@@ -5,7 +5,8 @@ alembic==1.13.3
 asyncpg==0.30.0
 psycopg2-binary==2.9.10
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+passlib==1.7.4
+bcrypt==4.0.1
 python-multipart==0.0.12
 anthropic==0.40.0
 faker==33.1.0
