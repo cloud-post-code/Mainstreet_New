@@ -1,0 +1,56 @@
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from ..db.database import get_db
+from ..db.models import Shop, Product
+from ..db.schemas import ShopOut
+from ..auth import get_current_user
+from ..db.models import User
+
+router = APIRouter(prefix="/api/shops", tags=["shops"])
+
+
+@router.get("", response_model=list[ShopOut])
+async def list_shops(
+    q: str = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    stmt = (
+        select(
+            Shop,
+            func.count(Product.id).label("product_count"),
+        )
+        .outerjoin(Product, Product.shop_id == Shop.id)
+        .group_by(Shop.id)
+        .order_by(Shop.name)
+    )
+    if q:
+        stmt = stmt.where(Shop.name.ilike(f"%{q}%") | Shop.description.ilike(f"%{q}%"))
+
+    result = await db.execute(stmt)
+    rows = result.all()
+    shops = []
+    for shop, count in rows:
+        out = ShopOut.model_validate(shop)
+        out.product_count = count
+        shops.append(out)
+    return shops
+
+
+@router.get("/{shop_id}", response_model=ShopOut)
+async def get_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+    result = await db.execute(
+        select(Shop, func.count(Product.id).label("product_count"))
+        .outerjoin(Product, Product.shop_id == Shop.id)
+        .where(Shop.id == shop_id)
+        .group_by(Shop.id)
+    )
+    row = result.first()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Shop not found")
+    shop, count = row
+    out = ShopOut.model_validate(shop)
+    out.product_count = count
+    return out

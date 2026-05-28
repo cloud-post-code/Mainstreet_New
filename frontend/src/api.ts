@@ -1,0 +1,60 @@
+const BASE = import.meta.env.VITE_API_URL ?? ''
+
+async function request<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> ?? {}),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? 'Request failed')
+  }
+  if (res.status === 204) return undefined as T
+  return res.json()
+}
+
+export interface User { id: number; email: string; display_name: string | null; is_admin: boolean }
+export interface Token { access_token: string; user: User }
+export interface Shop { id: number; name: string; logo_url: string | null; description: string | null; website_url: string | null; product_count: number | null }
+export interface Product { id: number; shop_id: number; shop_name: string | null; name: string; price: string; quantity: number; image_url: string | null; description: Record<string, unknown> | null }
+export interface Session { id: number; title: string; created_at: string; updated_at: string }
+export interface PlanStep { step: number; description: string; done: boolean }
+export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
+
+export const api = {
+  register: (email: string, password: string, display_name?: string) =>
+    request<Token>('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, display_name }) }),
+
+  login: (email: string, password: string) =>
+    request<Token>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+
+  getSessions: (token: string) =>
+    request<Session[]>('/api/agent/sessions', {}, token),
+
+  createSession: (token: string) =>
+    request<Session>('/api/agent/sessions', { method: 'POST' }, token),
+
+  getPlan: (sessionId: number, token: string) =>
+    request<Plan | null>(`/api/agent/sessions/${sessionId}/plan`, {}, token),
+
+  importCsv: (file: File, token: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return fetch(`${BASE}/api/admin/import`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }).then(r => r.json())
+  },
+
+  adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
+  adminProducts: (token: string, shopId?: number) =>
+    request<Product[]>(`/api/admin/products${shopId ? `?shop_id=${shopId}` : ''}`, {}, token),
+  deleteShop: (id: number, token: string) =>
+    request<void>(`/api/admin/shops/${id}`, { method: 'DELETE' }, token),
+  deleteProduct: (id: number, token: string) =>
+    request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }, token),
+}

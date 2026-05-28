@@ -1,0 +1,65 @@
+.wrapper {
+  background: #f8f0ff;
+  border: 1px solid #d8b4fe;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  max-width: 480px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.875rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #6b21a8;
+  font-weight: 600;
+}
+.toggle:hover { background: #f3e8ff; }
+.icon { font-size: 0.75rem; }
+.label { flex: 1; text-align: left; }
+.progress {
+  background: #d8b4fe;
+  color: #6b21a8;
+  padding: 0.1rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+}
+
+.steps {
+  list-style: none;
+  padding: 0.25rem 0.875rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+.step.done { color: #9ca3af; text-decoration: line-through; }
+
+.check {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e9d5ff;
+  color: #6b21a8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.done .check { background: #d1fae5; color: #065f46; }

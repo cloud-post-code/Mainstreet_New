@@ -1,0 +1,115 @@
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Numeric, Text,
+    ForeignKey, DateTime, func, Index
+)
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
+from sqlalchemy.orm import DeclarativeBase, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    display_name = Column(String(100))
+    is_admin = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    sessions = relationship("AgentSession", back_populates="user", cascade="all, delete-orphan")
+    memory = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
+
+
+class Shop(Base):
+    __tablename__ = "shops"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False, unique=True)
+    logo_url = Column(Text)
+    description = Column(Text)
+    website_url = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    products = relationship("Product", back_populates="shop", cascade="all, delete-orphan")
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True)
+    shop_id = Column(Integer, ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(300), nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Integer, default=0, nullable=False)
+    image_url = Column(Text)
+    description = Column(JSONB)
+    search_vector = Column(TSVECTOR)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    shop = relationship("Shop", back_populates="products")
+
+    __table_args__ = (
+        Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
+    )
+
+
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(300), default="New conversation")
+    processing = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="sessions")
+    turns = relationship("AgentTurn", back_populates="session", cascade="all, delete-orphan", order_by="AgentTurn.created_at")
+    plans = relationship("AgentPlan", back_populates="session", cascade="all, delete-orphan")
+
+
+class AgentTurn(Base):
+    __tablename__ = "agent_turns"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), nullable=False)  # user | assistant
+    content = Column(JSONB)
+    tool_calls = Column(JSONB)
+    tool_results = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("AgentSession", back_populates="turns")
+
+
+class AgentPlan(Base):
+    __tablename__ = "agent_plans"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False)
+    steps = Column(JSONB, nullable=False)  # [{step: 1, description: "...", done: false}]
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    session = relationship("AgentSession", back_populates="plans")
+
+
+class UserMemory(Base):
+    __tablename__ = "user_memory"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    key = Column(String(100), nullable=False)
+    value = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="memory")
+
+    __table_args__ = (
+        Index("ix_user_memory_user_key", "user_id", "key", unique=True),
+    )
