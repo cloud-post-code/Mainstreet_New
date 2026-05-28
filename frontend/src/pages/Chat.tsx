@@ -141,7 +141,7 @@ export default function Chat() {
       {/* Sidebar */}
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <div className={styles.brand}>🛍️ Main Street</div>
+          <div className={styles.brand}>MAIN ST</div>
           {user?.is_admin && (
             <button className={styles.adminBtn} onClick={() => navigate('/admin')}>Admin</button>
           )}
@@ -240,9 +240,9 @@ export default function Chat() {
       <main className={styles.main}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🛍️</div>
-            <h2>Your Personal Shopper</h2>
-            <p>Ask me to help you find products, compare options, or discover shops.</p>
+            <div className={styles.emptyIcon}>🧱</div>
+            <h2>Your Local Shopper</h2>
+            <p>Ask Mason to help you find products from local shops near you.</p>
             {!token && (
               <p className={styles.guestHint}>
                 <button onClick={() => openAuth('login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.
@@ -265,7 +265,7 @@ export default function Chat() {
           <div className={styles.messages}>
             {messages.map(msg => (
               <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                {msg.from === 'agent' && <div className={styles.avatar}>🤖</div>}
+                {msg.from === 'agent' && <div className={styles.avatar}>🧱</div>}
                 <div className={styles.bubble}>
                   {msg.from === 'user' ? (
                     <p className={styles.userText}>{msg.text}</p>
@@ -282,7 +282,7 @@ export default function Chat() {
             ))}
             {streaming && (
               <div className={`${styles.row} ${styles.agentRow}`}>
-                <div className={styles.avatar}>🤖</div>
+                <div className={styles.avatar}>🧱</div>
                 <div className={styles.bubble}>
                   <div className={styles.typingIndicator}>
                     <span /><span /><span />

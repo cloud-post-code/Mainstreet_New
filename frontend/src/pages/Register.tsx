@@ -31,8 +31,8 @@ export default function Register() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.logo}>🛍️</div>
-        <h1 className={styles.title}>Personal Shopper</h1>
+        <div className={styles.logo}>MAIN STREET</div>
+        <h1 className={styles.title}>Join Main Street</h1>
         <p className={styles.subtitle}>Create your account</p>
         <form onSubmit={handleSubmit} className={styles.form}>
           <input className={styles.input} type="text" placeholder="Display name (optional)" value={name} onChange={e => setName(e.target.value)} autoFocus />

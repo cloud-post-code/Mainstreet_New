@@ -1,6 +1,6 @@
 .wrapper {
-  background: #f8f0ff;
-  border: 1px solid #d8b4fe;
+  background: rgba(122,158,126,0.1);
+  border: 1px solid rgba(1,82,55,0.2);
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 0.5rem;
@@ -16,19 +16,21 @@
   background: none;
   border: none;
   cursor: pointer;
+  font-family: var(--font-body);
   font-size: 0.875rem;
-  color: #6b21a8;
+  color: var(--ms-primary);
   font-weight: 600;
 }
-.toggle:hover { background: #f3e8ff; }
+.toggle:hover { background: rgba(1,82,55,0.06); }
 .icon { font-size: 0.75rem; }
 .label { flex: 1; text-align: left; }
 .progress {
-  background: #d8b4fe;
-  color: #6b21a8;
+  background: rgba(1,82,55,0.15);
+  color: var(--ms-primary);
   padding: 0.1rem 0.5rem;
   border-radius: 20px;
   font-size: 0.75rem;
+  font-family: var(--font-body);
 }
 
 .steps {
@@ -43,8 +45,9 @@
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
+  font-family: var(--font-body);
   font-size: 0.85rem;
-  color: #4b5563;
+  color: var(--ms-dark);
 }
 .step.done { color: #9ca3af; text-decoration: line-through; }
 
@@ -52,8 +55,8 @@
   min-width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #e9d5ff;
-  color: #6b21a8;
+  background: rgba(122,158,126,0.2);
+  color: var(--ms-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -62,4 +65,4 @@
   flex-shrink: 0;
   margin-top: 1px;
 }
-.done .check { background: #d1fae5; color: #065f46; }
+.done .check { background: rgba(1,82,55,0.12); color: var(--ms-primary); }

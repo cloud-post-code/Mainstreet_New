@@ -8,7 +8,7 @@
 .sidebar {
   width: 260px;
   min-width: 260px;
-  background: #1a1a2e;
+  background: var(--ms-primary);
   color: white;
   display: flex;
   flex-direction: column;
@@ -21,31 +21,47 @@
   align-items: center;
   justify-content: space-between;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #2a2a4a;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
 }
-.brand { font-size: 1.1rem; font-weight: 700; }
+.brand {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.12);
+  color: white;
+  padding: 0.3rem 0.85rem;
+  border-radius: 3px;
+  outline: 1.5px solid rgba(255,255,255,0.3);
+  outline-offset: 2px;
+}
 .adminBtn {
   font-size: 0.75rem;
   padding: 0.3rem 0.6rem;
-  background: #667eea;
+  background: var(--ms-terra);
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  font-family: var(--font-body);
+  transition: opacity 0.15s;
 }
+.adminBtn:hover { opacity: 0.85; }
 
 .newChat {
   padding: 0.65rem 1rem;
-  background: #667eea;
+  background: var(--ms-sage);
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 600;
+  font-family: var(--font-body);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
-.newChat:hover { background: #5a6fd6; }
+.newChat:hover { opacity: 0.85; }
 
 .sessionList {
   flex: 1;
@@ -63,37 +79,38 @@
   border-radius: 8px;
   border: none;
   background: none;
-  color: #ccc;
+  color: rgba(255,255,255,0.7);
   cursor: pointer;
   text-align: left;
   width: 100%;
   transition: background 0.1s;
 }
-.sessionItem:hover { background: #2a2a4a; }
-.sessionItem.active { background: #2a2a4a; color: white; }
-.sessionTitle { font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
-.sessionDate { font-size: 0.7rem; color: #666; margin-top: 0.1rem; }
+.sessionItem:hover { background: rgba(255,255,255,0.1); }
+.sessionItem.active { background: rgba(255,255,255,0.15); color: white; }
+.sessionTitle { font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; font-family: var(--font-body); }
+.sessionDate { font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.1rem; }
 
 .sidebarFooter {
-  border-top: 1px solid #2a2a4a;
+  border-top: 1px solid rgba(255,255,255,0.15);
   padding-top: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.userName { font-size: 0.8rem; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
-.logoutBtn { font-size: 0.75rem; color: #888; background: none; border: none; cursor: pointer; }
-.logoutBtn:hover { color: #ccc; }
-.guestLabel { font-size: 0.78rem; color: #666; }
+.userName { font-size: 0.8rem; color: rgba(255,255,255,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.logoutBtn { font-size: 0.75rem; color: rgba(255,255,255,0.5); background: none; border: none; cursor: pointer; font-family: var(--font-body); }
+.logoutBtn:hover { color: white; }
+.guestLabel { font-size: 0.78rem; color: rgba(255,255,255,0.4); }
 
 /* ── Guest notice ── */
 .guestNotice {
-  background: #16213e;
+  background: rgba(0,0,0,0.2);
   border-radius: 10px;
   padding: 0.85rem;
   font-size: 0.82rem;
-  color: #aaa;
+  color: rgba(255,255,255,0.65);
   line-height: 1.5;
+  font-family: var(--font-body);
 }
 .guestButtons {
   display: flex;
@@ -103,30 +120,34 @@
 .signInBtn {
   flex: 1;
   padding: 0.45rem 0;
-  background: #667eea;
+  background: var(--ms-terra);
   color: white;
   border: none;
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 600;
+  font-family: var(--font-body);
   cursor: pointer;
+  transition: opacity 0.15s;
 }
-.signInBtn:hover { background: #5a6fd6; }
+.signInBtn:hover { opacity: 0.85; }
 .registerBtn {
   flex: 1;
   padding: 0.45rem 0;
   background: transparent;
-  color: #aaa;
-  border: 1px solid #3a3a5a;
+  color: rgba(255,255,255,0.65);
+  border: 1px solid rgba(255,255,255,0.2);
   border-radius: 6px;
   font-size: 0.8rem;
+  font-family: var(--font-body);
   cursor: pointer;
+  transition: all 0.15s;
 }
-.registerBtn:hover { color: white; border-color: #667eea; }
+.registerBtn:hover { color: white; border-color: rgba(255,255,255,0.5); }
 
 /* ── Inline auth panel ── */
 .authPanel {
-  background: #16213e;
+  background: rgba(0,0,0,0.2);
   border-radius: 10px;
   padding: 0.85rem;
   display: flex;
@@ -140,11 +161,12 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: white;
+  font-family: var(--font-heading);
 }
 .authClose {
   background: none;
   border: none;
-  color: #888;
+  color: rgba(255,255,255,0.5);
   cursor: pointer;
   font-size: 0.85rem;
   padding: 0;
@@ -157,44 +179,48 @@
 }
 .authInput {
   padding: 0.5rem 0.65rem;
-  background: #0f0f23;
-  border: 1px solid #3a3a5a;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.15);
   border-radius: 6px;
   color: white;
   font-size: 0.82rem;
+  font-family: var(--font-body);
   outline: none;
   transition: border-color 0.15s;
 }
-.authInput:focus { border-color: #667eea; }
-.authInput::placeholder { color: #555; }
+.authInput:focus { border-color: var(--ms-sage); }
+.authInput::placeholder { color: rgba(255,255,255,0.3); }
 .authError { font-size: 0.78rem; color: #fc8181; margin: 0; }
 .authSubmit {
   padding: 0.5rem;
-  background: #667eea;
+  background: var(--ms-terra);
   color: white;
   border: none;
   border-radius: 6px;
   font-size: 0.82rem;
   font-weight: 600;
+  font-family: var(--font-body);
   cursor: pointer;
   margin-top: 0.1rem;
+  transition: opacity 0.15s;
 }
 .authSubmit:disabled { opacity: 0.5; cursor: not-allowed; }
-.authSubmit:not(:disabled):hover { background: #5a6fd6; }
+.authSubmit:not(:disabled):hover { opacity: 0.85; }
 .authSwitch {
   font-size: 0.78rem;
-  color: #666;
+  color: rgba(255,255,255,0.45);
   text-align: center;
   margin: 0;
 }
 .authSwitch button {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--ms-sage);
   cursor: pointer;
   font-size: 0.78rem;
   padding: 0;
   text-decoration: underline;
+  font-family: var(--font-body);
 }
 
 /* ── Main ── */
@@ -203,7 +229,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #f8f9fa;
+  background: var(--ms-cream);
 }
 
 /* ── Empty state ── */
@@ -218,11 +244,25 @@
   text-align: center;
 }
 .emptyIcon { font-size: 3.5rem; }
-.empty h2 { font-size: 1.5rem; font-weight: 700; color: #1a1a1a; }
-.empty p { color: #666; font-size: 0.95rem; }
+.empty h2 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ms-dark);
+}
+.empty p { color: #666; font-size: 0.95rem; font-family: var(--font-body); }
 
-.guestHint { font-size: 0.85rem; color: #888; margin: 0; }
-.inlineLink { background: none; border: none; color: #667eea; cursor: pointer; font-size: 0.85rem; padding: 0; text-decoration: underline; }
+.guestHint { font-size: 0.85rem; color: #888; margin: 0; font-family: var(--font-body); }
+.inlineLink {
+  background: none;
+  border: none;
+  color: var(--ms-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  text-decoration: underline;
+  font-family: var(--font-body);
+}
 
 .suggestions {
   display: flex;
@@ -233,15 +273,16 @@
 }
 .suggestion {
   padding: 0.6rem 1rem;
-  background: white;
-  border: 1.5px solid #e0e0e0;
+  background: var(--ms-secondary);
+  border: 1.5px solid var(--ms-sage);
   border-radius: 20px;
   font-size: 0.875rem;
+  font-family: var(--font-body);
   cursor: pointer;
-  transition: border-color 0.15s;
-  color: #333;
+  transition: all 0.15s;
+  color: var(--ms-dark);
 }
-.suggestion:hover { border-color: #667eea; color: #667eea; }
+.suggestion:hover { border-color: var(--ms-primary); color: var(--ms-primary); background: white; }
 
 /* ── Messages ── */
 .messages {
@@ -265,7 +306,8 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #f0f0f0;
+  background: var(--ms-secondary);
+  border: 1px solid var(--ms-sage);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,11 +320,12 @@
 }
 
 .userText {
-  background: #667eea;
+  background: var(--ms-primary);
   color: white;
   padding: 0.75rem 1rem;
   border-radius: 16px 16px 4px 16px;
   font-size: 0.95rem;
+  font-family: var(--font-body);
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -291,15 +334,15 @@
   display: flex;
   gap: 4px;
   padding: 0.75rem 1rem;
-  background: white;
+  background: var(--ms-secondary);
   border-radius: 16px;
   width: fit-content;
-  border: 1px solid #e8e8e8;
+  border: 1px solid rgba(122,158,126,0.3);
 }
 .typingIndicator span {
   width: 7px;
   height: 7px;
-  background: #aaa;
+  background: var(--ms-sage);
   border-radius: 50%;
   animation: bounce 1.2s ease-in-out infinite;
 }
@@ -315,31 +358,33 @@
   display: flex;
   gap: 0.75rem;
   padding: 1rem 1.5rem 1.25rem;
-  background: white;
-  border-top: 1px solid #e8e8e8;
+  background: var(--ms-secondary);
+  border-top: 1px solid rgba(122,158,126,0.3);
   align-items: flex-end;
 }
 
 .textarea {
   flex: 1;
   padding: 0.75rem 1rem;
-  border: 1.5px solid #e0e0e0;
+  border: 1.5px solid rgba(122,158,126,0.4);
   border-radius: 12px;
   font-size: 0.95rem;
+  font-family: var(--font-body);
   resize: none;
   outline: none;
-  font-family: inherit;
+  background: white;
   max-height: 150px;
   transition: border-color 0.15s;
   line-height: 1.5;
+  color: var(--ms-dark);
 }
-.textarea:focus { border-color: #667eea; }
+.textarea:focus { border-color: var(--ms-primary); }
 
 .sendButton {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: #667eea;
+  background: var(--ms-primary);
   border: none;
   color: white;
   display: flex;
@@ -347,7 +392,7 @@
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, opacity 0.15s;
+  transition: opacity 0.15s;
 }
 .sendButton:disabled { opacity: 0.4; cursor: not-allowed; }
-.sendButton:not(:disabled):hover { background: #5a6fd6; }
+.sendButton:not(:disabled):hover { opacity: 0.85; }

@@ -2,6 +2,8 @@
   max-width: 1100px;
   margin: 0 auto;
   padding: 1.5rem 2rem 3rem;
+  background: var(--ms-cream);
+  min-height: 100vh;
 }
 
 .header {
@@ -13,54 +15,79 @@
 .back {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--ms-primary);
+  font-family: var(--font-body);
   font-size: 0.9rem;
   cursor: pointer;
   font-weight: 600;
 }
 .back:hover { text-decoration: underline; }
-.title { font-size: 1.5rem; font-weight: 700; }
+.title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ms-dark);
+}
 
 /* Import */
 .importSection {
-  background: white;
+  background: var(--ms-secondary);
   border-radius: 12px;
   padding: 1.5rem;
-  border: 1px solid #e8e8e8;
+  border: 1px solid rgba(122,158,126,0.25);
   margin-bottom: 1.5rem;
 }
-.sectionTitle { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
-.csvHint { font-size: 0.82rem; color: #666; margin-bottom: 1rem; }
-.csvHint code { background: #f5f5f5; padding: 0.1rem 0.4rem; border-radius: 4px; }
+.sectionTitle {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ms-dark);
+  margin-bottom: 0.5rem;
+}
+.csvHint {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+.csvHint code {
+  background: var(--ms-cream);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
 
 .uploadLabel { display: inline-block; cursor: pointer; }
 .uploadBtn {
   display: inline-block;
   padding: 0.65rem 1.25rem;
-  background: #667eea;
+  background: var(--ms-primary);
   color: white;
   border-radius: 8px;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
-.uploadBtn:hover:not(.disabled) { background: #5a6fd6; }
+.uploadBtn:hover:not(.disabled) { opacity: 0.85; }
 .uploadBtn.disabled { opacity: 0.5; cursor: not-allowed; }
 
 .importResult {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  background: #f0fdf4;
-  border: 1px solid #86efac;
+  background: rgba(1,82,55,0.06);
+  border: 1px solid rgba(1,82,55,0.2);
   border-radius: 8px;
+  font-family: var(--font-body);
   font-size: 0.875rem;
 }
 .errors {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: #fef3c7;
+  background: rgba(241,233,216,0.8);
   border-radius: 6px;
+  font-family: var(--font-body);
   font-size: 0.82rem;
 }
 .errors ul { margin-top: 0.25rem; padding-left: 1.25rem; }
@@ -74,31 +101,35 @@
 .tab {
   padding: 0.6rem 1.25rem;
   background: none;
-  border: 1.5px solid #e0e0e0;
+  border: 1.5px solid rgba(122,158,126,0.35);
   border-radius: 8px;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   color: #666;
   transition: all 0.15s;
 }
-.tab:hover { border-color: #667eea; color: #667eea; }
-.activeTab { background: #667eea; color: white; border-color: #667eea; }
+.tab:hover { border-color: var(--ms-primary); color: var(--ms-primary); }
+.activeTab { background: var(--ms-primary); color: white; border-color: var(--ms-primary); }
 
 .filterBar { margin-bottom: 0.75rem; }
 .select {
   padding: 0.5rem 0.875rem;
-  border: 1.5px solid #e0e0e0;
+  border: 1.5px solid rgba(122,158,126,0.35);
   border-radius: 8px;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   outline: none;
+  background: white;
+  color: var(--ms-dark);
 }
 
 /* Table */
 .tableWrapper {
-  background: white;
+  background: var(--ms-secondary);
   border-radius: 12px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid rgba(122,158,126,0.25);
   overflow: hidden;
   overflow-x: auto;
 }
@@ -106,23 +137,25 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+  font-family: var(--font-body);
 }
 .table th {
-  background: #f8f9fa;
+  background: var(--ms-cream);
   padding: 0.75rem 1rem;
   text-align: left;
-  font-weight: 600;
-  color: #555;
-  border-bottom: 1px solid #e8e8e8;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--ms-dark);
+  border-bottom: 1px solid rgba(122,158,126,0.25);
 }
 .table td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f0f0f0;
-  color: #333;
+  border-bottom: 1px solid rgba(122,158,126,0.1);
+  color: var(--ms-dark);
   vertical-align: middle;
 }
 .table tr:last-child td { border-bottom: none; }
-.table tr:hover td { background: #fafafa; }
+.table tr:hover td { background: rgba(241,233,216,0.4); }
 
 .shopLogo {
   width: 24px;
@@ -149,11 +182,12 @@
 .deleteBtn {
   padding: 0.3rem 0.75rem;
   background: none;
-  border: 1px solid #fca5a5;
-  color: #dc2626;
+  border: 1px solid rgba(190,70,70,0.4);
+  color: #c0392b;
   border-radius: 6px;
+  font-family: var(--font-body);
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.15s;
 }
-.deleteBtn:hover { background: #fee2e2; }
+.deleteBtn:hover { background: rgba(190,70,70,0.06); }
