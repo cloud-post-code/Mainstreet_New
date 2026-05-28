@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useAuth } from './useAuth'
 
-const BASE = import.meta.env.VITE_API_URL ?? ''
+const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
 
 export type StreamEvent =
   | { type: 'thinking'; content: string }
