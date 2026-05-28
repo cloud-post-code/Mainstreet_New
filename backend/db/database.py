@@ -38,9 +38,11 @@ async def create_tables():
             END
             $$ LANGUAGE plpgsql;
         """))
+        await conn.execute(text(
+            "DROP TRIGGER IF EXISTS products_search_vector_trigger ON products"
+        ))
         await conn.execute(text("""
-            DROP TRIGGER IF EXISTS products_search_vector_trigger ON products;
             CREATE TRIGGER products_search_vector_trigger
             BEFORE INSERT OR UPDATE ON products
-            FOR EACH ROW EXECUTE FUNCTION products_search_vector_update();
+            FOR EACH ROW EXECUTE FUNCTION products_search_vector_update()
         """))
