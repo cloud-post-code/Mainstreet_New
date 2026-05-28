@@ -165,3 +165,14 @@ async def delete_product(product_id: int, db: AsyncSession = Depends(get_db), _:
         raise HTTPException(status_code=404, detail="Product not found")
     await db.delete(product)
     await db.commit()
+
+
+@router.post("/seed")
+async def run_seed(db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
+    """Run the seed script to populate shops and products if the database is empty."""
+    from db.seed import seed
+    result = await db.execute(select(Shop).limit(1))
+    if result.scalars().first():
+        return {"status": "already_seeded", "message": "Database already has shops. Skipping seed."}
+    await seed()
+    return {"status": "seeded", "message": "Shops and products seeded successfully."}

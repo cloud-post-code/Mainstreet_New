@@ -21,19 +21,37 @@ async def load_short_term(session_id: int, db: AsyncSession) -> list[dict]:
     messages = []
     for turn in turns:
         if turn.role == "user":
-            messages.append({"role": "user", "content": turn.content or ""})
+            content = turn.content
+            # content can be a string, a list (tool_result blocks), or empty
+            if not content:
+                continue
+            messages.append({"role": "user", "content": content})
         elif turn.role == "assistant":
-            content = []
+            # Reconstruct full assistant content block list
+            content: list = []
             if turn.content:
-                if isinstance(turn.content, str):
-                    content.append({"type": "text", "text": turn.content})
-                else:
-                    content = turn.content if isinstance(turn.content, list) else [turn.content]
+                if isinstance(turn.content, list):
+                    # Already stored as list of typed blocks (text + tool_use)
+                    content = turn.content
+                elif isinstance(turn.content, str):
+                    content = [{"type": "text", "text": turn.content}]
+                # dict means a single block — shouldn't happen but handle it
+                elif isinstance(turn.content, dict):
+                    content = [turn.content]
+
+            # If content was stored without tool_calls embedded (legacy), append them
             if turn.tool_calls:
+                existing_ids = {b.get("id") for b in content if isinstance(b, dict) and b.get("type") == "tool_use"}
                 for tc in turn.tool_calls:
-                    content.append(tc)
-            if content:
-                messages.append({"role": "assistant", "content": content})
+                    if tc.get("id") not in existing_ids:
+                        content.append(tc)
+
+            if not content:
+                continue
+
+            messages.append({"role": "assistant", "content": content})
+
+            # Tool results go back as a user message so Claude can continue
             if turn.tool_results:
                 messages.append({"role": "user", "content": turn.tool_results})
     return messages

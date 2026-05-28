@@ -20,7 +20,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    sessions = relationship("AgentSession", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship("AgentSession", back_populates="user", cascade="all, delete-orphan", foreign_keys="AgentSession.user_id")
     memory = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
 
 
@@ -61,13 +61,13 @@ class AgentSession(Base):
     __tablename__ = "agent_sessions"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     title = Column(String(300), default="New conversation")
     processing = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    user = relationship("User", back_populates="sessions")
+    user = relationship("User", back_populates="sessions", foreign_keys=[user_id])
     turns = relationship("AgentTurn", back_populates="session", cascade="all, delete-orphan", order_by="AgentTurn.created_at")
     plans = relationship("AgentPlan", back_populates="session", cascade="all, delete-orphan")
 

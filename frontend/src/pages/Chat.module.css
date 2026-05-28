@@ -84,6 +84,118 @@
 .userName { font-size: 0.8rem; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 .logoutBtn { font-size: 0.75rem; color: #888; background: none; border: none; cursor: pointer; }
 .logoutBtn:hover { color: #ccc; }
+.guestLabel { font-size: 0.78rem; color: #666; }
+
+/* ── Guest notice ── */
+.guestNotice {
+  background: #16213e;
+  border-radius: 10px;
+  padding: 0.85rem;
+  font-size: 0.82rem;
+  color: #aaa;
+  line-height: 1.5;
+}
+.guestButtons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.signInBtn {
+  flex: 1;
+  padding: 0.45rem 0;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.signInBtn:hover { background: #5a6fd6; }
+.registerBtn {
+  flex: 1;
+  padding: 0.45rem 0;
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #3a3a5a;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.registerBtn:hover { color: white; border-color: #667eea; }
+
+/* ── Inline auth panel ── */
+.authPanel {
+  background: #16213e;
+  border-radius: 10px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.authPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+}
+.authClose {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+}
+.authClose:hover { color: white; }
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.authInput {
+  padding: 0.5rem 0.65rem;
+  background: #0f0f23;
+  border: 1px solid #3a3a5a;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.authInput:focus { border-color: #667eea; }
+.authInput::placeholder { color: #555; }
+.authError { font-size: 0.78rem; color: #fc8181; margin: 0; }
+.authSubmit {
+  padding: 0.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.1rem;
+}
+.authSubmit:disabled { opacity: 0.5; cursor: not-allowed; }
+.authSubmit:not(:disabled):hover { background: #5a6fd6; }
+.authSwitch {
+  font-size: 0.78rem;
+  color: #666;
+  text-align: center;
+  margin: 0;
+}
+.authSwitch button {
+  background: none;
+  border: none;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0;
+  text-decoration: underline;
+}
 
 /* ── Main ── */
 .main {
@@ -108,6 +220,9 @@
 .emptyIcon { font-size: 3.5rem; }
 .empty h2 { font-size: 1.5rem; font-weight: 700; color: #1a1a1a; }
 .empty p { color: #666; font-size: 0.95rem; }
+
+.guestHint { font-size: 0.85rem; color: #888; margin: 0; }
+.inlineLink { background: none; border: none; color: #667eea; cursor: pointer; font-size: 0.85rem; padding: 0; text-decoration: underline; }
 
 .suggestions {
   display: flex;

@@ -37,6 +37,9 @@ export const api = {
   createSession: (token: string) =>
     request<Session>('/api/agent/sessions', { method: 'POST' }, token),
 
+  createGuestSession: () =>
+    request<Session>('/api/agent/guest-session', { method: 'POST' }),
+
   getPlan: (sessionId: number, token: string) =>
     request<Plan | null>(`/api/agent/sessions/${sessionId}/plan`, {}, token),
 

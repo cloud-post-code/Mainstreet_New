@@ -19,23 +19,29 @@ from agent.tools import TOOL_DEFINITIONS, execute_tool
 
 MAX_ITERATIONS = 10
 
-SYSTEM_PROMPT = """You are a personal shopping assistant. You help users find products and shops from a curated catalog.
+SYSTEM_PROMPT = """You are a personal shopping assistant for Main Street, a curated local shopping platform.
+
+## Critical rule
+Only show products and shops that exist in the database. Never invent, hallucinate, or suggest products that are not returned by search_products or search_shops. If a search returns zero results, say so honestly and try a broader query.
+
+## Available shops in the catalog
+TechNova (Electronics), GreenLeaf (Organic Food), UrbanThreads (Clothing), HomeHaven (Home & Garden), SportsPeak (Sports), BookNook (Books), PetPalace (Pet Supplies), BeautyBliss (Beauty), ToyTrove (Toys), KitchenKing (Kitchen)
 
 ## Your capabilities
 - Search products by keyword, price range, shop, stock status
 - Search shops by name or category
 - Display products and shops as rich cards
 - Ask clarifying questions via interactive question cards
-- Remember user preferences (size, budget, brand preferences)
+- Remember user preferences (size, budget, brand preferences) — only when the user is logged in
 - Create multi-step plans for complex shopping tasks
 
 ## Guidelines
 - Be conversational and helpful
-- Use search_products or search_shops before building cards — always have real data
+- Always call search_products or search_shops first — never build cards from memory
 - For complex requests (multiple items, gift ideas, comparing options), call generate_plan first
-- When the user mentions a preference (budget, size, etc.), call save_preference
+- When the user mentions a preference (budget, size, etc.) and is logged in, call save_preference
 - Keep responses concise — let the cards do the heavy lifting
-- If a search returns no results, try broader search terms before giving up
+- If a search returns no results, try one broader search before giving up
 
 {long_term_memory}"""
 
@@ -47,7 +53,7 @@ def _event(obj: dict) -> str:
 async def run_agent_turn(
     user_message: str,
     session_id: int,
-    user_id: int,
+    user_id: int | None,
     question_card_id: str | None,
     db: AsyncSession,
 ) -> AsyncGenerator[str, None]:
@@ -55,8 +61,8 @@ async def run_agent_turn(
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    # Load memory
-    long_term = await load_long_term(user_id, db)
+    # Load memory — anonymous users get no long-term memory
+    long_term = await load_long_term(user_id, db) if user_id else ""
     history = await load_short_term(session_id, db)
 
     # Save the user turn

@@ -6,17 +6,26 @@ import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
 import styles from './Chat.module.css'
 
+type AuthMode = 'none' | 'login' | 'register'
+
 export default function Chat() {
-  const { token, user, logout } = useAuth()
+  const { token, user, login, logout } = useAuth()
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [input, setInput] = useState('')
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
+  const [authMode, setAuthMode] = useState<AuthMode>('none')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authName, setAuthName] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { messages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
 
+  // Load sessions for authenticated users
   useEffect(() => {
     if (!token) return
     api.getSessions(token).then(s => {
@@ -25,15 +34,26 @@ export default function Chat() {
     })
   }, [token])
 
+  // Create a guest session on first load if not authenticated
+  useEffect(() => {
+    if (token) return // authenticated users handled above
+    if (activeSessionId) return
+    api.createGuestSession().then(s => setActiveSessionId(s.id))
+  }, [token, activeSessionId])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   async function newSession() {
-    if (!token) return
-    const s = await api.createSession(token)
-    setSessions(prev => [s, ...prev])
-    setActiveSessionId(s.id)
+    if (token) {
+      const s = await api.createSession(token)
+      setSessions(prev => [s, ...prev])
+      setActiveSessionId(s.id)
+    } else {
+      const s = await api.createGuestSession()
+      setActiveSessionId(s.id)
+    }
     setAnsweredQuestions(new Set())
     reset()
   }
@@ -51,10 +71,11 @@ export default function Chat() {
     setInput('')
 
     if (!activeSessionId) {
-      const s = await api.createSession(token!)
-      setSessions(prev => [s, ...prev])
+      const s = token
+        ? await api.createSession(token)
+        : await api.createGuestSession()
+      if (token) setSessions(prev => [s, ...prev])
       setActiveSessionId(s.id)
-      // slight delay to let state settle
       setTimeout(() => sendMessage(text), 50)
       return
     }
@@ -73,32 +94,145 @@ export default function Chat() {
     sendMessage(answer, questionCardId)
   }
 
+  function openAuth(mode: 'login' | 'register') {
+    setAuthMode(mode)
+    setAuthError('')
+    setAuthEmail('')
+    setAuthPassword('')
+    setAuthName('')
+  }
+
+  async function handleAuth(e: FormEvent) {
+    e.preventDefault()
+    setAuthError('')
+    setAuthLoading(true)
+    try {
+      const data = authMode === 'login'
+        ? await api.login(authEmail, authPassword)
+        : await api.register(authEmail, authPassword, authName || undefined)
+      login(data.access_token, data.user)
+      setAuthMode('none')
+      // Load sessions for the newly logged-in user
+      const s = await api.getSessions(data.access_token)
+      setSessions(s)
+      if (s.length) {
+        setActiveSessionId(s[0].id)
+        reset()
+      }
+    } catch (err: unknown) {
+      setAuthError((err as Error).message)
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  function handleLogout() {
+    logout()
+    setSessions([])
+    setActiveSessionId(null)
+    setAnsweredQuestions(new Set())
+    reset()
+    // Create a fresh guest session
+    api.createGuestSession().then(s => setActiveSessionId(s.id))
+  }
+
   return (
     <div className={styles.layout}>
       {/* Sidebar */}
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <div className={styles.brand}>🛍️ Shopper</div>
+          <div className={styles.brand}>🛍️ Main Street</div>
           {user?.is_admin && (
             <button className={styles.adminBtn} onClick={() => navigate('/admin')}>Admin</button>
           )}
         </div>
         <button className={styles.newChat} onClick={newSession}>+ New chat</button>
-        <div className={styles.sessionList}>
-          {sessions.map(s => (
-            <button
-              key={s.id}
-              className={`${styles.sessionItem} ${s.id === activeSessionId ? styles.active : ''}`}
-              onClick={() => selectSession(s.id)}
-            >
-              <span className={styles.sessionTitle}>{s.title}</span>
-              <span className={styles.sessionDate}>{new Date(s.updated_at).toLocaleDateString()}</span>
-            </button>
-          ))}
-        </div>
+
+        {/* Session list — only shown when logged in */}
+        {token && (
+          <div className={styles.sessionList}>
+            {sessions.map(s => (
+              <button
+                key={s.id}
+                className={`${styles.sessionItem} ${s.id === activeSessionId ? styles.active : ''}`}
+                onClick={() => selectSession(s.id)}
+              >
+                <span className={styles.sessionTitle}>{s.title}</span>
+                <span className={styles.sessionDate}>{new Date(s.updated_at).toLocaleDateString()}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Guest notice — shown when not logged in */}
+        {!token && authMode === 'none' && (
+          <div className={styles.guestNotice}>
+            <p>Sign in to save your shopping history and preferences.</p>
+            <div className={styles.guestButtons}>
+              <button className={styles.signInBtn} onClick={() => openAuth('login')}>Sign in</button>
+              <button className={styles.registerBtn} onClick={() => openAuth('register')}>Register</button>
+            </div>
+          </div>
+        )}
+
+        {/* Inline auth form */}
+        {!token && authMode !== 'none' && (
+          <div className={styles.authPanel}>
+            <div className={styles.authPanelHeader}>
+              <span>{authMode === 'login' ? 'Sign in' : 'Create account'}</span>
+              <button className={styles.authClose} onClick={() => setAuthMode('none')}>✕</button>
+            </div>
+            <form onSubmit={handleAuth} className={styles.authForm}>
+              {authMode === 'register' && (
+                <input
+                  className={styles.authInput}
+                  type="text"
+                  placeholder="Display name (optional)"
+                  value={authName}
+                  onChange={e => setAuthName(e.target.value)}
+                />
+              )}
+              <input
+                className={styles.authInput}
+                type="email"
+                placeholder="Email"
+                value={authEmail}
+                onChange={e => setAuthEmail(e.target.value)}
+                required
+                autoFocus
+              />
+              <input
+                className={styles.authInput}
+                type="password"
+                placeholder="Password"
+                value={authPassword}
+                onChange={e => setAuthPassword(e.target.value)}
+                required
+              />
+              {authError && <p className={styles.authError}>{authError}</p>}
+              <button className={styles.authSubmit} type="submit" disabled={authLoading}>
+                {authLoading ? '…' : authMode === 'login' ? 'Sign in' : 'Register'}
+              </button>
+            </form>
+            <p className={styles.authSwitch}>
+              {authMode === 'login' ? (
+                <>No account? <button onClick={() => openAuth('register')}>Register</button></>
+              ) : (
+                <>Have an account? <button onClick={() => openAuth('login')}>Sign in</button></>
+              )}
+            </p>
+          </div>
+        )}
+
         <div className={styles.sidebarFooter}>
-          <span className={styles.userName}>{user?.display_name ?? user?.email}</span>
-          <button className={styles.logoutBtn} onClick={() => { logout(); navigate('/login') }}>Sign out</button>
+          {user ? (
+            <>
+              <span className={styles.userName}>{user.display_name ?? user.email}</span>
+              <button className={styles.logoutBtn} onClick={handleLogout}>Sign out</button>
+            </>
+          ) : (
+            <span className={styles.guestLabel}>Browsing as guest</span>
+          )}
         </div>
       </aside>
 
@@ -109,6 +243,11 @@ export default function Chat() {
             <div className={styles.emptyIcon}>🛍️</div>
             <h2>Your Personal Shopper</h2>
             <p>Ask me to help you find products, compare options, or discover shops.</p>
+            {!token && (
+              <p className={styles.guestHint}>
+                <button onClick={() => openAuth('login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.
+              </p>
+            )}
             <div className={styles.suggestions}>
               {[
                 "Find me running shoes under $100",

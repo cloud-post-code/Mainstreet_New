@@ -28,7 +28,7 @@ export function useAgentStream(sessionId: number | null) {
   const abortRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(async (text: string, questionCardId?: string) => {
-    if (!sessionId || !token || streaming) return
+    if (!sessionId || streaming) return
 
     const userMsg: Message = { id: Date.now().toString(), from: 'user', text }
     setMessages(prev => [...prev, userMsg])
@@ -40,10 +40,13 @@ export function useAgentStream(sessionId: number | null) {
     setStreaming(true)
     abortRef.current = new AbortController()
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
     try {
       const res = await fetch(`${BASE}/api/agent/turn`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers,
         body: JSON.stringify({ session_id: sessionId, message: text, question_card_id: questionCardId }),
         signal: abortRef.current.signal,
       })

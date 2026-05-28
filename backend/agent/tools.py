@@ -147,7 +147,7 @@ TOOL_DEFINITIONS = [
 async def execute_tool(
     tool_name: str,
     tool_input: dict,
-    user_id: int,
+    user_id: int | None,
     session_id: int,
     db: AsyncSession,
 ) -> tuple[Any, str | None]:
@@ -170,6 +170,8 @@ async def execute_tool(
         return await _generate_plan(tool_input, session_id, db), "plan_update"
 
     if tool_name == "save_preference":
+        if user_id is None:
+            return {"saved": False, "reason": "not_logged_in"}, None
         await save_preference(user_id, tool_input["key"], tool_input["value"], db)
         return {"saved": True, "key": tool_input["key"]}, None
 

@@ -9,6 +9,10 @@ from routers import auth, shops, products, agent, admin
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
+    import os
+    if os.environ.get("SEED_ON_STARTUP", "").lower() in ("1", "true", "yes"):
+        from db.seed import seed
+        await seed()
     yield
 
 
