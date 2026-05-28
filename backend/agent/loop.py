@@ -12,10 +12,10 @@ from typing import AsyncGenerator, Any
 import anthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from ..config import settings
-from ..db.models import AgentSession, User
-from .memory import load_short_term, load_long_term, save_turn
-from .tools import TOOL_DEFINITIONS, execute_tool
+from config import settings
+from db.models import AgentSession, User
+from agent.memory import load_short_term, load_long_term, save_turn
+from agent.tools import TOOL_DEFINITIONS, execute_tool
 
 MAX_ITERATIONS = 10
 

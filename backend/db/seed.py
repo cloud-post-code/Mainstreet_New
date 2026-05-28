@@ -7,8 +7,8 @@ import random
 from decimal import Decimal
 from faker import Faker
 from sqlalchemy import select
-from .database import AsyncSessionLocal, engine, create_tables
-from .models import Shop, Product
+from db.database import AsyncSessionLocal, engine, create_tables
+from db.models import Shop, Product
 
 fake = Faker()
 random.seed(42)

@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from ..db.database import get_db
-from ..db.models import AgentSession, AgentPlan, User
-from ..db.schemas import SessionOut, TurnIn, PlanOut
-from ..auth import get_current_user
-from ..agent.loop import run_agent_turn
+from db.database import get_db
+from db.models import AgentSession, AgentPlan, User
+from db.schemas import SessionOut, TurnIn, PlanOut
+from auth import get_current_user
+from agent.loop import run_agent_turn
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 

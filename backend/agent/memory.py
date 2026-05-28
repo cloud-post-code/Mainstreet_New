@@ -2,7 +2,7 @@
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from ..db.models import AgentTurn, UserMemory
+from db.models import AgentTurn, UserMemory
 
 MAX_SHORT_TERM_TURNS = 20   # last N turns loaded into context
 MAX_LONG_TERM_KEYS = 50     # cap per user

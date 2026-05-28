@@ -4,9 +4,9 @@ from typing import Any
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from ..db.models import Product, Shop, AgentPlan, UserMemory
-from ..db.schemas import ProductOut, ShopOut
-from .memory import save_preference
+from db.models import Product, Shop, AgentPlan, UserMemory
+from db.schemas import ProductOut, ShopOut
+from agent.memory import save_preference
 
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 

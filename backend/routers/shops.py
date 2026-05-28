@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from ..db.database import get_db
-from ..db.models import Shop, Product
-from ..db.schemas import ShopOut
-from ..auth import get_current_user
-from ..db.models import User
+from db.database import get_db
+from db.models import Shop, Product
+from db.schemas import ShopOut
+from auth import get_current_user
+from db.models import User
 
 router = APIRouter(prefix="/api/shops", tags=["shops"])
 

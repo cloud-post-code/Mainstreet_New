@@ -5,10 +5,10 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from ..db.database import get_db
-from ..db.models import Shop, Product, User
-from ..db.schemas import ImportResult, ShopOut, ProductOut
-from ..auth import get_admin_user
+from db.database import get_db
+from db.models import Shop, Product, User
+from db.schemas import ImportResult, ShopOut, ProductOut
+from auth import get_admin_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

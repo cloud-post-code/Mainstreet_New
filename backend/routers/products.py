@@ -4,11 +4,11 @@ from sqlalchemy import select, func, text
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from typing import Optional
 from decimal import Decimal
-from ..db.database import get_db
-from ..db.models import Product, Shop
-from ..db.schemas import ProductOut
-from ..auth import get_current_user
-from ..db.models import User
+from db.database import get_db
+from db.models import Product, Shop
+from db.schemas import ProductOut
+from auth import get_current_user
+from db.models import User
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
