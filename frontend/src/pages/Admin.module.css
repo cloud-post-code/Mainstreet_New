@@ -29,6 +29,29 @@
   color: var(--ms-dark);
 }
 
+/* Seed */
+.seedHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.seedBtn {
+  flex-shrink: 0;
+  padding: 0.65rem 1.25rem;
+  background: var(--ms-terracotta, #be6e46);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.seedBtn:hover:not(:disabled) { opacity: 0.85; }
+.seedBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Import */
 .importSection {
   background: var(--ms-secondary);

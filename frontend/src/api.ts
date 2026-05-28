@@ -53,9 +53,22 @@ export const api = {
     }).then(r => r.json())
   },
 
+  importShopsCsv: (file: File, token: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return fetch(`${BASE}/api/admin/import/shops`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }).then(r => r.json())
+  },
+
+  seedDatabase: (token: string) =>
+    request<{ status: string; message: string }>('/api/admin/seed', { method: 'POST' }, token),
+
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
-  adminProducts: (token: string, shopId?: number) =>
-    request<Product[]>(`/api/admin/products${shopId ? `?shop_id=${shopId}` : ''}`, {}, token),
+  adminProducts: (token: string, shopId?: number, limit = 500) =>
+    request<Product[]>(`/api/admin/products?limit=${limit}${shopId ? `&shop_id=${shopId}` : ''}`, {}, token),
   deleteShop: (id: number, token: string) =>
     request<void>(`/api/admin/shops/${id}`, { method: 'DELETE' }, token),
   deleteProduct: (id: number, token: string) =>

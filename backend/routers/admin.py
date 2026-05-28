@@ -13,6 +13,7 @@ from auth import get_admin_user
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 EXPECTED_COLUMNS = {"shop_name", "product_name", "price", "quantity", "image_url", "description_json"}
+SHOP_EXPECTED_COLUMNS = {"name"}
 
 
 @router.post("/import", response_model=ImportResult)
@@ -111,6 +112,60 @@ async def import_csv(
     return ImportResult(rows_added=rows_added, rows_updated=rows_updated, errors=errors)
 
 
+@router.post("/import/shops", response_model=ImportResult)
+async def import_shops_csv(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a .csv")
+
+    content = await file.read()
+    text = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="Empty CSV")
+
+    if "name" not in reader.fieldnames:
+        raise HTTPException(status_code=400, detail="Missing required column: name")
+
+    rows_added = 0
+    rows_updated = 0
+    errors = []
+
+    for i, row in enumerate(reader, start=2):
+        try:
+            name = row["name"].strip()
+            if not name:
+                raise ValueError("name is empty")
+
+            logo_url = row.get("logo_url", "").strip() or None
+            description = row.get("description", "").strip() or None
+            website_url = row.get("website_url", "").strip() or None
+
+            result = await db.execute(select(Shop).where(Shop.name == name))
+            existing = result.scalars().first()
+            if existing:
+                if logo_url is not None:
+                    existing.logo_url = logo_url
+                if description is not None:
+                    existing.description = description
+                if website_url is not None:
+                    existing.website_url = website_url
+                rows_updated += 1
+            else:
+                db.add(Shop(name=name, logo_url=logo_url, description=description, website_url=website_url))
+                rows_added += 1
+
+        except Exception as e:
+            errors.append({"row": i, "error": str(e)})
+
+    await db.commit()
+    return ImportResult(rows_added=rows_added, rows_updated=rows_updated, errors=errors)
+
+
 @router.get("/shops", response_model=list[ShopOut])
 async def admin_list_shops(db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
     from sqlalchemy import func
@@ -141,13 +196,15 @@ async def delete_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User 
 @router.get("/products", response_model=list[ProductOut])
 async def admin_list_products(
     shop_id: int | None = None,
+    limit: int = 500,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
     stmt = select(Product, Shop.name.label("shop_name")).join(Shop, Shop.id == Product.shop_id)
     if shop_id:
         stmt = stmt.where(Product.shop_id == shop_id)
-    stmt = stmt.order_by(Product.name).limit(200)
+    stmt = stmt.order_by(Product.name).limit(min(limit, 1000)).offset(offset)
     result = await db.execute(stmt)
     products = []
     for product, shop_name in result.all():

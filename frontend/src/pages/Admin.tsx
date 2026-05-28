@@ -18,6 +18,10 @@ export default function Admin() {
   const [selectedShop, setSelectedShop] = useState<number | undefined>()
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importing, setImporting] = useState(false)
+  const [shopImportResult, setShopImportResult] = useState<ImportResult | null>(null)
+  const [importingShops, setImportingShops] = useState(false)
+  const [seedResult, setSeedResult] = useState<string | null>(null)
+  const [seeding, setSeeding] = useState(false)
   const [tab, setTab] = useState<'shops' | 'products'>('shops')
 
   useEffect(() => {
@@ -60,6 +64,37 @@ export default function Admin() {
     setProducts(prev => prev.filter(p => p.id !== id))
   }
 
+  async function handleShopCsvUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !token) return
+    setImportingShops(true)
+    setShopImportResult(null)
+    try {
+      const result = await api.importShopsCsv(file, token)
+      setShopImportResult(result)
+      api.adminShops(token).then(setShops)
+    } finally {
+      setImportingShops(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleSeed() {
+    if (!token || !confirm('Seed the database with 10 shops and 500 products?')) return
+    setSeeding(true)
+    setSeedResult(null)
+    try {
+      const result = await api.seedDatabase(token)
+      setSeedResult(result.message)
+      api.adminShops(token).then(setShops)
+      api.adminProducts(token, selectedShop).then(setProducts)
+    } catch (err: unknown) {
+      setSeedResult(err instanceof Error ? err.message : 'Seed failed')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -67,7 +102,21 @@ export default function Admin() {
         <h1 className={styles.title}>Admin Portal</h1>
       </header>
 
-      {/* CSV Import */}
+      {/* Seed Database */}
+      <section className={styles.importSection}>
+        <div className={styles.seedHeader}>
+          <div>
+            <h2 className={styles.sectionTitle}>Seed Database</h2>
+            <p className={styles.csvHint}>Populate with 10 shops and 500 sample products. Only runs if no shops exist.</p>
+          </div>
+          <button className={styles.seedBtn} onClick={handleSeed} disabled={seeding}>
+            {seeding ? 'Seeding…' : 'Seed Database'}
+          </button>
+        </div>
+        {seedResult && <div className={styles.importResult}><p>{seedResult}</p></div>}
+      </section>
+
+      {/* CSV Import — Products */}
       <section className={styles.importSection}>
         <h2 className={styles.sectionTitle}>Import Products via CSV</h2>
         <p className={styles.csvHint}>
@@ -76,7 +125,7 @@ export default function Admin() {
         <label className={styles.uploadLabel}>
           <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={importing} hidden />
           <span className={`${styles.uploadBtn} ${importing ? styles.disabled : ''}`}>
-            {importing ? 'Importing…' : '📂 Upload CSV'}
+            {importing ? 'Importing…' : 'Upload Products CSV'}
           </span>
         </label>
         {importResult && (
@@ -87,6 +136,35 @@ export default function Admin() {
                 <p>⚠️ {importResult.errors.length} errors:</p>
                 <ul>
                   {importResult.errors.map((e, i) => (
+                    <li key={i}>Row {e.row}: {e.error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* CSV Import — Shops */}
+      <section className={styles.importSection}>
+        <h2 className={styles.sectionTitle}>Import Shops via CSV</h2>
+        <p className={styles.csvHint}>
+          Required: <code>name</code> &nbsp;|&nbsp; Optional: <code>logo_url, description, website_url</code>
+        </p>
+        <label className={styles.uploadLabel}>
+          <input type="file" accept=".csv" onChange={handleShopCsvUpload} disabled={importingShops} hidden />
+          <span className={`${styles.uploadBtn} ${importingShops ? styles.disabled : ''}`}>
+            {importingShops ? 'Importing…' : 'Upload Shops CSV'}
+          </span>
+        </label>
+        {shopImportResult && (
+          <div className={styles.importResult}>
+            <p>✅ {shopImportResult.rows_added} added, {shopImportResult.rows_updated} updated</p>
+            {shopImportResult.errors.length > 0 && (
+              <div className={styles.errors}>
+                <p>⚠️ {shopImportResult.errors.length} errors:</p>
+                <ul>
+                  {shopImportResult.errors.map((e, i) => (
                     <li key={i}>Row {e.row}: {e.error}</li>
                   ))}
                 </ul>
