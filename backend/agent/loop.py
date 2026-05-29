@@ -75,6 +75,16 @@ async def run_agent_turn(
 
     await save_turn(session_id, "user", user_content, None, None, db)
 
+    # Update session: stamp updated_at and set title from first message if still default
+    from sqlalchemy import update as sa_update
+    from datetime import datetime, timezone
+    session_row = (await db.execute(select(AgentSession).where(AgentSession.id == session_id))).scalars().first()
+    if session_row:
+        session_row.updated_at = datetime.now(timezone.utc)
+        if session_row.title in ("New conversation", "Guest conversation"):
+            session_row.title = user_message[:80]
+        db.add(session_row)
+
     # Build message list
     messages = history + [{"role": "user", "content": user_content}]
 

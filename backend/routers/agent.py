@@ -73,6 +73,56 @@ async def create_guest_session(db: AsyncSession = Depends(get_db)):
     return session
 
 
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(AgentSession).where(
+            AgentSession.id == session_id,
+            AgentSession.user_id == current_user.id,
+        )
+    )
+    session = result.scalars().first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    await db.delete(session)
+    await db.commit()
+
+
+@router.get("/sessions/{session_id}/turns")
+async def get_turns(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(AgentSession).where(AgentSession.id == session_id, AgentSession.user_id == current_user.id)
+    )
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    from db.models import AgentTurn
+    turns_result = await db.execute(
+        select(AgentTurn)
+        .where(AgentTurn.session_id == session_id)
+        .order_by(AgentTurn.created_at.asc())
+    )
+    turns = turns_result.scalars().all()
+    return [
+        {
+            "role": t.role,
+            "content": t.content,
+            "tool_calls": t.tool_calls,
+            "tool_results": t.tool_results,
+            "created_at": t.created_at.isoformat(),
+        }
+        for t in turns
+    ]
+
+
 @router.get("/sessions/{session_id}/plan", response_model=PlanOut | None)
 async def get_plan(
     session_id: int,

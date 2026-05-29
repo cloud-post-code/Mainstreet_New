@@ -62,6 +62,9 @@ export const api = {
     }).then(r => r.json())
   },
 
+  getTurns: (sessionId: number, token: string) =>
+    request<Array<{ role: string; content: unknown; tool_calls: unknown; tool_results: unknown; created_at: string }>>(`/api/agent/sessions/${sessionId}/turns`, {}, token),
+
   deleteSession: (id: number, token: string) =>
     request<void>(`/api/agent/sessions/${id}`, { method: 'DELETE' }, token),
 

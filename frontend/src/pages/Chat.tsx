@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, FormEvent, KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, FormEvent, KeyboardEvent, MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream } from '../hooks/useAgentStream'
@@ -15,6 +15,7 @@ export default function Chat() {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [input, setInput] = useState('')
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
+  const [loadedMessages, setLoadedMessages] = useState<import('../hooks/useAgentStream').Message[]>([])
   const [authMode, setAuthMode] = useState<AuthMode>('none')
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
@@ -23,7 +24,8 @@ export default function Chat() {
   const [authLoading, setAuthLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const { messages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
+  const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
+  const messages = liveMessages.length > 0 ? liveMessages : loadedMessages
 
   // Load sessions for authenticated users
   useEffect(() => {
@@ -42,6 +44,10 @@ export default function Chat() {
   }, [token, activeSessionId])
 
   useEffect(() => {
+    if (liveMessages.length > 0) setLoadedMessages([])
+  }, [liveMessages.length])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
@@ -55,13 +61,33 @@ export default function Chat() {
       setActiveSessionId(s.id)
     }
     setAnsweredQuestions(new Set())
+    setLoadedMessages([])
     reset()
   }
 
-  function selectSession(id: number) {
+  async function selectSession(id: number) {
     setActiveSessionId(id)
     setAnsweredQuestions(new Set())
     reset()
+    if (token) {
+      try {
+        const turns = await api.getTurns(id, token)
+        const msgs: import('../hooks/useAgentStream').Message[] = []
+        for (const t of turns) {
+          if (t.role === 'user') {
+            const text = typeof t.content === 'string' ? t.content : Array.isArray(t.content) ? (t.content as Array<{type:string;text?:string}>).find(b => b.type === 'text')?.text ?? '' : ''
+            if (text) msgs.push({ id: t.created_at + '-u', from: 'user', text })
+          } else if (t.role === 'assistant') {
+            const blocks = Array.isArray(t.content) ? t.content as Array<{type:string;text?:string;name?:string;input?:unknown}> : []
+            const events: import('../hooks/useAgentStream').StreamEvent[] = blocks
+              .filter(b => b.type === 'text' && b.text)
+              .map(b => ({ type: 'text' as const, content: b.text! }))
+            if (events.length) msgs.push({ id: t.created_at + '-a', from: 'agent', events })
+          }
+        }
+        if (msgs.length) setLoadedMessages(msgs)
+      } catch { /* ignore — session may have no turns yet */ }
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -116,14 +142,27 @@ export default function Chat() {
       const s = await api.getSessions(data.access_token)
       setSessions(s)
       if (s.length) {
-        setActiveSessionId(s[0].id)
-        reset()
+        await selectSession(s[0].id)
       }
     } catch (err: unknown) {
       setAuthError((err as Error).message)
     } finally {
       setAuthLoading(false)
     }
+  }
+
+  async function handleDeleteSession(e: MouseEvent, id: number) {
+    e.stopPropagation()
+    if (!token || !confirm('Delete this conversation?')) return
+    await api.deleteSession(id, token)
+    setSessions(prev => {
+      const remaining = prev.filter(s => s.id !== id)
+      if (activeSessionId === id) {
+        if (remaining.length > 0) selectSession(remaining[0].id)
+        else newSession()
+      }
+      return remaining
+    })
   }
 
   function handleLogout() {
@@ -158,7 +197,14 @@ export default function Chat() {
                 onClick={() => selectSession(s.id)}
               >
                 <span className={styles.sessionTitle}>{s.title}</span>
-                <span className={styles.sessionDate}>{new Date(s.updated_at).toLocaleDateString()}</span>
+                <div className={styles.sessionMeta}>
+                  <span className={styles.sessionDate}>{new Date(s.updated_at).toLocaleDateString()}</span>
+                  <button
+                    className={styles.deleteSessionBtn}
+                    onClick={e => handleDeleteSession(e, s.id)}
+                    title="Delete conversation"
+                  >×</button>
+                </div>
               </button>
             ))}
           </div>
