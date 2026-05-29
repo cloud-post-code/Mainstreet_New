@@ -79,12 +79,15 @@ export default function Admin() {
     }
   }
 
-  async function handleSeed() {
-    if (!token || !confirm('Seed the database with 10 shops and 500 products?')) return
+  async function handleSeed(force = false) {
+    const msg = force
+      ? 'Re-seed will delete the 10 default shops and re-create them with 500 products. Continue?'
+      : 'Seed the database with 10 shops and 500 sample products?'
+    if (!token || !confirm(msg)) return
     setSeeding(true)
     setSeedResult(null)
     try {
-      const result = await api.seedDatabase(token)
+      const result = await api.seedDatabase(token, force)
       setSeedResult(result.message)
       api.adminShops(token).then(setShops)
       api.adminProducts(token, selectedShop).then(setProducts)
@@ -107,11 +110,18 @@ export default function Admin() {
         <div className={styles.seedHeader}>
           <div>
             <h2 className={styles.sectionTitle}>Seed Database</h2>
-            <p className={styles.csvHint}>Populate with 10 shops and 500 sample products. Only runs if no shops exist.</p>
+            <p className={styles.csvHint}>Populate with 10 shops and 500 sample products.</p>
           </div>
-          <button className={styles.seedBtn} onClick={handleSeed} disabled={seeding}>
-            {seeding ? 'Seeding…' : 'Seed Database'}
-          </button>
+          <div className={styles.seedActions}>
+            <button className={styles.seedBtn} onClick={() => handleSeed(false)} disabled={seeding}>
+              {seeding ? 'Seeding…' : 'Seed Database'}
+            </button>
+            {shops.length > 0 && (
+              <button className={styles.reseedBtn} onClick={() => handleSeed(true)} disabled={seeding} title="Delete default shops and re-create from scratch">
+                Re-seed
+              </button>
+            )}
+          </div>
         </div>
         {seedResult && <div className={styles.importResult}><p>{seedResult}</p></div>}
       </section>

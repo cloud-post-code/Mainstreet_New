@@ -88,7 +88,21 @@
 .sessionItem:hover { background: rgba(255,255,255,0.1); }
 .sessionItem.active { background: rgba(255,255,255,0.15); color: white; }
 .sessionTitle { font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; font-family: var(--font-body); }
-.sessionDate { font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.1rem; }
+.sessionMeta { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 0.1rem; }
+.sessionDate { font-size: 0.7rem; color: rgba(255,255,255,0.4); }
+.deleteSessionBtn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--ms-terra, #be6e46);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px;
+  transition: opacity 0.15s;
+}
+.sessionItem:hover .deleteSessionBtn { opacity: 1; }
+.deleteSessionBtn:hover { color: #e05a30; }
 
 .sidebarFooter {
   border-top: 1px solid rgba(255,255,255,0.15);

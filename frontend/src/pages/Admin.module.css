@@ -51,6 +51,21 @@
 }
 .seedBtn:hover:not(:disabled) { opacity: 0.85; }
 .seedBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.seedActions { display: flex; gap: 0.5rem; flex-shrink: 0; align-items: center; }
+.reseedBtn {
+  padding: 0.65rem 1rem;
+  background: transparent;
+  color: var(--ms-terracotta, #be6e46);
+  border: 1.5px solid var(--ms-terracotta, #be6e46);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.reseedBtn:hover:not(:disabled) { background: var(--ms-terracotta, #be6e46); color: white; }
+.reseedBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Import */
 .importSection {

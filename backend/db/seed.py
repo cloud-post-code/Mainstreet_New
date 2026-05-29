@@ -68,14 +68,21 @@ def make_product(shop_id: int, category: str, tags: list[str]) -> dict:
     }
 
 
-async def seed():
+async def seed(force: bool = False):
     await create_tables()
     async with AsyncSessionLocal() as session:
-        # Check if already seeded
         result = await session.execute(select(Shop).limit(1))
         if result.scalars().first():
-            print("Database already seeded. Skipping.")
-            return
+            if not force:
+                print("Database already seeded. Skipping.")
+                return
+            # Wipe existing seed shops by name so we can re-insert cleanly
+            seed_shop_names = [name for name, _, _ in SHOP_CATEGORIES]
+            for name in seed_shop_names:
+                existing = (await session.execute(select(Shop).where(Shop.name == name))).scalars().first()
+                if existing:
+                    await session.delete(existing)
+            await session.flush()
 
         shops = []
         for shop_name, category, tags in SHOP_CATEGORIES:
