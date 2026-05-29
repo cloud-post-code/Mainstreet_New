@@ -1,5 +1,10 @@
 const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
 
+export function clearStoredAuth() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+}
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -9,6 +14,10 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
   if (!res.ok) {
+    if (res.status === 401) {
+      clearStoredAuth()
+      window.location.reload()
+    }
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Request failed')
   }
@@ -53,6 +62,9 @@ export const api = {
     }).then(r => r.json())
   },
 
+  deleteSession: (id: number, token: string) =>
+    request<void>(`/api/agent/sessions/${id}`, { method: 'DELETE' }, token),
+
   importShopsCsv: (file: File, token: string) => {
     const fd = new FormData()
     fd.append('file', file)
@@ -63,8 +75,8 @@ export const api = {
     }).then(r => r.json())
   },
 
-  seedDatabase: (token: string) =>
-    request<{ status: string; message: string }>('/api/admin/seed', { method: 'POST' }, token),
+  seedDatabase: (token: string, force = false) =>
+    request<{ status: string; message: string }>(`/api/admin/seed${force ? '?force=true' : ''}`, { method: 'POST' }, token),
 
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
   adminProducts: (token: string, shopId?: number, limit = 500) =>
