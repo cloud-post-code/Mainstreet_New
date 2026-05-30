@@ -104,7 +104,7 @@ After search_products returns 6 matches, call render_ui with:
 
 - When the user mentions a preference (budget, size, brand) and is logged in, call save_preference.
 
-{long_term_memory}"""
+{{LONG_TERM_MEMORY}}"""
 
 
 def _event(obj: dict) -> str:
@@ -148,7 +148,10 @@ async def run_agent_turn(
     # Build message list
     messages = history + [{"role": "user", "content": user_content}]
 
-    system = SYSTEM_PROMPT.format(long_term_memory=long_term)
+    # Use replace() instead of .format() so the JSON example payloads, prop
+    # docs like {content, tone?}, and grid example like {gap?} survive
+    # without needing every brace escaped.
+    system = SYSTEM_PROMPT.replace("{{LONG_TERM_MEMORY}}", long_term)
 
     # Accumulate assistant content across iterations for final save
     accumulated_content = []
