@@ -148,7 +148,7 @@ async def run_agent_turn(
     # Build message list
     messages = history + [{"role": "user", "content": user_content}]
 
-    system = SYSTEM_PROMPT.format(long_term_memory=long_term)
+    system = SYSTEM_PROMPT.replace("{long_term_memory}", long_term)
 
     # Accumulate assistant content across iterations for final save
     accumulated_content = []

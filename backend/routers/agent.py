@@ -10,6 +10,8 @@ from db.schemas import SessionOut, TurnIn, PlanOut
 from auth import get_current_user
 from agent.loop import run_agent_turn
 
+GUEST_USER_EMAIL = "guest@internal.local"
+
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
@@ -66,7 +68,21 @@ async def create_session(
 @router.post("/guest-session", response_model=SessionOut, status_code=201)
 async def create_guest_session(db: AsyncSession = Depends(get_db)):
     """Create an ephemeral session for unauthenticated users. Memory is not saved."""
-    session = AgentSession(user_id=None, title="Guest conversation")
+    # Resolve (or lazily create) the shared guest user so user_id is never NULL.
+    result = await db.execute(select(User).where(User.email == GUEST_USER_EMAIL))
+    guest_user = result.scalars().first()
+    if not guest_user:
+        import secrets
+        guest_user = User(
+            email=GUEST_USER_EMAIL,
+            password_hash=secrets.token_hex(32),  # unusable password — login is blocked
+            display_name="Guest",
+            is_admin=False,
+        )
+        db.add(guest_user)
+        await db.flush()  # populate guest_user.id without committing
+
+    session = AgentSession(user_id=guest_user.id, title="Guest conversation")
     db.add(session)
     await db.commit()
     await db.refresh(session)
@@ -151,12 +167,16 @@ async def agent_turn(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    # For authenticated users: verify session ownership
-    # For anonymous: verify session has no owner (user_id IS NULL)
+    # For authenticated users: verify session ownership.
+    # For anonymous: verify session belongs to the shared guest user.
     if current_user:
         owner_filter = (AgentSession.user_id == current_user.id)
     else:
-        owner_filter = (AgentSession.user_id == None)  # noqa: E711
+        guest_result = await db.execute(select(User).where(User.email == GUEST_USER_EMAIL))
+        guest_user = guest_result.scalars().first()
+        if not guest_user:
+            raise HTTPException(status_code=404, detail="Session not found")
+        owner_filter = (AgentSession.user_id == guest_user.id)
 
     result = await db.execute(
         select(AgentSession).where(
