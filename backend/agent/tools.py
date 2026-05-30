@@ -1,12 +1,11 @@
 """Tool definitions (schemas for Claude) and tool execution logic."""
-import json
 from typing import Any
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from db.models import Product, Shop, AgentPlan, UserMemory
-from db.schemas import ProductOut, ShopOut
+from db.models import Product, Shop, AgentPlan
 from agent.memory import save_preference
+from agent.a2ui_schema import RENDER_UI_TOOL_SCHEMA, validate_render_ui
 
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 
@@ -15,7 +14,8 @@ TOOL_DEFINITIONS = [
         "name": "search_products",
         "description": (
             "Search products in the database. Returns a list of matching products. "
-            "Use this before building product cards. Supports full-text search and filters."
+            "Call this before render_ui whenever the UI will reference products. "
+            "Supports full-text search and filters."
         ),
         "input_schema": {
             "type": "object",
@@ -39,72 +39,13 @@ TOOL_DEFINITIONS = [
             },
         },
     },
-    {
-        "name": "build_product_card",
-        "description": (
-            "Render a product as a rich UI card artifact. Call this after search_products "
-            "to display products to the user. Pass the full product data."
-        ),
-        "input_schema": {
-            "type": "object",
-            "required": ["product_id", "name", "price", "shop_name"],
-            "properties": {
-                "product_id": {"type": "integer"},
-                "name": {"type": "string"},
-                "price": {"type": "number"},
-                "quantity": {"type": "integer"},
-                "image_url": {"type": "string"},
-                "shop_name": {"type": "string"},
-                "shop_id": {"type": "integer"},
-                "description_summary": {"type": "string", "description": "Short 1-2 sentence summary"},
-                "tags": {"type": "array", "items": {"type": "string"}},
-            },
-        },
-    },
-    {
-        "name": "build_shop_card",
-        "description": "Render a shop as a UI card artifact to display to the user.",
-        "input_schema": {
-            "type": "object",
-            "required": ["shop_id", "name"],
-            "properties": {
-                "shop_id": {"type": "integer"},
-                "name": {"type": "string"},
-                "logo_url": {"type": "string"},
-                "description": {"type": "string"},
-                "website_url": {"type": "string"},
-                "product_count": {"type": "integer"},
-            },
-        },
-    },
-    {
-        "name": "build_question_card",
-        "description": (
-            "Ask the user a clarifying question as an interactive UI card. "
-            "Use when you need more information before searching (e.g., budget, size, preference). "
-            "The user's answer will be sent back to you as a tool result."
-        ),
-        "input_schema": {
-            "type": "object",
-            "required": ["question_id", "question"],
-            "properties": {
-                "question_id": {"type": "string", "description": "Unique ID for this question, e.g. 'q_budget'"},
-                "question": {"type": "string", "description": "The question to ask"},
-                "options": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional predefined choices. If omitted, free-text input shown.",
-                },
-                "hint": {"type": "string", "description": "Placeholder text for free-text input"},
-            },
-        },
-    },
+    RENDER_UI_TOOL_SCHEMA,
     {
         "name": "generate_plan",
         "description": (
             "Generate a numbered plan of steps before executing. Use for complex multi-step requests. "
             "The plan is shown to the user as a collapsible dropdown. "
-            "After calling this, proceed to execute the steps."
+            "After calling this, proceed to execute the steps and finish with render_ui."
         ),
         "input_schema": {
             "type": "object",
@@ -154,7 +95,7 @@ async def execute_tool(
     """
     Execute a tool and return (result_for_claude, event_type).
     result_for_claude is what gets sent back as tool_result content.
-    event_type is an optional streaming event hint (e.g. "artifact").
+    event_type is an optional streaming event hint (e.g. "ui_tree").
     """
     if tool_name == "search_products":
         return await _search_products(tool_input, db), None
@@ -162,9 +103,18 @@ async def execute_tool(
     if tool_name == "search_shops":
         return await _search_shops(tool_input, db), None
 
-    if tool_name in ("build_product_card", "build_shop_card", "build_question_card"):
-        # These are purely UI artifacts — we echo the input back and flag as artifact
-        return {"artifact": True, "kind": tool_name, "data": tool_input}, "artifact"
+    if tool_name == "render_ui":
+        errors = validate_render_ui(tool_input)
+        if errors:
+            return (
+                {
+                    "render_ui_invalid": True,
+                    "errors": errors,
+                    "hint": "Fix the listed errors and call render_ui again in this same turn.",
+                },
+                None,
+            )
+        return {"rendered": True}, "ui_tree"
 
     if tool_name == "generate_plan":
         return await _generate_plan(tool_input, session_id, db), "plan_update"

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { useAuth } from './useAuth'
+import { A2uiComponent } from '../a2ui/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
 
@@ -8,7 +9,7 @@ export type StreamEvent =
   | { type: 'text'; content: string }
   | { type: 'tool_call'; tool: string; args: Record<string, unknown>; id: string }
   | { type: 'tool_result'; tool: string; result: unknown }
-  | { type: 'artifact'; kind: string; data: Record<string, unknown>; tool_use_id: string }
+  | { type: 'ui_tree'; root: string; components: A2uiComponent[]; tool_use_id: string }
   | { type: 'plan_update'; steps: Array<{ step: number; description: string; done: boolean }> }
   | { type: 'done' }
 
@@ -78,7 +79,11 @@ export function useAgentStream(sessionId: number | null) {
                   : m
               )
             )
-          } catch { /* ignore malformed lines */ }
+          } catch (err) {
+            if (import.meta.env.DEV) {
+              console.warn('useAgentStream: dropped malformed NDJSON line', line, err)
+            }
+          }
         }
       }
     } catch (e: unknown) {

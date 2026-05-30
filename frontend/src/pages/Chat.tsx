@@ -78,10 +78,42 @@ export default function Chat() {
             const text = typeof t.content === 'string' ? t.content : Array.isArray(t.content) ? (t.content as Array<{type:string;text?:string}>).find(b => b.type === 'text')?.text ?? '' : ''
             if (text) msgs.push({ id: t.created_at + '-u', from: 'user', text })
           } else if (t.role === 'assistant') {
-            const blocks = Array.isArray(t.content) ? t.content as Array<{type:string;text?:string;name?:string;input?:unknown}> : []
-            const events: import('../hooks/useAgentStream').StreamEvent[] = blocks
-              .filter(b => b.type === 'text' && b.text)
-              .map(b => ({ type: 'text' as const, content: b.text! }))
+            const blocks = Array.isArray(t.content)
+              ? t.content as Array<{ type: string; text?: string; name?: string; id?: string; input?: { root?: string; components?: import('../a2ui/types').A2uiComponent[] } }>
+              : []
+            // Map tool_use_id -> success, derived from tool_results. Only restore
+            // ui_trees whose render_ui call actually succeeded.
+            const toolResults = Array.isArray(t.tool_results)
+              ? t.tool_results as Array<{ tool_use_id?: string; content?: string }>
+              : []
+            const renderOk = new Set<string>()
+            for (const tr of toolResults) {
+              if (!tr.tool_use_id || typeof tr.content !== 'string') continue
+              try {
+                const parsed = JSON.parse(tr.content)
+                if (parsed?.rendered === true) renderOk.add(tr.tool_use_id)
+              } catch { /* ignore */ }
+            }
+            const events: import('../hooks/useAgentStream').StreamEvent[] = []
+            for (const b of blocks) {
+              if (b.type === 'text' && b.text) {
+                events.push({ type: 'text', content: b.text })
+              } else if (
+                b.type === 'tool_use'
+                && b.name === 'render_ui'
+                && b.id
+                && renderOk.has(b.id)
+                && b.input?.root
+                && Array.isArray(b.input.components)
+              ) {
+                events.push({
+                  type: 'ui_tree',
+                  root: b.input.root,
+                  components: b.input.components,
+                  tool_use_id: b.id,
+                })
+              }
+            }
             if (events.length) msgs.push({ id: t.created_at + '-a', from: 'agent', events })
           }
         }
@@ -118,6 +150,46 @@ export default function Chat() {
   function handleAnswer(answer: string, questionCardId: string) {
     setAnsweredQuestions(prev => new Set([...prev, questionCardId]))
     sendMessage(answer, questionCardId)
+  }
+
+  function latestProductIds(): number[] {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.from !== 'agent') continue
+      const trees = (m.events ?? []).filter(e => e.type === 'ui_tree')
+      if (!trees.length) continue
+      const last = trees[trees.length - 1] as Extract<import('../hooks/useAgentStream').StreamEvent, { type: 'ui_tree' }>
+      const ids: number[] = []
+      for (const c of last.components) {
+        if (c.type === 'product_card') {
+          const pid = (c.props as { product_id?: unknown }).product_id
+          if (typeof pid === 'number') ids.push(pid)
+        }
+      }
+      return ids
+    }
+    return []
+  }
+
+  function handleIntent(intent: string, payload?: unknown) {
+    if (streaming) return
+    const p: Record<string, unknown> =
+      payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    if (intent === 'open_details') {
+      const name = p.name ?? (p.product_id != null ? `product ${p.product_id}` : 'this product')
+      sendMessage(`Show me more details for ${name}.`)
+    } else if (intent === 'compare') {
+      const ids = latestProductIds()
+      sendMessage(
+        ids.length
+          ? `Compare these products for me: ${ids.join(', ')}.`
+          : `Compare the products you just showed me.`
+      )
+    } else if (typeof p.label === 'string' && p.label) {
+      sendMessage(p.label)
+    } else {
+      sendMessage(intent)
+    }
   }
 
   function openAuth(mode: 'login' | 'register') {
@@ -319,6 +391,7 @@ export default function Chat() {
                     <AgentMessage
                       events={msg.events ?? []}
                       onAnswer={handleAnswer}
+                      onIntent={handleIntent}
                       answeredQuestions={answeredQuestions}
                     />
                   )}

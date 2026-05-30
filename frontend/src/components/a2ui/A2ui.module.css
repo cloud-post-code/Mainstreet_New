@@ -1,0 +1,290 @@
+/* ── Stack ── */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+/* ── TextBlock ── */
+.textBlock {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ms-dark);
+  white-space: pre-wrap;
+}
+.textBlockMuted {
+  color: #777;
+  font-size: 0.875rem;
+}
+
+/* ── ReasoningBlock ── */
+.reasoning {
+  border: 1px dashed rgba(122, 158, 126, 0.4);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  background: rgba(241, 233, 216, 0.35);
+}
+.reasoning > summary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--ms-sage);
+  font-weight: 600;
+  list-style: none;
+  user-select: none;
+}
+.reasoning > summary::-webkit-details-marker { display: none; }
+.reasoning > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 0.4rem;
+  transition: transform 0.15s;
+}
+.reasoning[open] > summary::before {
+  transform: rotate(90deg);
+}
+.reasoningBody {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed rgba(122, 158, 126, 0.3);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #555;
+  white-space: pre-wrap;
+}
+
+/* ── ProductGrid ── */
+.gridWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.gridTitle {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ms-dark);
+}
+.gridSubtitle {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: #777;
+  margin-top: -0.25rem;
+}
+.gridRecommendation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0.75rem;
+}
+.gridComparison {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+.gridCurated {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0.75rem;
+}
+
+/* ── ComparisonTable ── */
+.tableWrapper {
+  overflow-x: auto;
+  border: 1px solid rgba(122, 158, 126, 0.3);
+  border-radius: 12px;
+  background: var(--ms-secondary);
+}
+.compTable {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--font-body);
+}
+.compTable th,
+.compTable td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(122, 158, 126, 0.2);
+  font-size: 0.875rem;
+  color: var(--ms-dark);
+  vertical-align: top;
+}
+.compTable th {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  background: var(--ms-cream);
+  color: var(--ms-dark);
+}
+.compAttr {
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--ms-primary);
+  background: rgba(241, 233, 216, 0.4);
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* ── MultipleChoice ── */
+.choiceCard {
+  background: rgba(241, 233, 216, 0.6);
+  border: 1.5px solid rgba(190, 110, 70, 0.35);
+  border-radius: 12px;
+  padding: 1rem 1.125rem;
+  max-width: 480px;
+}
+.choiceQ {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ms-dark);
+  margin-bottom: 0.75rem;
+}
+.choiceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.choiceBtn {
+  text-align: left;
+  padding: 0.55rem 0.85rem;
+  background: white;
+  border: 1.5px solid rgba(122, 158, 126, 0.4);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--ms-dark);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.choiceBtn:hover:not(:disabled) {
+  border-color: var(--ms-primary);
+  color: var(--ms-primary);
+}
+.choiceBtnSelected {
+  background: var(--ms-primary);
+  color: white;
+  border-color: var(--ms-primary);
+}
+.choiceBtn:disabled { cursor: not-allowed; opacity: 0.7; }
+
+/* ── ProductDetailsModal ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 24, 5, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+.modalCard {
+  background: var(--ms-secondary);
+  border-radius: 16px;
+  max-width: 640px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  position: relative;
+  box-shadow: 0 12px 48px rgba(15, 24, 5, 0.25);
+}
+.modalClose {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+.modalImage {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: var(--ms-cream);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modalImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.modalShop {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ms-primary);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.modalName {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ms-dark);
+  margin-bottom: 0.5rem;
+}
+.modalPrice {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--ms-primary);
+  margin-bottom: 1rem;
+}
+.modalDesc {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ms-dark);
+  margin-bottom: 1rem;
+}
+.modalTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.modalTag {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  background: var(--ms-cream);
+  color: #555;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+
+/* ── NextActions ── */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.actionChip {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  background: white;
+  color: var(--ms-primary);
+  border: 1.5px solid rgba(1, 82, 55, 0.3);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+.actionChip:hover {
+  background: var(--ms-primary);
+  color: white;
+  border-color: var(--ms-primary);
+}
+

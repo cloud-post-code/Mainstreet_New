@@ -1,4 +1,5 @@
 import styles from './Cards.module.css'
+import { IntentHandler } from '../a2ui/types'
 
 interface Props {
   product_id: number
@@ -10,12 +11,18 @@ interface Props {
   shop_id?: number
   description_summary?: string
   tags?: string[]
+  onIntent?: IntentHandler
 }
 
 export default function ProductCard(props: Props) {
   const inStock = (props.quantity ?? 0) > 0
+  const clickable = Boolean(props.onIntent)
   return (
-    <div className={styles.productCard}>
+    <div
+      className={styles.productCard}
+      style={clickable ? { cursor: 'pointer' } : undefined}
+      onClick={clickable ? () => props.onIntent?.('open_details', { product_id: props.product_id, name: props.name }) : undefined}
+    >
       <div className={styles.productImage}>
         {props.image_url
           ? <img src={props.image_url} alt={props.name} />
