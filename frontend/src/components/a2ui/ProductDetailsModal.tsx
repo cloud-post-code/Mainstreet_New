@@ -13,18 +13,10 @@ interface Props {
   _a2uiId?: string
 }
 
-// Tracks which modal component instances have already auto-opened during this
-// page session. The agent's first render of a modal pops it up; reopening the
-// conversation later shows a placeholder pill that the user clicks to view it.
-const autoOpened = new Set<string>()
-
 export default function ProductDetailsModal(props: Props) {
-  const key = props._a2uiId ?? `${props.product_id}:${props.name}`
-  const [open, setOpen] = useState(() => {
-    if (autoOpened.has(key)) return false
-    autoOpened.add(key)
-    return true
-  })
+  // Always closed by default. The modal only appears when the user clicks
+  // the placeholder pill — never auto-pops, even on the agent's first render.
+  const [open, setOpen] = useState(false)
 
   if (!open) {
     return (

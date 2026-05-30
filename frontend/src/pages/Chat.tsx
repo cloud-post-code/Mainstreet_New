@@ -9,6 +9,68 @@ import styles from './Chat.module.css'
 
 type AuthMode = 'none' | 'login' | 'register'
 
+type Turn = {
+  role: string
+  content: unknown
+  tool_calls: unknown
+  tool_results: unknown
+  created_at: string
+}
+
+// Converts the backend's raw turn rows into the Message shape the chat
+// renders. Pulled out of the component so both initial load and the
+// "load older" pagination path can share it.
+function parseTurns(turns: Turn[]): import('../hooks/useAgentStream').Message[] {
+  const msgs: import('../hooks/useAgentStream').Message[] = []
+  for (const t of turns) {
+    if (t.role === 'user') {
+      const text = typeof t.content === 'string'
+        ? t.content
+        : Array.isArray(t.content)
+          ? (t.content as Array<{type:string;text?:string}>).find(b => b.type === 'text')?.text ?? ''
+          : ''
+      if (text) msgs.push({ id: t.created_at + '-u', from: 'user', text })
+    } else if (t.role === 'assistant') {
+      const blocks = Array.isArray(t.content)
+        ? t.content as Array<{ type: string; text?: string; name?: string; id?: string; input?: { root?: string; components?: import('../a2ui/types').A2uiComponent[] } }>
+        : []
+      const toolResults = Array.isArray(t.tool_results)
+        ? t.tool_results as Array<{ tool_use_id?: string; content?: string }>
+        : []
+      const renderOk = new Set<string>()
+      for (const tr of toolResults) {
+        if (!tr.tool_use_id || typeof tr.content !== 'string') continue
+        try {
+          const parsed = JSON.parse(tr.content)
+          if (parsed?.rendered === true) renderOk.add(tr.tool_use_id)
+        } catch { /* ignore */ }
+      }
+      const events: import('../hooks/useAgentStream').StreamEvent[] = []
+      for (const b of blocks) {
+        if (b.type === 'text' && b.text) {
+          events.push({ type: 'text', content: b.text })
+        } else if (
+          b.type === 'tool_use'
+          && b.name === 'render_ui'
+          && b.id
+          && renderOk.has(b.id)
+          && b.input?.root
+          && Array.isArray(b.input.components)
+        ) {
+          events.push({
+            type: 'ui_tree',
+            root: b.input.root,
+            components: b.input.components,
+            tool_use_id: b.id,
+          })
+        }
+      }
+      if (events.length) msgs.push({ id: t.created_at + '-a', from: 'agent', events })
+    }
+  }
+  return msgs
+}
+
 export default function Chat() {
   const { token, user, login, logout } = useAuth()
   const navigate = useNavigate()
@@ -17,6 +79,9 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
   const [loadedMessages, setLoadedMessages] = useState<import('../hooks/useAgentStream').Message[]>([])
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [inboxOpen, setInboxOpen] = useState(false)
   const [inboxUnread, setInboxUnread] = useState(0)
   const [authMode, setAuthMode] = useState<AuthMode>('none')
@@ -31,6 +96,9 @@ export default function Chat() {
   // session A can resolve after the user has already moved to session B and
   // overwrite B's messages with A's history.
   const selectTokenRef = useRef(0)
+  // Set by "load older" to skip the next bottom-snap so the user stays at
+  // the point in history they were reading.
+  const skipNextScrollRef = useRef(false)
 
   const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
   // Memoize so the array reference is stable across renders that don't touch
@@ -71,6 +139,10 @@ export default function Chat() {
   useEffect(() => {
     const switched = prevSessionRef.current !== activeSessionId
     prevSessionRef.current = activeSessionId
+    if (skipNextScrollRef.current) {
+      skipNextScrollRef.current = false
+      return
+    }
     bottomRef.current?.scrollIntoView({
       behavior: switched ? 'auto' : 'smooth',
     })
@@ -97,59 +169,42 @@ export default function Chat() {
     setActiveSessionId(id)
     setAnsweredQuestions(new Set())
     setLoadedMessages([])
+    setHistoryCursor(null)
+    setHistoryHasMore(false)
     reset()
-    if (token) {
-      try {
-        const turns = await api.getTurns(id, token)
-        if (myToken !== selectTokenRef.current) return // user switched again, discard
-        const msgs: import('../hooks/useAgentStream').Message[] = []
-        for (const t of turns) {
-          if (t.role === 'user') {
-            const text = typeof t.content === 'string' ? t.content : Array.isArray(t.content) ? (t.content as Array<{type:string;text?:string}>).find(b => b.type === 'text')?.text ?? '' : ''
-            if (text) msgs.push({ id: t.created_at + '-u', from: 'user', text })
-          } else if (t.role === 'assistant') {
-            const blocks = Array.isArray(t.content)
-              ? t.content as Array<{ type: string; text?: string; name?: string; id?: string; input?: { root?: string; components?: import('../a2ui/types').A2uiComponent[] } }>
-              : []
-            // Map tool_use_id -> success, derived from tool_results. Only restore
-            // ui_trees whose render_ui call actually succeeded.
-            const toolResults = Array.isArray(t.tool_results)
-              ? t.tool_results as Array<{ tool_use_id?: string; content?: string }>
-              : []
-            const renderOk = new Set<string>()
-            for (const tr of toolResults) {
-              if (!tr.tool_use_id || typeof tr.content !== 'string') continue
-              try {
-                const parsed = JSON.parse(tr.content)
-                if (parsed?.rendered === true) renderOk.add(tr.tool_use_id)
-              } catch { /* ignore */ }
-            }
-            const events: import('../hooks/useAgentStream').StreamEvent[] = []
-            for (const b of blocks) {
-              if (b.type === 'text' && b.text) {
-                events.push({ type: 'text', content: b.text })
-              } else if (
-                b.type === 'tool_use'
-                && b.name === 'render_ui'
-                && b.id
-                && renderOk.has(b.id)
-                && b.input?.root
-                && Array.isArray(b.input.components)
-              ) {
-                events.push({
-                  type: 'ui_tree',
-                  root: b.input.root,
-                  components: b.input.components,
-                  tool_use_id: b.id,
-                })
-              }
-            }
-            if (events.length) msgs.push({ id: t.created_at + '-a', from: 'agent', events })
-          }
-        }
-        if (myToken !== selectTokenRef.current) return
-        if (msgs.length) setLoadedMessages(msgs)
-      } catch { /* ignore — session may have no turns yet */ }
+    if (!token) return
+    try {
+      const res = await api.getTurns(id, token, { limit: 20 })
+      if (myToken !== selectTokenRef.current) return
+      const msgs = parseTurns(res.turns)
+      setLoadedMessages(msgs)
+      setHistoryHasMore(res.has_more)
+      setHistoryCursor(res.next_cursor)
+    } catch { /* session may have no turns yet */ }
+  }
+
+  async function loadOlderMessages() {
+    if (!token || !activeSessionId || !historyCursor || historyLoading) return
+    setHistoryLoading(true)
+    const myToken = selectTokenRef.current
+    try {
+      const res = await api.getTurns(activeSessionId, token, {
+        limit: 20,
+        before: historyCursor,
+      })
+      if (myToken !== selectTokenRef.current) return
+      const older = parseTurns(res.turns)
+      // Prepend older messages; preserve existing scroll position by not
+      // touching the scroll ref here (the bottom-anchor effect only fires
+      // on length changes, but we want users reading older context to stay
+      // put — see the scroll-skip logic below).
+      skipNextScrollRef.current = true
+      setLoadedMessages(prev => [...older, ...prev])
+      setHistoryHasMore(res.has_more)
+      setHistoryCursor(res.next_cursor)
+    } catch { /* ignore */ }
+    finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -434,6 +489,17 @@ export default function Chat() {
           </div>
         ) : (
           <div className={styles.messages}>
+            {historyHasMore && (
+              <div className={styles.loadOlderWrap}>
+                <button
+                  className={styles.loadOlderBtn}
+                  onClick={loadOlderMessages}
+                  disabled={historyLoading}
+                >
+                  {historyLoading ? 'Loading…' : 'Load older messages'}
+                </button>
+              </div>
+            )}
             {(() => {
               // Find the index of the last agent message — only that one shows live streaming state.
               let lastAgentIdx = -1

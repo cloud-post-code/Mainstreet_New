@@ -63,8 +63,21 @@ export const api = {
     }).then(r => r.json())
   },
 
-  getTurns: (sessionId: number, token: string) =>
-    request<Array<{ role: string; content: unknown; tool_calls: unknown; tool_results: unknown; created_at: string }>>(`/api/agent/sessions/${sessionId}/turns`, {}, token),
+  getTurns: (
+    sessionId: number,
+    token: string,
+    opts: { limit?: number; before?: string } = {},
+  ) => {
+    const params = new URLSearchParams()
+    if (opts.limit) params.set('limit', String(opts.limit))
+    if (opts.before) params.set('before', opts.before)
+    const qs = params.toString()
+    return request<{
+      turns: Array<{ role: string; content: unknown; tool_calls: unknown; tool_results: unknown; created_at: string }>
+      has_more: boolean
+      next_cursor: string | null
+    }>(`/api/agent/sessions/${sessionId}/turns${qs ? `?${qs}` : ''}`, {}, token)
+  },
 
   deleteSession: (id: number, token: string) =>
     request<void>(`/api/agent/sessions/${id}`, { method: 'DELETE' }, token),

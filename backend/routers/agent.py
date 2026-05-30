@@ -95,9 +95,18 @@ async def delete_session(
 @router.get("/sessions/{session_id}/turns")
 async def get_turns(
     session_id: int,
+    limit: int = 20,
+    before: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Cursor-paginated turn history.
+
+    Returns the most recent `limit` turns older than `before` (an ISO
+    timestamp). Without `before`, returns the most recent page. Response
+    is in ascending chronological order; `has_more` indicates whether
+    older turns exist beyond the returned page.
+    """
     result = await db.execute(
         select(AgentSession).where(AgentSession.id == session_id, AgentSession.user_id == current_user.id)
     )
@@ -105,22 +114,47 @@ async def get_turns(
         raise HTTPException(status_code=404, detail="Session not found")
 
     from db.models import AgentTurn
-    turns_result = await db.execute(
-        select(AgentTurn)
-        .where(AgentTurn.session_id == session_id)
-        .order_by(AgentTurn.created_at.asc())
-    )
-    turns = turns_result.scalars().all()
-    return [
-        {
-            "role": t.role,
-            "content": t.content,
-            "tool_calls": t.tool_calls,
-            "tool_results": t.tool_results,
-            "created_at": t.created_at.isoformat(),
-        }
-        for t in turns
-    ]
+    from datetime import datetime
+
+    # Clamp limit to a sane range — guards against accidental huge fetches
+    # while still letting callers tune page size.
+    limit = max(1, min(limit, 100))
+
+    q = select(AgentTurn).where(AgentTurn.session_id == session_id)
+    if before:
+        try:
+            cursor = datetime.fromisoformat(before)
+            q = q.where(AgentTurn.created_at < cursor)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid `before` cursor")
+
+    # Fetch one extra row so we can tell the client whether more pages exist
+    # without a separate count query.
+    q = q.order_by(AgentTurn.created_at.desc()).limit(limit + 1)
+    turns_result = await db.execute(q)
+    page = turns_result.scalars().all()
+
+    has_more = len(page) > limit
+    if has_more:
+        page = page[:limit]
+    # Hand back oldest-first so the frontend can prepend without re-sorting.
+    page.reverse()
+
+    return {
+        "turns": [
+            {
+                "role": t.role,
+                "content": t.content,
+                "tool_calls": t.tool_calls,
+                "tool_results": t.tool_results,
+                "created_at": t.created_at.isoformat(),
+            }
+            for t in page
+        ],
+        "has_more": has_more,
+        # Cursor for fetching the next (older) page — pass back as `before`.
+        "next_cursor": page[0].created_at.isoformat() if has_more and page else None,
+    }
 
 
 @router.get("/sessions/{session_id}/plan", response_model=PlanOut | None)

@@ -348,6 +348,31 @@
   gap: 1.25rem;
 }
 
+.loadOlderWrap {
+  display: flex;
+  justify-content: center;
+  padding: 0.25rem 0 0.5rem;
+}
+.loadOlderBtn {
+  padding: 0.4rem 0.9rem;
+  background: var(--ms-secondary, #f1e9d8);
+  border: 1px solid rgba(1, 82, 55, 0.25);
+  border-radius: 999px;
+  color: var(--ms-primary, #015237);
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.loadOlderBtn:hover:not(:disabled) {
+  background: #e7dcc4;
+  border-color: var(--ms-primary, #015237);
+}
+.loadOlderBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .row {
   display: flex;
   gap: 0.75rem;
