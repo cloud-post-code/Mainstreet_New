@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from db.database import create_tables
-from routers import auth, shops, products, agent, admin
+from routers import auth, shops, products, agent, admin, inbox
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.include_router(shops.router)
 app.include_router(products.router)
 app.include_router(agent.router)
 app.include_router(admin.router)
+app.include_router(inbox.router)
 
 
 @app.get("/api/health")

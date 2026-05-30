@@ -110,3 +110,22 @@ class ImportResult(BaseModel):
     rows_added: int
     rows_updated: int
     errors: list[dict[str, Any]]
+
+
+# --- Inbox ---
+
+class InboxMessageOut(BaseModel):
+    id: int
+    user_id: int
+    session_id: Optional[int]
+    title: str
+    preview: str
+    body: str
+    read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class InboxOpenOut(BaseModel):
+    session_id: int

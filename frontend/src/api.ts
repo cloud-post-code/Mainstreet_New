@@ -30,6 +30,7 @@ export interface Token { access_token: string; user: User }
 export interface Shop { id: number; name: string; logo_url: string | null; description: string | null; website_url: string | null; product_count: number | null }
 export interface Product { id: number; shop_id: number; shop_name: string | null; name: string; price: string; quantity: number; image_url: string | null; description: Record<string, unknown> | null }
 export interface Session { id: number; title: string; created_at: string; updated_at: string }
+export interface InboxMessage { id: number; user_id: number; session_id: number | null; title: string; preview: string; body: string; read: boolean; created_at: string }
 export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
 
@@ -88,4 +89,13 @@ export const api = {
     request<void>(`/api/admin/shops/${id}`, { method: 'DELETE' }, token),
   deleteProduct: (id: number, token: string) =>
     request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }, token),
+
+  getInbox: (token: string) =>
+    request<InboxMessage[]>('/api/inbox', {}, token),
+
+  markRead: (id: number, token: string) =>
+    request<InboxMessage>(`/api/inbox/${id}/read`, { method: 'PATCH' }, token),
+
+  openInboxMessage: (id: number, token: string) =>
+    request<{ session_id: number }>(`/api/inbox/${id}/open`, { method: 'POST' }, token),
 }

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, FormEvent, KeyboardEvent, MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, FormEvent, KeyboardEvent, MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream } from '../hooks/useAgentStream'
 import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
+import InboxPanel from '../components/InboxPanel'
 import styles from './Chat.module.css'
 
 type AuthMode = 'none' | 'login' | 'register'
@@ -16,6 +17,8 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
   const [loadedMessages, setLoadedMessages] = useState<import('../hooks/useAgentStream').Message[]>([])
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const [inboxUnread, setInboxUnread] = useState(0)
   const [authMode, setAuthMode] = useState<AuthMode>('none')
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
@@ -23,9 +26,20 @@ export default function Chat() {
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Token used to discard stale in-flight `selectSession` fetches when the
+  // user switches conversations rapidly. Without this, a slow request for
+  // session A can resolve after the user has already moved to session B and
+  // overwrite B's messages with A's history.
+  const selectTokenRef = useRef(0)
 
   const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
-  const messages = [...loadedMessages, ...liveMessages]
+  // Memoize so the array reference is stable across renders that don't touch
+  // either source list. Otherwise every keystroke or stream chunk would
+  // re-fire the scroll effect below and rebuild downstream memos.
+  const messages = useMemo(
+    () => [...loadedMessages, ...liveMessages],
+    [loadedMessages, liveMessages]
+  )
 
   // Load sessions for authenticated users
   useEffect(() => {
@@ -43,11 +57,27 @@ export default function Chat() {
     api.createGuestSession().then(s => setActiveSessionId(s.id))
   }, [token, activeSessionId])
 
+  // Fetch inbox unread count for authenticated users
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (!token) return
+    api.getInbox(token).then(msgs => setInboxUnread(msgs.filter(m => !m.read).length))
+  }, [token])
+
+  // Smooth-scroll only when content grows during the active session. On a
+  // session switch the message count usually jumps from N to M in one render —
+  // a smooth scroll across hundreds of pixels feels like a hang, so jump
+  // instantly in that case.
+  const prevSessionRef = useRef<number | null>(null)
+  useEffect(() => {
+    const switched = prevSessionRef.current !== activeSessionId
+    prevSessionRef.current = activeSessionId
+    bottomRef.current?.scrollIntoView({
+      behavior: switched ? 'auto' : 'smooth',
+    })
+  }, [messages.length, activeSessionId])
 
   async function newSession() {
+    ++selectTokenRef.current
     if (token) {
       const s = await api.createSession(token)
       setSessions(prev => [s, ...prev])
@@ -62,12 +92,16 @@ export default function Chat() {
   }
 
   async function selectSession(id: number) {
+    if (id === activeSessionId) return
+    const myToken = ++selectTokenRef.current
     setActiveSessionId(id)
     setAnsweredQuestions(new Set())
+    setLoadedMessages([])
     reset()
     if (token) {
       try {
         const turns = await api.getTurns(id, token)
+        if (myToken !== selectTokenRef.current) return // user switched again, discard
         const msgs: import('../hooks/useAgentStream').Message[] = []
         for (const t of turns) {
           if (t.role === 'user') {
@@ -113,6 +147,7 @@ export default function Chat() {
             if (events.length) msgs.push({ id: t.created_at + '-a', from: 'agent', events })
           }
         }
+        if (myToken !== selectTokenRef.current) return
         if (msgs.length) setLoadedMessages(msgs)
       } catch { /* ignore — session may have no turns yet */ }
     }
@@ -143,12 +178,19 @@ export default function Chat() {
     }
   }
 
-  function handleAnswer(answer: string, questionCardId: string) {
+  const handleAnswer = useCallback((answer: string, questionCardId: string) => {
     setAnsweredQuestions(prev => new Set([...prev, questionCardId]))
     sendMessage(answer, questionCardId)
-  }
+  }, [sendMessage])
+
+  // Keep a ref to the latest `messages` so handleIntent (which we memoize
+  // below) doesn't need to depend on it. Without this, every new stream
+  // chunk would change handleIntent's identity and bust AgentMessage's memo.
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
   function latestProductIds(): number[] {
+    const messages = messagesRef.current
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]
       if (m.from !== 'agent') continue
@@ -167,8 +209,10 @@ export default function Chat() {
     return []
   }
 
-  function handleIntent(intent: string, payload?: unknown) {
-    if (streaming) return
+  const streamingRef = useRef(streaming)
+  streamingRef.current = streaming
+  const handleIntent = useCallback((intent: string, payload?: unknown) => {
+    if (streamingRef.current) return
     const p: Record<string, unknown> =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
     if (intent === 'open_details') {
@@ -186,7 +230,7 @@ export default function Chat() {
     } else {
       sendMessage(intent)
     }
-  }
+  }, [sendMessage])
 
   function openAuth(mode: 'login' | 'register') {
     setAuthMode(mode)
@@ -223,14 +267,12 @@ export default function Chat() {
     e.stopPropagation()
     if (!token || !confirm('Delete this conversation?')) return
     await api.deleteSession(id, token)
-    setSessions(prev => {
-      const remaining = prev.filter(s => s.id !== id)
-      if (activeSessionId === id) {
-        if (remaining.length > 0) selectSession(remaining[0].id)
-        else newSession()
-      }
-      return remaining
-    })
+    const remaining = sessions.filter(s => s.id !== id)
+    setSessions(remaining)
+    if (activeSessionId === id) {
+      if (remaining.length > 0) selectSession(remaining[0].id)
+      else newSession()
+    }
   }
 
   function handleLogout() {
@@ -249,9 +291,24 @@ export default function Chat() {
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <div className={styles.brand}>MAIN ST</div>
-          {user?.is_admin && (
-            <button className={styles.adminBtn} onClick={() => navigate('/admin')}>Admin</button>
-          )}
+          <div className={styles.sidebarHeaderActions}>
+            {token && (
+              <button
+                className={styles.inboxBtn}
+                onClick={() => setInboxOpen(true)}
+                title="Inbox"
+                aria-label={inboxUnread ? `Inbox, ${inboxUnread} unread` : 'Inbox'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {inboxUnread > 0 && <span className={styles.inboxBadge}>{inboxUnread}</span>}
+              </button>
+            )}
+            {user?.is_admin && (
+              <button className={styles.adminBtn} onClick={() => navigate('/admin')}>Admin</button>
+            )}
+          </div>
         </div>
         <button className={styles.newChat} onClick={newSession}>+ New chat</button>
 
@@ -424,6 +481,23 @@ export default function Chat() {
           </button>
         </form>
       </main>
+
+      {inboxOpen && token && (
+        <InboxPanel
+          token={token}
+          onClose={() => setInboxOpen(false)}
+          onOpenSession={async (sessionId) => {
+            await selectSession(sessionId)
+            setInboxUnread(prev => Math.max(0, prev - 1))
+            // Refresh the session list if the inbox surfaced a session we
+            // didn't have locally (e.g., a new push notification).
+            const knownLocally = sessions.some(s => s.id === sessionId)
+            if (!knownLocally) {
+              api.getSessions(token).then(setSessions).catch(() => {})
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

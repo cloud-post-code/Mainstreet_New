@@ -98,6 +98,22 @@ class AgentPlan(Base):
     session = relationship("AgentSession", back_populates="plans")
 
 
+class InboxMessage(Base):
+    __tablename__ = "inbox_messages"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="SET NULL"), nullable=True)
+    title = Column(String(300), nullable=False)
+    preview = Column(String(500), nullable=False)
+    body = Column(Text, nullable=False)
+    read = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", backref="inbox_messages")
+    session = relationship("AgentSession")
+
+
 class UserMemory(Base):
     __tablename__ = "user_memory"
 

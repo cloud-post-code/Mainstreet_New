@@ -14,7 +14,7 @@ interface Props {
   answeredQuestions: Set<string>
 }
 
-export default function AgentMessage({ events, streaming, onAnswer, onIntent, answeredQuestions }: Props) {
+function AgentMessageImpl({ events, streaming, onAnswer, onIntent, answeredQuestions }: Props) {
   const rendered: React.ReactNode[] = []
   const textBlocks: string[] = []
 
@@ -86,6 +86,13 @@ export default function AgentMessage({ events, streaming, onAnswer, onIntent, an
 
   return <div className={styles.wrapper}>{rendered}</div>
 }
+
+// Memoize so unrelated parent re-renders (e.g., textarea keystrokes) don't
+// rebuild every historical agent message. `events` is a stable reference held
+// inside the Message object, and `answeredQuestions` only changes when a
+// question is actually answered.
+const AgentMessage = React.memo(AgentMessageImpl)
+export default AgentMessage
 
 // QuestionCard expects onAnswer, not onIntent. Patch the tree's question_card nodes
 // at render time to pass the right props.

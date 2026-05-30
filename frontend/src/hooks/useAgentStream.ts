@@ -102,8 +102,11 @@ export function useAgentStream(sessionId: number | null) {
   }, [sessionId, token, streaming])
 
   const reset = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
     setMessages([])
     setPlan([])
+    setStreaming(false)
   }, [])
 
   return { messages, streaming, plan, setPlan, sendMessage, reset }
