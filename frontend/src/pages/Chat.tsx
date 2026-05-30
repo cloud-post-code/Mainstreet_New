@@ -381,34 +381,32 @@ export default function Chat() {
           </div>
         ) : (
           <div className={styles.messages}>
-            {messages.map(msg => (
-              <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                {msg.from === 'agent' && <div className={styles.avatar}>🧱</div>}
-                <div className={styles.bubble}>
-                  {msg.from === 'user' ? (
-                    <p className={styles.userText}>{msg.text}</p>
-                  ) : (
-                    <AgentMessage
-                      events={msg.events ?? []}
-                      onAnswer={handleAnswer}
-                      onIntent={handleIntent}
-                      answeredQuestions={answeredQuestions}
-                    />
-                  )}
-                </div>
-                {msg.from === 'user' && <div className={styles.avatar}>👤</div>}
-              </div>
-            ))}
-            {streaming && (
-              <div className={`${styles.row} ${styles.agentRow}`}>
-                <div className={styles.avatar}>🧱</div>
-                <div className={styles.bubble}>
-                  <div className={styles.typingIndicator}>
-                    <span /><span /><span />
+            {(() => {
+              // Find the index of the last agent message — only that one shows live streaming state.
+              let lastAgentIdx = -1
+              for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].from === 'agent') { lastAgentIdx = i; break }
+              }
+              return messages.map((msg, idx) => (
+                <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
+                  {msg.from === 'agent' && <div className={styles.avatar}>🧱</div>}
+                  <div className={styles.bubble}>
+                    {msg.from === 'user' ? (
+                      <p className={styles.userText}>{msg.text}</p>
+                    ) : (
+                      <AgentMessage
+                        events={msg.events ?? []}
+                        streaming={streaming && idx === lastAgentIdx}
+                        onAnswer={handleAnswer}
+                        onIntent={handleIntent}
+                        answeredQuestions={answeredQuestions}
+                      />
+                    )}
                   </div>
+                  {msg.from === 'user' && <div className={styles.avatar}>👤</div>}
                 </div>
-              </div>
-            )}
+              ))
+            })()}
             <div ref={bottomRef} />
           </div>
         )}

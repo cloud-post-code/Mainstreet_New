@@ -1,18 +1,20 @@
 import React from 'react'
 import { StreamEvent } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
+import LiveReasoning from './LiveReasoning'
 import Renderer from '../a2ui/Renderer'
 import { A2uiTree } from '../a2ui/types'
 import styles from './AgentMessage.module.css'
 
 interface Props {
   events: StreamEvent[]
+  streaming?: boolean
   onAnswer: (answer: string, questionCardId: string) => void
   onIntent?: (intent: string, payload?: unknown) => void
   answeredQuestions: Set<string>
 }
 
-export default function AgentMessage({ events, onAnswer, onIntent, answeredQuestions }: Props) {
+export default function AgentMessage({ events, streaming, onAnswer, onIntent, answeredQuestions }: Props) {
   const rendered: React.ReactNode[] = []
   const textBlocks: string[] = []
 
@@ -39,6 +41,15 @@ export default function AgentMessage({ events, onAnswer, onIntent, answeredQuest
     ? { root: uiTreeEvents[uiTreeEvents.length - 1].root, components: uiTreeEvents[uiTreeEvents.length - 1].components }
     : null
 
+  // Live reasoning surface — collapsed by default, summarizes thinking + tool_call
+  // events. Shows while streaming and also stays around after for inspection.
+  const hasReasoningEvents = events.some(e => e.type === 'thinking' || (e.type === 'tool_call' && e.tool !== 'render_ui'))
+  if (hasReasoningEvents || streaming) {
+    rendered.push(
+      <LiveReasoning key="live-reasoning" events={events} streaming={Boolean(streaming)} />
+    )
+  }
+
   // Handle intents — special-case answer_choice to wire into existing question flow
   const intentHandler = (intent: string, payload?: unknown) => {
     if (intent === 'answer_choice' && payload && typeof payload === 'object') {
@@ -51,42 +62,16 @@ export default function AgentMessage({ events, onAnswer, onIntent, answeredQuest
     onIntent?.(intent, payload)
   }
 
-  let toolPillShown = false
-
-  events.forEach((event, i) => {
+  // Stream incremental text from `text` events into a paragraph above the tree.
+  events.forEach(event => {
     if (event.type === 'text') {
       textBlocks.push(event.content)
-    } else if (event.type === 'thinking') {
-      // Show only the first thinking pill while streaming; the ui_tree supersedes it
-      if (!toolPillShown && !latestTree) {
-        flushText(`text-${i}`)
-        rendered.push(
-          <p key={`thinking-${i}`} className={styles.thinking}>
-            <span className={styles.thinkingDot} />
-            Thinking…
-          </p>
-        )
-        toolPillShown = true
-      }
-    } else if (event.type === 'tool_call') {
-      // Don't repeat for render_ui — it's the closing call
-      if (event.tool === 'render_ui') return
-      flushText(`text-${i}`)
-      rendered.push(
-        <div key={`tool-${i}`} className={styles.toolCall}>
-          <span className={styles.toolIcon}>⚙️</span>
-          <span className={styles.toolName}>{event.tool}</span>
-          {event.args?.query != null && <span className={styles.toolArg}>"{String(event.args.query)}"</span>}
-        </div>
-      )
     }
   })
   flushText('final')
 
   // Render the A2UI tree last (it's the main visual payload)
   if (latestTree) {
-    // If the tree contains question_cards, override their onAnswer via a wrapping handler
-    // (QuestionCard takes onAnswer not onIntent — the registry passes onIntent, so we route via intentHandler)
     rendered.push(
       <div key="ui-tree" className={styles.uiTreeWrapper}>
         <TreeWithQuestionCardAdapter

@@ -1,0 +1,97 @@
+.reasoning {
+  border: 1px dashed rgba(122, 158, 126, 0.4);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  background: rgba(241, 233, 216, 0.35);
+}
+
+.reasoning > summary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: var(--ms-sage);
+  font-weight: 600;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.reasoning > summary::-webkit-details-marker { display: none; }
+.reasoning > summary::before {
+  content: '▸';
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.reasoning[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.summaryLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+  color: #777;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ms-sage);
+  animation: pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+  display: inline-block;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.steps {
+  list-style: none;
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem 0 0 0;
+  border-top: 1px dashed rgba(122, 158, 126, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: #555;
+}
+
+.thinkingStep {
+  color: #888;
+  font-style: italic;
+}
+
+.toolStep {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.toolIcon {
+  font-size: 0.75rem;
+}
+.toolName {
+  font-weight: 600;
+  color: var(--ms-primary);
+}
+.toolDetail {
+  color: #888;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streamingPulse {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #888;
+  font-style: italic;
+}
