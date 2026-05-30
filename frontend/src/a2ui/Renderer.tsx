@@ -17,7 +17,7 @@ function Node({ tree, id, onIntent }: NodeProps): ReactNode {
     <Node key={cid} tree={tree} id={cid} onIntent={onIntent} />
   ))
   return (
-    <Comp {...node.props} onIntent={onIntent}>
+    <Comp {...node.props} _a2uiId={id} onIntent={onIntent}>
       {children}
     </Comp>
   )

@@ -25,7 +25,7 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
-  const messages = liveMessages.length > 0 ? liveMessages : loadedMessages
+  const messages = [...loadedMessages, ...liveMessages]
 
   // Load sessions for authenticated users
   useEffect(() => {
@@ -42,10 +42,6 @@ export default function Chat() {
     if (activeSessionId) return
     api.createGuestSession().then(s => setActiveSessionId(s.id))
   }, [token, activeSessionId])
-
-  useEffect(() => {
-    if (liveMessages.length > 0) setLoadedMessages([])
-  }, [liveMessages.length])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

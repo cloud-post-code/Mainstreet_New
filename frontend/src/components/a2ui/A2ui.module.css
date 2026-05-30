@@ -172,6 +172,26 @@
 .choiceBtn:disabled { cursor: not-allowed; opacity: 0.7; }
 
 /* ── ProductDetailsModal ── */
+.modalPlaceholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--ms-secondary, #f1e9d8);
+  border: 1px solid rgba(1, 82, 55, 0.25);
+  border-radius: 999px;
+  color: var(--ms-primary, #015237);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.modalPlaceholder:hover {
+  background: #e7dcc4;
+  border-color: var(--ms-primary, #015237);
+}
+.modalPlaceholderIcon { font-size: 1rem; }
+.modalPlaceholderText { line-height: 1.2; }
+
 .modalOverlay {
   position: fixed;
   inset: 0;

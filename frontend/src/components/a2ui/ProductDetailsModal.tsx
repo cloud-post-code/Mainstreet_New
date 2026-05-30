@@ -10,11 +10,37 @@ interface Props {
   gallery?: string[]
   description_long?: string
   tags?: string[]
+  _a2uiId?: string
 }
 
+// Tracks which modal component instances have already auto-opened during this
+// page session. The agent's first render of a modal pops it up; reopening the
+// conversation later shows a placeholder pill that the user clicks to view it.
+const autoOpened = new Set<string>()
+
 export default function ProductDetailsModal(props: Props) {
-  const [open, setOpen] = useState(true)
-  if (!open) return null
+  const key = props._a2uiId ?? `${props.product_id}:${props.name}`
+  const [open, setOpen] = useState(() => {
+    if (autoOpened.has(key)) return false
+    autoOpened.add(key)
+    return true
+  })
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className={styles.modalPlaceholder}
+        onClick={() => setOpen(true)}
+      >
+        <span className={styles.modalPlaceholderIcon}>🛍️</span>
+        <span className={styles.modalPlaceholderText}>
+          View details for <strong>{props.name}</strong>
+        </span>
+      </button>
+    )
+  }
+
   const mainImage = props.gallery?.[0] ?? props.image_url
   return (
     <div className={styles.modalOverlay} onClick={() => setOpen(false)}>
