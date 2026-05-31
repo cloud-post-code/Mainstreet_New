@@ -111,4 +111,85 @@ export const api = {
 
   openInboxMessage: (id: number, token: string) =>
     request<{ session_id: number }>(`/api/inbox/${id}/open`, { method: 'POST' }, token),
+
+  uploadListingImage: (file: File, token: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return fetch(`${BASE}/api/admin/listing/upload-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }).then(async r => {
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? 'Upload failed')
+      return r.json() as Promise<{ image_url: string }>
+    })
+  },
+
+  streamListingDraft: async (
+    body: { shop_id: number; image_url: string; user_text?: string; quantity?: number; price?: number },
+    token: string,
+    onEvent: (evt: ListingEvent) => void,
+  ) => {
+    const res = await fetch(`${BASE}/api/admin/listing/draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail ?? 'Draft failed')
+    }
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let nl
+      while ((nl = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nl).trim()
+        buffer = buffer.slice(nl + 1)
+        if (!line) continue
+        try { onEvent(JSON.parse(line) as ListingEvent) } catch { /* ignore */ }
+      }
+    }
+    if (buffer.trim()) {
+      try { onEvent(JSON.parse(buffer) as ListingEvent) } catch { /* ignore */ }
+    }
+  },
+
+  approveListing: (body: {
+    shop_id: number
+    name: string
+    price: number | string
+    quantity: number
+    image_url?: string | null
+    description?: Record<string, unknown>
+  }, token: string) =>
+    request<Product>('/api/admin/listing/approve', { method: 'POST', body: JSON.stringify(body) }, token),
+}
+
+export type ListingStage = 'vision' | 'market' | 'writer' | 'verify'
+export type ListingEvent =
+  | { type: 'stage'; stage: ListingStage; status: 'start' | 'done' | 'error'; data?: Record<string, unknown>; error?: string }
+  | { type: 'draft'; draft: ListingDraft }
+  | { type: 'error'; error: string }
+
+export interface ListingDraft {
+  name: string
+  price: string
+  quantity: number
+  image_url: string | null
+  tags: string[]
+  description: {
+    summary?: string
+    long?: string
+    tags?: string[]
+    vision_attributes?: Record<string, unknown>
+    market_comps?: Array<{ title?: string; price?: number; url?: string; source?: string }>
+    price_range?: { low?: number; mid?: number; high?: number }
+    price_rationale?: string
+  }
+  flags: Array<{ field: string; issue: string; severity?: string }>
 }

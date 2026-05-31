@@ -229,3 +229,136 @@
   transition: all 0.15s;
 }
 .deleteBtn:hover { background: rgba(190,70,70,0.06); }
+
+/* ── AI Listing Agent panel ─────────────────────────────────────── */
+
+.addForm { display: flex; flex-direction: column; gap: 1rem; }
+.addFieldset { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1rem; }
+.addFieldset:disabled { opacity: 0.5; }
+
+.addLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ms-dark);
+}
+.required { color: #c0392b; font-weight: 700; }
+.optional { color: #888; font-weight: 400; font-size: 0.8rem; }
+
+.input, .textarea {
+  padding: 0.55rem 0.75rem;
+  border: 1.5px solid rgba(122,158,126,0.35);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  background: white;
+  color: var(--ms-dark);
+  outline: none;
+  font-weight: 400;
+}
+.input:focus, .textarea:focus { border-color: var(--ms-primary); }
+.textarea { resize: vertical; min-height: 60px; }
+
+.addRow { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+.addRow > .addLabel { flex: 1 1 180px; }
+
+.previewImg {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid rgba(122,158,126,0.25);
+  margin-top: 0.5rem;
+  object-fit: cover;
+}
+
+.errorText {
+  color: #c0392b;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+
+/* Stage timeline */
+.stageTimeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+.stageCard {
+  flex: 1 1 180px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--ms-cream);
+  border: 1.5px solid rgba(122,158,126,0.25);
+  border-radius: 10px;
+  font-family: var(--font-body);
+}
+.stageIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(122,158,126,0.2);
+  color: var(--ms-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.stageLabel { font-size: 0.85rem; font-weight: 600; color: var(--ms-dark); }
+.stage_start { border-color: var(--ms-primary); }
+.stage_start .stageIcon { background: var(--ms-primary); color: white; animation: pulse 1.2s ease-in-out infinite; }
+.stage_done { border-color: var(--ms-primary); background: rgba(1,82,55,0.05); }
+.stage_done .stageIcon { background: var(--ms-primary); color: white; }
+.stage_error { border-color: #c0392b; background: rgba(192,57,43,0.05); }
+.stage_error .stageIcon { background: #c0392b; color: white; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Draft card */
+.draftCard {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: white;
+  border: 1.5px solid var(--ms-primary);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.draftImg {
+  max-width: 260px;
+  max-height: 260px;
+  border-radius: 8px;
+  object-fit: cover;
+  align-self: flex-start;
+}
+.flagList {
+  margin: 0;
+  padding: 0.65rem 1rem 0.65rem 1.5rem;
+  background: rgba(241,233,216,0.6);
+  border-left: 3px solid #d39537;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  list-style: disc;
+}
+.compsDetails {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  background: var(--ms-cream);
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+}
+.compsDetails ul { margin-top: 0.5rem; padding-left: 1.25rem; }
+

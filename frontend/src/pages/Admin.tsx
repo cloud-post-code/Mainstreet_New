@@ -1,7 +1,7 @@
 import { useEffect, useState, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { api, Shop, Product } from '../api'
+import { api, Shop, Product, ListingDraft, ListingStage } from '../api'
 import styles from './Admin.module.css'
 
 interface ImportResult {
@@ -22,7 +22,7 @@ export default function Admin() {
   const [importingShops, setImportingShops] = useState(false)
   const [seedResult, setSeedResult] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
-  const [tab, setTab] = useState<'shops' | 'products'>('shops')
+  const [tab, setTab] = useState<'shops' | 'products' | 'add'>('shops')
 
   useEffect(() => {
     if (!token) return
@@ -192,7 +192,21 @@ export default function Admin() {
         <button className={`${styles.tab} ${tab === 'products' ? styles.activeTab : ''}`} onClick={() => setTab('products')}>
           Products ({products.length})
         </button>
+        <button className={`${styles.tab} ${tab === 'add' ? styles.activeTab : ''}`} onClick={() => setTab('add')}>
+          + Add Product
+        </button>
       </div>
+
+      {tab === 'add' && token && (
+        <AddProductPanel
+          shops={shops}
+          token={token}
+          onApproved={() => {
+            api.adminProducts(token, selectedShop).then(setProducts)
+            setTab('products')
+          }}
+        />
+      )}
 
       {tab === 'shops' && (
         <div className={styles.tableWrapper}>
@@ -259,5 +273,361 @@ export default function Admin() {
         </>
       )}
     </div>
+  )
+}
+
+// ── AI Listing Agent panel ────────────────────────────────────────────────
+
+type StageState = 'idle' | 'start' | 'done' | 'error'
+
+interface StageInfo {
+  status: StageState
+  data?: Record<string, unknown>
+  error?: string
+}
+
+const STAGE_LABELS: Record<ListingStage, string> = {
+  vision: 'Vision extraction',
+  market: 'Market research',
+  writer: 'Description writer',
+  verify: 'Verify & confirm',
+}
+
+function AddProductPanel({
+  shops,
+  token,
+  onApproved,
+}: {
+  shops: Shop[]
+  token: string
+  onApproved: () => void
+}) {
+  const [sellerId, setSellerId] = useState<number | ''>('')
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [notes, setNotes] = useState('')
+  const [qtyInput, setQtyInput] = useState('')
+  const [priceInput, setPriceInput] = useState('')
+  const [stages, setStages] = useState<Record<ListingStage, StageInfo>>({
+    vision: { status: 'idle' },
+    market: { status: 'idle' },
+    writer: { status: 'idle' },
+    verify: { status: 'idle' },
+  })
+  const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState<string | null>(null)
+  const [draft, setDraft] = useState<ListingDraft | null>(null)
+  const [approving, setApproving] = useState(false)
+  const [approveError, setApproveError] = useState<string | null>(null)
+
+  const canGenerate = sellerId !== '' && !!imageUrl && !generating
+
+  async function handleImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const { image_url } = await api.uploadListingImage(file, token)
+      setImageUrl(image_url)
+      setImagePreview(URL.createObjectURL(file))
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleGenerate() {
+    if (sellerId === '' || !imageUrl) return
+    setGenerating(true)
+    setGenError(null)
+    setDraft(null)
+    setStages({
+      vision: { status: 'idle' },
+      market: { status: 'idle' },
+      writer: { status: 'idle' },
+      verify: { status: 'idle' },
+    })
+    try {
+      await api.streamListingDraft(
+        {
+          shop_id: Number(sellerId),
+          image_url: imageUrl,
+          user_text: notes.trim() || undefined,
+          quantity: qtyInput.trim() ? Number(qtyInput) : undefined,
+          price: priceInput.trim() ? Number(priceInput) : undefined,
+        },
+        token,
+        evt => {
+          if (evt.type === 'stage') {
+            setStages(prev => ({
+              ...prev,
+              [evt.stage]: { status: evt.status, data: evt.data, error: evt.error },
+            }))
+          } else if (evt.type === 'draft') {
+            setDraft(evt.draft)
+          } else if (evt.type === 'error') {
+            setGenError(evt.error)
+          }
+        },
+      )
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handleApprove() {
+    if (!draft || sellerId === '') return
+    setApproving(true)
+    setApproveError(null)
+    try {
+      await api.approveListing(
+        {
+          shop_id: Number(sellerId),
+          name: draft.name,
+          price: draft.price,
+          quantity: draft.quantity,
+          image_url: draft.image_url,
+          description: draft.description as Record<string, unknown>,
+        },
+        token,
+      )
+      // Reset for next listing
+      setDraft(null)
+      setImageUrl(null)
+      setImagePreview(null)
+      setNotes('')
+      setQtyInput('')
+      setPriceInput('')
+      setStages({
+        vision: { status: 'idle' },
+        market: { status: 'idle' },
+        writer: { status: 'idle' },
+        verify: { status: 'idle' },
+      })
+      onApproved()
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Approve failed')
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  function updateDraft<K extends keyof ListingDraft>(key: K, value: ListingDraft[K]) {
+    setDraft(prev => (prev ? { ...prev, [key]: value } : prev))
+  }
+
+  return (
+    <section className={styles.importSection}>
+      <h2 className={styles.sectionTitle}>AI-Assisted Product Listing</h2>
+      <p className={styles.csvHint}>
+        Select a seller, upload a photo, optionally add notes. The agent will draft a listing for review.
+      </p>
+
+      <div className={styles.addForm}>
+        <label className={styles.addLabel}>
+          Seller profile <span className={styles.required}>*</span>
+          <select
+            className={styles.select}
+            value={sellerId}
+            onChange={e => setSellerId(e.target.value ? Number(e.target.value) : '')}
+          >
+            <option value="">— choose a seller —</option>
+            {shops.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <fieldset className={styles.addFieldset} disabled={sellerId === ''}>
+          <label className={styles.addLabel}>
+            Product photo <span className={styles.required}>*</span>
+            <input type="file" accept="image/*" onChange={handleImage} disabled={uploading} />
+            {uploading && <span className={styles.csvHint}>Uploading…</span>}
+            {uploadError && <span className={styles.errorText}>{uploadError}</span>}
+            {imagePreview && (
+              <img src={imagePreview} alt="preview" className={styles.previewImg} />
+            )}
+          </label>
+
+          <label className={styles.addLabel}>
+            Notes <span className={styles.optional}>(optional)</span>
+            <textarea
+              className={styles.textarea}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Anything the agent should know — brand, condition, materials…"
+              rows={3}
+            />
+          </label>
+
+          <div className={styles.addRow}>
+            <label className={styles.addLabel}>
+              Quantity <span className={styles.optional}>(default 1)</span>
+              <input
+                type="number"
+                min={1}
+                className={styles.input}
+                value={qtyInput}
+                onChange={e => setQtyInput(e.target.value)}
+                placeholder="1"
+              />
+            </label>
+            <label className={styles.addLabel}>
+              Price <span className={styles.optional}>(agent decides if blank)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className={styles.input}
+                value={priceInput}
+                onChange={e => setPriceInput(e.target.value)}
+                placeholder="agent decides"
+              />
+            </label>
+          </div>
+
+          <button
+            className={styles.seedBtn}
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+          >
+            {generating ? 'Generating…' : 'Generate Listing'}
+          </button>
+          {genError && <div className={styles.errorText}>{genError}</div>}
+        </fieldset>
+      </div>
+
+      {/* Stage timeline */}
+      {(generating || draft) && (
+        <div className={styles.stageTimeline}>
+          {(Object.keys(STAGE_LABELS) as ListingStage[]).map(stage => {
+            const s = stages[stage]
+            const icon =
+              s.status === 'done' ? '✓' :
+              s.status === 'error' ? '!' :
+              s.status === 'start' ? '…' : '·'
+            return (
+              <div key={stage} className={`${styles.stageCard} ${styles[`stage_${s.status}`] ?? ''}`}>
+                <div className={styles.stageIcon}>{icon}</div>
+                <div>
+                  <div className={styles.stageLabel}>{STAGE_LABELS[stage]}</div>
+                  {s.error && <div className={styles.errorText}>{s.error}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Editable draft card */}
+      {draft && (
+        <div className={styles.draftCard}>
+          <h3 className={styles.sectionTitle}>Review listing</h3>
+          {draft.image_url && (
+            <img src={draft.image_url} alt="" className={styles.draftImg} />
+          )}
+
+          {draft.flags.length > 0 && (
+            <ul className={styles.flagList}>
+              {draft.flags.map((f, i) => (
+                <li key={i}><strong>{f.field}:</strong> {f.issue}</li>
+              ))}
+            </ul>
+          )}
+
+          <label className={styles.addLabel}>
+            Title
+            <input
+              className={styles.input}
+              value={draft.name}
+              onChange={e => updateDraft('name', e.target.value)}
+            />
+          </label>
+
+          <div className={styles.addRow}>
+            <label className={styles.addLabel}>
+              Price ($)
+              <input
+                type="number"
+                step="0.01"
+                className={styles.input}
+                value={draft.price}
+                onChange={e => updateDraft('price', e.target.value)}
+              />
+            </label>
+            <label className={styles.addLabel}>
+              Quantity
+              <input
+                type="number"
+                min={1}
+                className={styles.input}
+                value={draft.quantity}
+                onChange={e => updateDraft('quantity', Number(e.target.value) || 1)}
+              />
+            </label>
+          </div>
+
+          <label className={styles.addLabel}>
+            Summary
+            <textarea
+              className={styles.textarea}
+              rows={2}
+              value={draft.description.summary ?? ''}
+              onChange={e => setDraft(prev => prev ? { ...prev, description: { ...prev.description, summary: e.target.value } } : prev)}
+            />
+          </label>
+
+          <label className={styles.addLabel}>
+            Description
+            <textarea
+              className={styles.textarea}
+              rows={5}
+              value={draft.description.long ?? ''}
+              onChange={e => setDraft(prev => prev ? { ...prev, description: { ...prev.description, long: e.target.value } } : prev)}
+            />
+          </label>
+
+          <label className={styles.addLabel}>
+            Tags (comma-separated)
+            <input
+              className={styles.input}
+              value={(draft.tags ?? []).join(', ')}
+              onChange={e => updateDraft('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))}
+            />
+          </label>
+
+          {draft.description.market_comps && draft.description.market_comps.length > 0 && (
+            <details className={styles.compsDetails}>
+              <summary>Market comps ({draft.description.market_comps.length})</summary>
+              <ul>
+                {draft.description.market_comps.map((c, i) => (
+                  <li key={i}>
+                    {c.url ? <a href={c.url} target="_blank" rel="noreferrer">{c.title ?? 'comp'}</a> : (c.title ?? 'comp')}
+                    {typeof c.price === 'number' ? ` — $${c.price.toFixed(2)}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          <div className={styles.addRow}>
+            <button className={styles.seedBtn} onClick={handleApprove} disabled={approving}>
+              {approving ? 'Saving…' : 'Approve & publish'}
+            </button>
+            <button className={styles.reseedBtn} onClick={handleGenerate} disabled={generating}>
+              Regenerate
+            </button>
+          </div>
+          {approveError && <div className={styles.errorText}>{approveError}</div>}
+        </div>
+      )}
+    </section>
   )
 }
