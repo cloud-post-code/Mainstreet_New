@@ -7,41 +7,70 @@ Stages (each is a separate Claude call so progress is independently streamable):
   3. description_writer — Claude drafts title, description, summary, tags.
   4. verify — Claude self-checks the assembled draft and emits flags.
 
-Each stage yields {"type":"stage", ...} events; the final draft is emitted as
-{"type":"draft", "draft": {...}} and stored under Product.description as JSONB.
+Each stage yields {"type":"stage", ...} and streams {"type":"thinking", ...} deltas.
+The final draft is emitted as {"type":"draft", "draft": {...}}.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import mimetypes
+import uuid
 from decimal import Decimal
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Generator, Optional
 
 import anthropic
 import httpx
 
+from agent.streaming import stream_claude
+from agent.uploads import listing_url, listings_dir
 from config import settings
 
 MODEL = "claude-sonnet-4-6"
+GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
+
+SCENE_HINTS: dict[str, str] = {
+    "mug": "held in a sunlit kitchen next to a steaming coffee pot",
+    "cup": "on a wooden cafe table beside a folded newspaper",
+    "candle": "lit on a wooden side table next to an open book and a soft throw",
+    "wallet": "on an entryway tray next to keys, sunglasses, and a leather notebook",
+    "bag": "slung over a shoulder on a city street in soft morning light",
+    "tote": "set on a kitchen counter, half-filled with farmers-market produce",
+    "shirt": "worn casually in a sunlit living room with plants in the background",
+    "jacket": "worn on a brisk autumn walk through a tree-lined street",
+    "shoes": "laced up beside a doormat with a coat hung in the background",
+    "hat": "resting on a wooden bench beside a backpack at a trailhead",
+    "scarf": "draped over a chair next to a warm cup of tea by a window",
+    "soap": "on a stone bathroom ledge beside a folded linen towel",
+    "lotion": "on a bright bathroom counter next to a fresh sprig of greenery",
+    "ceramic": "displayed on a kitchen shelf among other handmade pottery",
+    "vase": "holding fresh wildflowers on a sunlit windowsill",
+    "plant": "in a bright corner of a cozy living room",
+    "print": "framed and hanging above a mid-century sideboard",
+    "poster": "framed and mounted above a desk in a warmly lit studio",
+    "book": "open on a reading nook bench beside a mug and a soft blanket",
+    "notebook": "open on a wooden desk with a pen and morning coffee",
+    "jewelry": "worn against soft natural light, styled simply",
+    "necklace": "worn against a simple top in soft natural light",
+    "earring": "worn close-up in soft natural light",
+    "ring": "worn on a hand resting on a linen tablecloth",
+    "leather": "in a styled flat-lay on a warm wooden surface",
+}
+
+
+def _scene_hint(category: Optional[str]) -> str:
+    if not category:
+        return "in a warm, natural home or outdoor setting that suits its purpose"
+    lower = category.lower()
+    for key, hint in SCENE_HINTS.items():
+        if key in lower:
+            return hint
+    return "in a warm, natural home or outdoor setting that suits its purpose"
 
 
 def _event(obj: dict) -> dict:
     return obj
-
-
-def _extract_json(text: str) -> dict:
-    """Best-effort: pull the first {...} block out of a model text response."""
-    if not text:
-        return {}
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end < start:
-        return {}
-    try:
-        return json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return {}
 
 
 def _first_tool_input(response, tool_name: str) -> Optional[dict]:
@@ -51,16 +80,8 @@ def _first_tool_input(response, tool_name: str) -> Optional[dict]:
     return None
 
 
-def _collected_text(response) -> str:
-    parts = []
-    for block in response.content:
-        if getattr(block, "type", None) == "text":
-            parts.append(block.text)
-    return "\n".join(parts)
-
-
-async def _fetch_image_as_block(image_url: str) -> dict:
-    """Download an image URL and wrap it as an Anthropic image content block."""
+async def _fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
+    """Download an image URL and return (raw bytes, normalized media_type)."""
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         resp = await client.get(image_url)
         resp.raise_for_status()
@@ -68,11 +89,71 @@ async def _fetch_image_as_block(image_url: str) -> dict:
         media_type = media_type.split(";")[0].strip()
         if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
             media_type = "image/jpeg"
-        data = base64.standard_b64encode(resp.content).decode("ascii")
+        return resp.content, media_type
+
+
+async def _fetch_image_as_block(image_url: str) -> dict:
+    """Download an image URL and wrap it as an Anthropic image content block."""
+    raw, media_type = await _fetch_image_bytes(image_url)
+    data = base64.standard_b64encode(raw).decode("ascii")
     return {
         "type": "image",
         "source": {"type": "base64", "media_type": media_type, "data": data},
     }
+
+
+def _gemini_generate_image(*, prompt: str, image_bytes: Optional[bytes] = None, image_mime: str = "image/jpeg") -> bytes:
+    """
+    Call Gemini 2.5 Flash Image and return the first inline image returned.
+    Runs synchronously inside a thread executor (the SDK is sync).
+    """
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY not configured")
+    from google import genai
+    from google.genai import types as gtypes
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    parts: list[Any] = [prompt]
+    if image_bytes is not None:
+        parts.append(gtypes.Part.from_bytes(data=image_bytes, mime_type=image_mime))
+    response = client.models.generate_content(model=GEMINI_IMAGE_MODEL, contents=parts)
+    for cand in getattr(response, "candidates", None) or []:
+        content = getattr(cand, "content", None)
+        for part in getattr(content, "parts", None) or []:
+            inline = getattr(part, "inline_data", None)
+            if inline and getattr(inline, "data", None):
+                return inline.data
+    raise RuntimeError("Gemini returned no image data")
+
+
+async def _gen_image_async(**kwargs: Any) -> bytes:
+    return await asyncio.to_thread(_gemini_generate_image, **kwargs)
+
+
+def _save_listing_image(png_bytes: bytes, public_api_base_url: str) -> str:
+    filename = f"{uuid.uuid4().hex}.png"
+    (listings_dir() / filename).write_bytes(png_bytes)
+    return listing_url(filename, public_api_base_url)
+
+
+def _stream_stage_thinking(
+    client: anthropic.Anthropic,
+    *,
+    stage: str,
+    preamble: str,
+    **create_kwargs: Any,
+) -> Generator[dict, None, anthropic.types.Message]:
+    """Yield thinking events for a stage, then return the final message."""
+    yield _event({"type": "thinking", "stage": stage, "content": preamble})
+    response = None
+    for kind, payload in stream_claude(client, model=MODEL, **create_kwargs):
+        if kind in ("thinking", "text"):
+            yield _event({"type": "thinking", "stage": stage, "content": payload})
+        elif kind == "done":
+            response = payload
+    if response is None:
+        raise RuntimeError(f"Stage {stage} produced no response")
+    return response
 
 
 # ── Tool schemas for structured outputs ──────────────────────────────────────
@@ -169,134 +250,6 @@ VERIFY_TOOL = {
 }
 
 
-# ── Stage runners ────────────────────────────────────────────────────────────
-
-
-async def _run_vision(client: anthropic.Anthropic, image_block: dict, user_text: Optional[str], shop_name: str) -> dict:
-    prompt = (
-        f"You are the vision-extraction sub-agent for a Main Street listing. "
-        f"The seller is '{shop_name}'. Examine the attached photo and extract "
-        f"structured product attributes. Call record_vision_attributes exactly once."
-    )
-    if user_text:
-        prompt += f"\n\nSeller notes: {user_text}"
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        tools=[VISION_TOOL],
-        tool_choice={"type": "tool", "name": "record_vision_attributes"},
-        messages=[
-            {
-                "role": "user",
-                "content": [image_block, {"type": "text", "text": prompt}],
-            }
-        ],
-    )
-    return _first_tool_input(response, "record_vision_attributes") or {}
-
-
-async def _run_market(client: anthropic.Anthropic, vision: dict, user_text: Optional[str]) -> dict:
-    query_hint = vision.get("category") or (vision.get("candidate_titles") or [""])[0] or "handmade item"
-    prompt = (
-        "You are the market-research sub-agent. Use web_search to look up Etsy "
-        "and Google Shopping comps for the item described below, then call "
-        "record_market_research with the price range and a suggested price.\n\n"
-        f"Item: {query_hint}\n"
-        f"Attributes: {json.dumps(vision)}\n"
-    )
-    if user_text:
-        prompt += f"Seller notes: {user_text}\n"
-
-    tools = [
-        {"type": "web_search_20250305", "name": "web_search", "max_uses": 4},
-        MARKET_TOOL,
-    ]
-    try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=2048,
-            tools=tools,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = _first_tool_input(response, "record_market_research")
-        if result:
-            return result
-    except Exception:
-        pass
-
-    # Fallback: no web tool available or web call failed — ask Claude to estimate.
-    fallback = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        tools=[MARKET_TOOL],
-        tool_choice={"type": "tool", "name": "record_market_research"},
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    "Estimate a fair retail price range and suggested price for this "
-                    f"item based on general knowledge of similar handmade/boutique goods.\n\n"
-                    f"Attributes: {json.dumps(vision)}\n"
-                    f"Notes: {user_text or ''}"
-                ),
-            }
-        ],
-    )
-    return _first_tool_input(fallback, "record_market_research") or {
-        "comps": [],
-        "price_range": {"low": 10, "mid": 25, "high": 50},
-        "suggested_price": 25,
-        "rationale": "Fallback estimate — no comps available.",
-    }
-
-
-async def _run_writer(
-    client: anthropic.Anthropic,
-    vision: dict,
-    market: dict,
-    user_text: Optional[str],
-    shop_name: str,
-) -> dict:
-    prompt = (
-        "You are the description-writer sub-agent for Main Street, a curated "
-        "local marketplace. Write a warm, specific listing.\n\n"
-        f"Shop: {shop_name}\n"
-        f"Vision attributes: {json.dumps(vision)}\n"
-        f"Market research: {json.dumps(market)}\n"
-    )
-    if user_text:
-        prompt += f"Seller notes: {user_text}\n"
-    prompt += "\nCall record_listing_copy exactly once."
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        tools=[WRITER_TOOL],
-        tool_choice={"type": "tool", "name": "record_listing_copy"},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return _first_tool_input(response, "record_listing_copy") or {}
-
-
-async def _run_verify(client: anthropic.Anthropic, draft: dict, market: dict) -> dict:
-    prompt = (
-        "You are the verification sub-agent. Inspect the draft listing and flag "
-        "any issues (missing fields, price outside market range, weak title, "
-        "tags too generic). Call record_verification exactly once.\n\n"
-        f"Draft: {json.dumps(draft, default=str)}\n"
-        f"Market range: {json.dumps(market.get('price_range'))}"
-    )
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        tools=[VERIFY_TOOL],
-        tool_choice={"type": "tool", "name": "record_verification"},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return _first_tool_input(response, "record_verification") or {"flags": [], "overall": "ok"}
-
-
 # ── Public entry point ───────────────────────────────────────────────────────
 
 
@@ -306,31 +259,167 @@ async def run_listing_agent(
     user_text: Optional[str],
     quantity: Optional[int],
     price: Optional[Decimal],
+    public_api_base_url: str = "",
 ) -> AsyncGenerator[dict, None]:
     """Yield NDJSON-ready event dicts as each sub-agent runs."""
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    # Pre-fetch image once; reused only by vision stage.
+    # ── Vision ───────────────────────────────────────────────────────────────
     yield _event({"type": "stage", "stage": "vision", "status": "start"})
     try:
         image_block = await _fetch_image_as_block(image_url)
-        vision = await _run_vision(client, image_block, user_text, shop_name)
+        vision_prompt = (
+            f"You are the vision-extraction sub-agent for a Main Street listing. "
+            f"The seller is '{shop_name}'. Examine the attached photo and extract "
+            f"structured product attributes. Call record_vision_attributes exactly once."
+        )
+        if user_text:
+            vision_prompt += f"\n\nSeller notes: {user_text}"
+
+        gen = _stream_stage_thinking(
+            client,
+            stage="vision",
+            preamble="Examining the product photo for category, materials, colors, and title ideas…\n",
+            max_tokens=1024,
+            tools=[VISION_TOOL],
+            tool_choice={"type": "tool", "name": "record_vision_attributes"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": [image_block, {"type": "text", "text": vision_prompt}],
+                }
+            ],
+        )
+        response = None
+        while True:
+            try:
+                evt = next(gen)
+                yield evt
+            except StopIteration as stop:
+                response = stop.value
+                break
+        vision = _first_tool_input(response, "record_vision_attributes") or {}
         yield _event({"type": "stage", "stage": "vision", "status": "done", "data": vision})
     except Exception as e:
         yield _event({"type": "stage", "stage": "vision", "status": "error", "error": str(e)})
         return
 
+    # ── Market research ──────────────────────────────────────────────────────
     yield _event({"type": "stage", "stage": "market", "status": "start"})
+    market: dict = {}
     try:
-        market = await _run_market(client, vision, user_text)
+        query_hint = vision.get("category") or (vision.get("candidate_titles") or [""])[0] or "handmade item"
+        market_prompt = (
+            "You are the market-research sub-agent. Use web_search to look up Etsy "
+            "and Google Shopping comps for the item described below, then call "
+            "record_market_research with the price range and a suggested price.\n\n"
+            f"Item: {query_hint}\n"
+            f"Attributes: {json.dumps(vision)}\n"
+        )
+        if user_text:
+            market_prompt += f"Seller notes: {user_text}\n"
+
+        tools = [
+            {"type": "web_search_20250305", "name": "web_search", "max_uses": 4},
+            MARKET_TOOL,
+        ]
+        try:
+            gen = _stream_stage_thinking(
+                client,
+                stage="market",
+                preamble="Searching for comparable listings and building a price range…\n",
+                max_tokens=2048,
+                tools=tools,
+                messages=[{"role": "user", "content": market_prompt}],
+            )
+            response = None
+            while True:
+                try:
+                    evt = next(gen)
+                    yield evt
+                except StopIteration as stop:
+                    response = stop.value
+                    break
+            market = _first_tool_input(response, "record_market_research") or {}
+        except Exception:
+            gen = _stream_stage_thinking(
+                client,
+                stage="market",
+                preamble="Web search unavailable — estimating price from catalog knowledge…\n",
+                max_tokens=1024,
+                tools=[MARKET_TOOL],
+                tool_choice={"type": "tool", "name": "record_market_research"},
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            "Estimate a fair retail price range and suggested price for this "
+                            f"item based on general knowledge of similar handmade/boutique goods.\n\n"
+                            f"Attributes: {json.dumps(vision)}\n"
+                            f"Notes: {user_text or ''}"
+                        ),
+                    }
+                ],
+            )
+            response = None
+            while True:
+                try:
+                    evt = next(gen)
+                    yield evt
+                except StopIteration as stop:
+                    response = stop.value
+                    break
+            market = _first_tool_input(response, "record_market_research") or {}
+
+        if not market:
+            market = {
+                "comps": [],
+                "price_range": {"low": 10, "mid": 25, "high": 50},
+                "suggested_price": 25,
+                "rationale": "Fallback estimate — no comps available.",
+            }
         yield _event({"type": "stage", "stage": "market", "status": "done", "data": market})
     except Exception as e:
-        market = {"comps": [], "price_range": {"low": 10, "mid": 25, "high": 50}, "suggested_price": 25}
+        market = {
+            "comps": [],
+            "price_range": {"low": 10, "mid": 25, "high": 50},
+            "suggested_price": 25,
+            "rationale": "Fallback estimate after error.",
+        }
         yield _event({"type": "stage", "stage": "market", "status": "error", "error": str(e), "data": market})
 
+    # ── Writer ───────────────────────────────────────────────────────────────
     yield _event({"type": "stage", "stage": "writer", "status": "start"})
     try:
-        copy = await _run_writer(client, vision, market, user_text, shop_name)
+        writer_prompt = (
+            "You are the description-writer sub-agent for Main Street, a curated "
+            "local marketplace. Write a warm, specific listing.\n\n"
+            f"Shop: {shop_name}\n"
+            f"Vision attributes: {json.dumps(vision)}\n"
+            f"Market research: {json.dumps(market)}\n"
+        )
+        if user_text:
+            writer_prompt += f"Seller notes: {user_text}\n"
+        writer_prompt += "\nCall record_listing_copy exactly once."
+
+        gen = _stream_stage_thinking(
+            client,
+            stage="writer",
+            preamble="Drafting title, summary, long description, and tags…\n",
+            max_tokens=1024,
+            tools=[WRITER_TOOL],
+            tool_choice={"type": "tool", "name": "record_listing_copy"},
+            messages=[{"role": "user", "content": writer_prompt}],
+        )
+        response = None
+        while True:
+            try:
+                evt = next(gen)
+                yield evt
+            except StopIteration as stop:
+                response = stop.value
+                break
+        copy = _first_tool_input(response, "record_listing_copy") or {}
         yield _event({"type": "stage", "stage": "writer", "status": "done", "data": copy})
     except Exception as e:
         yield _event({"type": "stage", "stage": "writer", "status": "error", "error": str(e)})
@@ -358,13 +447,114 @@ async def run_listing_agent(
         },
     }
 
+    # ── Verify ───────────────────────────────────────────────────────────────
     yield _event({"type": "stage", "stage": "verify", "status": "start"})
     try:
-        verify = await _run_verify(client, draft, market)
+        verify_prompt = (
+            "You are the verification sub-agent. Inspect the draft listing and flag "
+            "any issues (missing fields, price outside market range, weak title, "
+            "tags too generic). Call record_verification exactly once.\n\n"
+            f"Draft: {json.dumps(draft, default=str)}\n"
+            f"Market range: {json.dumps(market.get('price_range'))}"
+        )
+        gen = _stream_stage_thinking(
+            client,
+            stage="verify",
+            preamble="Checking the draft for missing fields, pricing, and quality issues…\n",
+            max_tokens=1024,
+            tools=[VERIFY_TOOL],
+            tool_choice={"type": "tool", "name": "record_verification"},
+            messages=[{"role": "user", "content": verify_prompt}],
+        )
+        response = None
+        while True:
+            try:
+                evt = next(gen)
+                yield evt
+            except StopIteration as stop:
+                response = stop.value
+                break
+        verify = _first_tool_input(response, "record_verification") or {"flags": [], "overall": "ok"}
         yield _event({"type": "stage", "stage": "verify", "status": "done", "data": verify})
     except Exception as e:
         verify = {"flags": [], "overall": "ok"}
         yield _event({"type": "stage", "stage": "verify", "status": "error", "error": str(e), "data": verify})
 
     draft["flags"] = verify.get("flags", [])
+
+    # ── Image enhancement ───────────────────────────────────────────────────
+    yield _event({"type": "stage", "stage": "image_enhance", "status": "start"})
+    enhanced_url: str = image_url
+    in_use_url: Optional[str] = None
+    try:
+        yield _event({"type": "thinking", "stage": "image_enhance", "content": "Downloading the original photo…\n"})
+        original_bytes, original_mime = await _fetch_image_bytes(image_url)
+
+        # Step 1 — enhance the product photo
+        yield _event({"type": "thinking", "stage": "image_enhance", "content": "Enhancing the product photo (cleaning background, fixing exposure)…\n"})
+        enhance_prompt = (
+            "Improve this product photo for an e-commerce listing. Clean and neutralize the background "
+            "(soft seamless studio or warm neutral). Correct white balance and exposure, sharpen detail, "
+            "remove dust and reflections. Do NOT alter the product itself, its colors, materials, shape, "
+            "or proportions. No added text, logos, watermarks, or extra objects. Return a single high-quality "
+            "photoreal image."
+        )
+        try:
+            enhanced_bytes = await _gen_image_async(
+                prompt=enhance_prompt, image_bytes=original_bytes, image_mime=original_mime
+            )
+            enhanced_url = _save_listing_image(enhanced_bytes, public_api_base_url)
+            yield _event({"type": "image", "stage": "image_enhance", "kind": "enhanced", "url": enhanced_url})
+        except Exception as e:
+            enhanced_bytes = original_bytes
+            yield _event({"type": "thinking", "stage": "image_enhance", "content": f"Enhance step failed ({e}); using original photo.\n"})
+
+        # Step 2 — in-use lifestyle image
+        category = (vision.get("category") or "").strip() or "item"
+        material = (vision.get("material") or "").strip()
+        title = (copy.get("title") or "").strip()
+        scene_hint = _scene_hint(category)
+        in_use_prompt = (
+            f"Generate a warm, natural lifestyle photo of this {category}"
+            f"{f' ({material})' if material else ''}"
+            f" being used in context — {scene_hint}. "
+            f"The product must be the visual focus and should match the reference image exactly in "
+            f"shape, color, and material. Photoreal, soft natural light, shallow depth of field, "
+            f"no text, no watermarks, no logos. "
+            f"{f'Listing title for context: {title}.' if title else ''}"
+        )
+        try:
+            in_use_bytes = await _gen_image_async(
+                prompt=in_use_prompt, image_bytes=enhanced_bytes, image_mime="image/png"
+            )
+            in_use_url = _save_listing_image(in_use_bytes, public_api_base_url)
+            yield _event({"type": "image", "stage": "image_enhance", "kind": "in_use", "url": in_use_url})
+        except Exception as e:
+            yield _event({"type": "thinking", "stage": "image_enhance", "content": f"In-use generation failed ({e}); skipping.\n"})
+
+        yield _event({
+            "type": "stage",
+            "stage": "image_enhance",
+            "status": "done",
+            "data": {"enhanced_url": enhanced_url, "in_use_url": in_use_url},
+        })
+    except Exception as e:
+        yield _event({
+            "type": "stage",
+            "stage": "image_enhance",
+            "status": "error",
+            "error": str(e),
+            "data": {"enhanced_url": enhanced_url, "in_use_url": in_use_url},
+        })
+
+    # Promote enhanced image and record provenance on the draft.
+    draft["image_url"] = enhanced_url
+    draft["images"] = {
+        "original_url": image_url,
+        "enhanced_url": enhanced_url,
+        "in_use_url": in_use_url,
+    }
+    if isinstance(draft.get("description"), dict):
+        draft["description"]["images"] = draft["images"]
+
     yield _event({"type": "draft", "draft": draft})

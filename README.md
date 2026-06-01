@@ -21,10 +21,10 @@ cp .env.example .env
 
 # Start the API
 uvicorn main:app --reload --port 8000
-
-# In a separate terminal, seed the database
-python -m db.seed
 ```
+
+The catalog starts empty. Add shops and products via the Admin portal (CSV import or the AI Listing Agent).
+
 
 ### Frontend
 
@@ -72,8 +72,11 @@ Set environment variables in Railway dashboard:
 | `SECRET_KEY` | any long random string |
 | `ANTHROPIC_API_KEY` | your Anthropic API key |
 | `FRONTEND_URL` | your Railway frontend URL (set after deploying frontend) |
+| `PUBLIC_API_URL` | *(optional)* override for image URLs; Railway sets `RAILWAY_PUBLIC_DOMAIN` automatically |
 
 Railway auto-injects `DATABASE_URL` from the Postgres plugin.
+
+**Listing images:** uploads are saved on the backend disk under `uploads/listings/` and served at `/uploads/…`. The URL is stored in Postgres on `products.image_url` — same as seed data. No Railway bucket or `RAILWAY_BUCKET_*` variables are required. (Uploaded files are lost on redeploy unless you add a [Railway volume](https://docs.railway.com/guides/volumes) mounted at `uploads/`.)
 
 ### 4. Deploy the frontend
 

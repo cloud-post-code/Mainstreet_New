@@ -1,9 +1,9 @@
 """
 AI Listing Agent — admin-only endpoints.
 
-  POST /api/admin/listing/upload-image  → uploads image to Railway bucket
+  POST /api/admin/listing/upload-image  → saves image under uploads/, returns URL
   POST /api/admin/listing/draft         → streams sub-agent progress (NDJSON)
-  POST /api/admin/listing/approve       → inserts the final Product row
+  POST /api/admin/listing/approve       → inserts the final Product row (Postgres)
 """
 from __future__ import annotations
 
@@ -13,15 +13,15 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.listing_orchestrator import run_listing_agent
+from agent.uploads import UPLOAD_SUBDIR, listings_dir, listing_url, public_api_base
 from auth import get_admin_user
-from config import settings
 from db.database import get_db
 from db.models import Product, Shop, User
 from db.schemas import ProductOut
@@ -56,59 +56,25 @@ class UploadResponse(BaseModel):
 # ── Image upload ─────────────────────────────────────────────────────────────
 
 
-def _s3_client():
-    # Lazy import so the backend boots even if boto3 isn't installed yet.
-    import boto3
-    from botocore.config import Config
-
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.railway_bucket_endpoint or None,
-        aws_access_key_id=settings.railway_bucket_access_key or None,
-        aws_secret_access_key=settings.railway_bucket_secret_key or None,
-        region_name=settings.railway_bucket_region or "us-east-1",
-        config=Config(signature_version="s3v4"),
-    )
-
-
 @router.post("/upload-image", response_model=UploadResponse)
 async def upload_image(
+    request: Request,
     file: UploadFile = File(...),
     _: User = Depends(get_admin_user),
 ):
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    if not settings.railway_bucket_name:
-        raise HTTPException(
-            status_code=500,
-            detail="Image storage is not configured (RAILWAY_BUCKET_NAME unset).",
-        )
-
     ext = mimetypes.guess_extension(file.content_type or "") or ".jpg"
-    key = f"listings/{uuid.uuid4().hex}{ext}"
+    if ext == ".jpe":
+        ext = ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest_path = listings_dir() / filename
+
     body = await file.read()
+    dest_path.write_bytes(body)
 
-    try:
-        client = _s3_client()
-        client.put_object(
-            Bucket=settings.railway_bucket_name,
-            Key=key,
-            Body=body,
-            ContentType=file.content_type or "image/jpeg",
-            ACL="public-read",
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
-
-    public_base = settings.railway_bucket_public_base_url.rstrip("/")
-    if public_base:
-        image_url = f"{public_base}/{key}"
-    elif settings.railway_bucket_endpoint:
-        image_url = f"{settings.railway_bucket_endpoint.rstrip('/')}/{settings.railway_bucket_name}/{key}"
-    else:
-        image_url = key
-
+    image_url = listing_url(filename, public_api_base(request))
     return UploadResponse(image_url=image_url)
 
 
@@ -118,12 +84,15 @@ async def upload_image(
 @router.post("/draft")
 async def draft_listing(
     body: DraftRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
     shop = (await db.execute(select(Shop).where(Shop.id == body.shop_id))).scalars().first()
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
+
+    base_url = public_api_base(request)
 
     async def event_stream():
         try:
@@ -133,6 +102,7 @@ async def draft_listing(
                 user_text=body.user_text,
                 quantity=body.quantity,
                 price=body.price,
+                public_api_base_url=base_url,
             ):
                 yield json.dumps(evt, default=str) + "\n"
         except Exception as e:

@@ -92,9 +92,6 @@ export const api = {
     }).then(r => r.json())
   },
 
-  seedDatabase: (token: string, force = false) =>
-    request<{ status: string; message: string }>(`/api/admin/seed${force ? '?force=true' : ''}`, { method: 'POST' }, token),
-
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
   adminProducts: (token: string, shopId?: number, limit = 500) =>
     request<Product[]>(`/api/admin/products?limit=${limit}${shopId ? `&shop_id=${shopId}` : ''}`, {}, token),
@@ -170,11 +167,19 @@ export const api = {
     request<Product>('/api/admin/listing/approve', { method: 'POST', body: JSON.stringify(body) }, token),
 }
 
-export type ListingStage = 'vision' | 'market' | 'writer' | 'verify'
+export type ListingStage = 'vision' | 'market' | 'writer' | 'verify' | 'image_enhance'
 export type ListingEvent =
   | { type: 'stage'; stage: ListingStage; status: 'start' | 'done' | 'error'; data?: Record<string, unknown>; error?: string }
+  | { type: 'thinking'; stage: ListingStage; content: string }
+  | { type: 'image'; stage: 'image_enhance'; kind: 'enhanced' | 'in_use'; url: string }
   | { type: 'draft'; draft: ListingDraft }
   | { type: 'error'; error: string }
+
+export interface ListingImages {
+  original_url: string
+  enhanced_url: string
+  in_use_url: string | null
+}
 
 export interface ListingDraft {
   name: string
@@ -182,6 +187,7 @@ export interface ListingDraft {
   quantity: number
   image_url: string | null
   tags: string[]
+  images?: ListingImages
   description: {
     summary?: string
     long?: string
@@ -190,6 +196,7 @@ export interface ListingDraft {
     market_comps?: Array<{ title?: string; price?: number; url?: string; source?: string }>
     price_range?: { low?: number; mid?: number; high?: number }
     price_rationale?: string
+    images?: ListingImages
   }
   flags: Array<{ field: string; issue: string; severity?: string }>
 }

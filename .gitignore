@@ -20,4 +20,13 @@ dist/
 # IDE
 .vscode/
 .idea/
-.gstack/
+
+# Uploaded product images (URLs live in Postgres like seed data)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Etsy data pull artifacts
+etsy-data-pull/.env
+etsy-data-pull/cache/
+etsy-data-pull/output/
+etsy-data-pull/.venv/

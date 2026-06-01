@@ -16,7 +16,12 @@ function buildSteps(events: StreamEvent[]): Step[] {
   const steps: Step[] = []
   for (const e of events) {
     if (e.type === 'thinking') {
-      steps.push({ kind: 'thinking', label: e.content })
+      const last = steps[steps.length - 1]
+      if (last?.kind === 'thinking') {
+        last.label += e.content
+      } else {
+        steps.push({ kind: 'thinking', label: e.content })
+      }
     } else if (e.type === 'tool_call') {
       if (e.tool === 'render_ui') continue
       let detail: string | undefined

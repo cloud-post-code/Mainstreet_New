@@ -29,13 +29,7 @@
   color: var(--ms-dark);
 }
 
-/* Seed */
-.seedHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
+/* Action buttons (Generate Listing, Approve, Regenerate) */
 .seedBtn {
   flex-shrink: 0;
   padding: 0.65rem 1.25rem;
@@ -51,7 +45,6 @@
 }
 .seedBtn:hover:not(:disabled) { opacity: 0.85; }
 .seedBtn:disabled { opacity: 0.5; cursor: not-allowed; }
-.seedActions { display: flex; gap: 0.5rem; flex-shrink: 0; align-items: center; }
 .reseedBtn {
   padding: 0.65rem 1rem;
   background: transparent;
@@ -325,6 +318,49 @@
   50% { opacity: 0.55; }
 }
 
+.thinkingPanel {
+  margin-top: 1rem;
+  background: rgba(1, 82, 55, 0.04);
+  border: 1px solid rgba(1, 82, 55, 0.15);
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem;
+}
+.thinkingSummary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ms-primary);
+  list-style: none;
+}
+.thinkingSummary::-webkit-details-marker { display: none; }
+.thinkingBody {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.thinkingStageTitle {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ms-dark);
+  opacity: 0.75;
+}
+.thinkingText {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ms-dark);
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
 /* Draft card */
 .draftCard {
   margin-top: 1.5rem;
@@ -342,6 +378,25 @@
   border-radius: 8px;
   object-fit: cover;
   align-self: flex-start;
+}
+.imageGallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.25rem 0 0.5rem;
+}
+.imageFigure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+}
+.imageCaption {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: #6b6157;
+  text-align: center;
 }
 .flagList {
   margin: 0;

@@ -224,17 +224,3 @@ async def delete_product(product_id: int, db: AsyncSession = Depends(get_db), _:
     await db.commit()
 
 
-@router.post("/seed")
-async def run_seed(
-    force: bool = False,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
-):
-    """Seed 10 shops + 500 products. Pass ?force=true to re-seed even if data exists."""
-    from db.seed import seed
-    result = await db.execute(select(Shop).limit(1))
-    has_shops = result.scalars().first() is not None
-    if has_shops and not force:
-        return {"status": "already_seeded", "message": "Database already has shops. Use force=true to re-seed."}
-    await seed(force=force)
-    return {"status": "seeded", "message": "Shops and products seeded successfully."}

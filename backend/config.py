@@ -6,15 +6,13 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
     frontend_url: str = "http://localhost:5173"
 
-    # Railway object storage (S3-compatible) for product image uploads
-    railway_bucket_name: str = ""
-    railway_bucket_endpoint: str = ""
-    railway_bucket_access_key: str = ""
-    railway_bucket_secret_key: str = ""
-    railway_bucket_region: str = "us-east-1"
-    railway_bucket_public_base_url: str = ""
+    # Product images: saved under upload_dir, served at /uploads, URL stored in Product.image_url
+    upload_dir: str = "uploads"
+    # Set on Railway to your backend public URL (e.g. https://your-api.up.railway.app)
+    public_api_url: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

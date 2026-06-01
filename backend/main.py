@@ -1,18 +1,18 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from config import settings
 from db.database import create_tables
+from agent.uploads import upload_root
 from routers import auth, shops, products, agent, admin, inbox, listing_agent
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    upload_root().mkdir(parents=True, exist_ok=True)
     await create_tables()
-    import os
-    if os.environ.get("SEED_ON_STARTUP", "").lower() in ("1", "true", "yes"):
-        from db.seed import seed
-        await seed()
     yield
 
 
@@ -43,6 +43,8 @@ app.include_router(agent.router)
 app.include_router(admin.router)
 app.include_router(inbox.router)
 app.include_router(listing_agent.router)
+
+app.mount("/uploads", StaticFiles(directory=str(upload_root())), name="uploads")
 
 
 @app.get("/api/health")

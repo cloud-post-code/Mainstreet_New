@@ -20,8 +20,6 @@ export default function Admin() {
   const [importing, setImporting] = useState(false)
   const [shopImportResult, setShopImportResult] = useState<ImportResult | null>(null)
   const [importingShops, setImportingShops] = useState(false)
-  const [seedResult, setSeedResult] = useState<string | null>(null)
-  const [seeding, setSeeding] = useState(false)
   const [tab, setTab] = useState<'shops' | 'products' | 'add'>('shops')
 
   useEffect(() => {
@@ -79,52 +77,12 @@ export default function Admin() {
     }
   }
 
-  async function handleSeed(force = false) {
-    const msg = force
-      ? 'Re-seed will delete the 10 default shops and re-create them with 500 products. Continue?'
-      : 'Seed the database with 10 shops and 500 sample products?'
-    if (!token || !confirm(msg)) return
-    setSeeding(true)
-    setSeedResult(null)
-    try {
-      const result = await api.seedDatabase(token, force)
-      setSeedResult(result.message)
-      api.adminShops(token).then(setShops)
-      api.adminProducts(token, selectedShop).then(setProducts)
-    } catch (err: unknown) {
-      setSeedResult(err instanceof Error ? err.message : 'Seed failed')
-    } finally {
-      setSeeding(false)
-    }
-  }
-
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <button className={styles.back} onClick={() => navigate('/')}>← Back to chat</button>
         <h1 className={styles.title}>Admin Portal</h1>
       </header>
-
-      {/* Seed Database */}
-      <section className={styles.importSection}>
-        <div className={styles.seedHeader}>
-          <div>
-            <h2 className={styles.sectionTitle}>Seed Database</h2>
-            <p className={styles.csvHint}>Populate with 10 shops and 500 sample products.</p>
-          </div>
-          <div className={styles.seedActions}>
-            <button className={styles.seedBtn} onClick={() => handleSeed(false)} disabled={seeding}>
-              {seeding ? 'Seeding…' : 'Seed Database'}
-            </button>
-            {shops.length > 0 && (
-              <button className={styles.reseedBtn} onClick={() => handleSeed(true)} disabled={seeding} title="Delete default shops and re-create from scratch">
-                Re-seed
-              </button>
-            )}
-          </div>
-        </div>
-        {seedResult && <div className={styles.importResult}><p>{seedResult}</p></div>}
-      </section>
 
       {/* CSV Import — Products */}
       <section className={styles.importSection}>
@@ -291,6 +249,7 @@ const STAGE_LABELS: Record<ListingStage, string> = {
   market: 'Market research',
   writer: 'Description writer',
   verify: 'Verify & confirm',
+  image_enhance: 'Photo enhancement',
 }
 
 function AddProductPanel({
@@ -315,7 +274,10 @@ function AddProductPanel({
     market: { status: 'idle' },
     writer: { status: 'idle' },
     verify: { status: 'idle' },
+    image_enhance: { status: 'idle' },
   })
+  const [thinkingByStage, setThinkingByStage] = useState<Partial<Record<ListingStage, string>>>({})
+  const [livePreviewImages, setLivePreviewImages] = useState<{ enhanced?: string; in_use?: string }>({})
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [draft, setDraft] = useState<ListingDraft | null>(null)
@@ -351,7 +313,10 @@ function AddProductPanel({
       market: { status: 'idle' },
       writer: { status: 'idle' },
       verify: { status: 'idle' },
+      image_enhance: { status: 'idle' },
     })
+    setThinkingByStage({})
+    setLivePreviewImages({})
     try {
       await api.streamListingDraft(
         {
@@ -368,6 +333,13 @@ function AddProductPanel({
               ...prev,
               [evt.stage]: { status: evt.status, data: evt.data, error: evt.error },
             }))
+          } else if (evt.type === 'thinking') {
+            setThinkingByStage(prev => ({
+              ...prev,
+              [evt.stage]: (prev[evt.stage] ?? '') + evt.content,
+            }))
+          } else if (evt.type === 'image') {
+            setLivePreviewImages(prev => ({ ...prev, [evt.kind]: evt.url }))
           } else if (evt.type === 'draft') {
             setDraft(evt.draft)
           } else if (evt.type === 'error') {
@@ -394,7 +366,10 @@ function AddProductPanel({
           price: draft.price,
           quantity: draft.quantity,
           image_url: draft.image_url,
-          description: draft.description as Record<string, unknown>,
+          description: {
+            ...draft.description,
+            images: draft.images ?? draft.description.images,
+          } as Record<string, unknown>,
         },
         token,
       )
@@ -410,7 +385,10 @@ function AddProductPanel({
         market: { status: 'idle' },
         writer: { status: 'idle' },
         verify: { status: 'idle' },
+        image_enhance: { status: 'idle' },
       })
+      setThinkingByStage({})
+      setLivePreviewImages({})
       onApproved()
     } catch (err) {
       setApproveError(err instanceof Error ? err.message : 'Approve failed')
@@ -504,25 +482,65 @@ function AddProductPanel({
         </fieldset>
       </div>
 
-      {/* Stage timeline */}
+      {/* Stage timeline + live thinking */}
       {(generating || draft) && (
-        <div className={styles.stageTimeline}>
-          {(Object.keys(STAGE_LABELS) as ListingStage[]).map(stage => {
-            const s = stages[stage]
-            const icon =
-              s.status === 'done' ? '✓' :
-              s.status === 'error' ? '!' :
-              s.status === 'start' ? '…' : '·'
-            return (
-              <div key={stage} className={`${styles.stageCard} ${styles[`stage_${s.status}`] ?? ''}`}>
-                <div className={styles.stageIcon}>{icon}</div>
-                <div>
-                  <div className={styles.stageLabel}>{STAGE_LABELS[stage]}</div>
-                  {s.error && <div className={styles.errorText}>{s.error}</div>}
+        <>
+          <div className={styles.stageTimeline}>
+            {(Object.keys(STAGE_LABELS) as ListingStage[]).map(stage => {
+              const s = stages[stage]
+              const icon =
+                s.status === 'done' ? '✓' :
+                s.status === 'error' ? '!' :
+                s.status === 'start' ? '…' : '·'
+              return (
+                <div key={stage} className={`${styles.stageCard} ${styles[`stage_${s.status}`] ?? ''}`}>
+                  <div className={styles.stageIcon}>{icon}</div>
+                  <div>
+                    <div className={styles.stageLabel}>{STAGE_LABELS[stage]}</div>
+                    {s.error && <div className={styles.errorText}>{s.error}</div>}
+                  </div>
                 </div>
+              )
+            })}
+          </div>
+
+          {Object.keys(thinkingByStage).length > 0 && (
+            <details className={styles.thinkingPanel} open={generating}>
+              <summary className={styles.thinkingSummary}>
+                {generating ? 'Agent thinking…' : 'Agent thinking trace'}
+              </summary>
+              <div className={styles.thinkingBody}>
+                {(Object.keys(STAGE_LABELS) as ListingStage[]).map(stage => {
+                  const text = thinkingByStage[stage]
+                  if (!text) return null
+                  return (
+                    <section key={stage} className={styles.thinkingStage}>
+                      <h4 className={styles.thinkingStageTitle}>{STAGE_LABELS[stage]}</h4>
+                      <pre className={styles.thinkingText}>{text}</pre>
+                    </section>
+                  )
+                })}
               </div>
-            )
-          })}
+            </details>
+          )}
+        </>
+      )}
+
+      {/* Live image preview while the image stage runs */}
+      {generating && (livePreviewImages.enhanced || livePreviewImages.in_use) && (
+        <div className={styles.imageGallery}>
+          {livePreviewImages.enhanced && (
+            <figure className={styles.imageFigure}>
+              <img src={livePreviewImages.enhanced} alt="enhanced" className={styles.draftImg} />
+              <figcaption className={styles.imageCaption}>Enhanced photo</figcaption>
+            </figure>
+          )}
+          {livePreviewImages.in_use && (
+            <figure className={styles.imageFigure}>
+              <img src={livePreviewImages.in_use} alt="in use" className={styles.draftImg} />
+              <figcaption className={styles.imageCaption}>In use</figcaption>
+            </figure>
+          )}
         </div>
       )}
 
@@ -530,8 +548,25 @@ function AddProductPanel({
       {draft && (
         <div className={styles.draftCard}>
           <h3 className={styles.sectionTitle}>Review listing</h3>
-          {draft.image_url && (
-            <img src={draft.image_url} alt="" className={styles.draftImg} />
+          {(draft.images?.enhanced_url || draft.images?.in_use_url || draft.image_url) && (
+            <div className={styles.imageGallery}>
+              {(draft.images?.enhanced_url ?? draft.image_url) && (
+                <figure className={styles.imageFigure}>
+                  <img
+                    src={draft.images?.enhanced_url ?? draft.image_url ?? ''}
+                    alt="enhanced product"
+                    className={styles.draftImg}
+                  />
+                  <figcaption className={styles.imageCaption}>Enhanced photo</figcaption>
+                </figure>
+              )}
+              {draft.images?.in_use_url && (
+                <figure className={styles.imageFigure}>
+                  <img src={draft.images.in_use_url} alt="in use" className={styles.draftImg} />
+                  <figcaption className={styles.imageCaption}>In use</figcaption>
+                </figure>
+              )}
+            </div>
           )}
 
           {draft.flags.length > 0 && (

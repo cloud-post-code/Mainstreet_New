@@ -19,6 +19,7 @@ from config import settings
 from db.models import AgentSession
 from agent.memory import load_short_term, load_long_term, save_turn
 from agent.tools import TOOL_DEFINITIONS, execute_tool
+from agent.streaming import stream_claude
 
 MAX_ITERATIONS = 10
 
@@ -27,8 +28,8 @@ SYSTEM_PROMPT = """You are Mason, a personal shopping assistant for Main Street,
 ## Critical rule
 Only show products and shops that exist in the database. Never invent, hallucinate, or suggest products that are not returned by search_products or search_shops. If a search returns zero results, say so honestly and try a broader query.
 
-## Available shops in the catalog
-TechNova (Electronics), GreenLeaf (Organic Food), UrbanThreads (Clothing), HomeHaven (Home & Garden), SportsPeak (Sports), BookNook (Books), PetPalace (Pet Supplies), BeautyBliss (Beauty), ToyTrove (Toys), KitchenKing (Kitchen)
+## Catalog
+The catalog is dynamic. Always call search_shops or search_products before recommending anything. If results are empty, say so honestly and suggest a broader query.
 
 ## How you respond — A2UI
 
@@ -159,16 +160,27 @@ async def run_agent_turn(
     accumulated_tool_results = []
 
     for iteration in range(MAX_ITERATIONS):
-        yield _event({"type": "thinking", "content": f"Thinking... (step {iteration + 1})"})
+        if iteration > 0:
+            yield _event({"type": "thinking", "content": f"\n\n— Step {iteration + 1} —\n"})
 
-        # Call Claude (non-streaming for tool use reliability)
-        response = client.messages.create(
+        response = None
+        for kind, payload in stream_claude(
+            client,
             model="claude-sonnet-4-6",
             max_tokens=4096,
             system=system,
             tools=TOOL_DEFINITIONS,
             messages=messages,
-        )
+        ):
+            if kind == "thinking":
+                yield _event({"type": "thinking", "content": payload})
+            elif kind == "text":
+                yield _event({"type": "thinking", "content": payload})
+            elif kind == "done":
+                response = payload
+
+        if response is None:
+            break
 
         # Process response blocks
         tool_use_blocks = []
