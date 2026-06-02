@@ -1,6 +1,10 @@
 """Tool definitions (schemas for Claude) and tool execution logic."""
+import logging
+import traceback
 from typing import Any
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from db.models import Product, Shop, AgentPlan
@@ -97,35 +101,46 @@ async def execute_tool(
     result_for_claude is what gets sent back as tool_result content.
     event_type is an optional streaming event hint (e.g. "ui_tree").
     """
-    if tool_name == "search_products":
-        return await _search_products(tool_input, db), None
+    try:
+        if tool_name == "search_products":
+            return await _search_products(tool_input, db), None
 
-    if tool_name == "search_shops":
-        return await _search_shops(tool_input, db), None
+        if tool_name == "search_shops":
+            return await _search_shops(tool_input, db), None
 
-    if tool_name == "render_ui":
-        errors = validate_render_ui(tool_input)
-        if errors:
-            return (
-                {
-                    "render_ui_invalid": True,
-                    "errors": errors,
-                    "hint": "Fix the listed errors and call render_ui again in this same turn.",
-                },
-                None,
-            )
-        return {"rendered": True}, "ui_tree"
+        if tool_name == "render_ui":
+            errors = validate_render_ui(tool_input)
+            if errors:
+                return (
+                    {
+                        "render_ui_invalid": True,
+                        "errors": errors,
+                        "hint": "Fix the listed errors and call render_ui again in this same turn.",
+                    },
+                    None,
+                )
+            return {"rendered": True}, "ui_tree"
 
-    if tool_name == "generate_plan":
-        return await _generate_plan(tool_input, session_id, db), "plan_update"
+        if tool_name == "generate_plan":
+            return await _generate_plan(tool_input, session_id, db), "plan_update"
 
-    if tool_name == "save_preference":
-        if user_id is None:
-            return {"saved": False, "reason": "not_logged_in"}, None
-        await save_preference(user_id, tool_input["key"], tool_input["value"], db)
-        return {"saved": True, "key": tool_input["key"]}, None
+        if tool_name == "save_preference":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            await save_preference(user_id, tool_input["key"], tool_input["value"], db)
+            return {"saved": True, "key": tool_input["key"]}, None
 
-    return {"error": f"Unknown tool: {tool_name}"}, None
+        return {"error": f"Unknown tool: {tool_name}"}, None
+    except Exception as e:
+        logger.exception("Tool %s failed with input %s", tool_name, tool_input)
+        return (
+            {
+                "error": f"{type(e).__name__}: {e}",
+                "tool": tool_name,
+                "traceback": traceback.format_exc(),
+            },
+            None,
+        )
 
 
 async def _search_products(params: dict, db: AsyncSession) -> dict:

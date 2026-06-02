@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import traceback
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import StreamingResponse
@@ -11,6 +13,7 @@ from auth import get_current_user
 from agent.loop import run_agent_turn
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+logger = logging.getLogger(__name__)
 
 
 
@@ -222,10 +225,21 @@ async def agent_turn(
                 db=db,
             ):
                 yield chunk
+        except Exception as e:
+            logger.exception("agent_turn stream crashed for session %s", body.session_id)
+            import json as _json
+            yield _json.dumps({
+                "type": "error",
+                "error": f"{type(e).__name__}: {e}",
+                "traceback": traceback.format_exc(),
+            }) + "\n"
         finally:
-            await db.execute(
-                update(AgentSession).where(AgentSession.id == body.session_id).values(processing=False)
-            )
-            await db.commit()
+            try:
+                await db.execute(
+                    update(AgentSession).where(AgentSession.id == body.session_id).values(processing=False)
+                )
+                await db.commit()
+            except Exception:
+                logger.exception("Failed to clear processing flag for session %s", body.session_id)
 
     return StreamingResponse(stream_and_release(), media_type="application/x-ndjson")

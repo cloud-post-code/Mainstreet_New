@@ -11,8 +11,12 @@ The agent emits one render_ui(payload) call per turn after searching, then ends.
 The payload is streamed to the client as a ui_tree event for the A2UI renderer.
 """
 import json
+import logging
+import traceback
 from typing import AsyncGenerator, Any
 import anthropic
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from config import settings
@@ -120,7 +124,29 @@ async def run_agent_turn(
     db: AsyncSession,
 ) -> AsyncGenerator[str, None]:
     """Async generator yielding NDJSON event strings."""
+    try:
+        async for ev in _run_agent_turn_inner(
+            user_message, session_id, user_id, question_card_id, db
+        ):
+            yield ev
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.exception("run_agent_turn crashed for session %s", session_id)
+        yield _event({
+            "type": "error",
+            "error": f"{type(e).__name__}: {e}",
+            "traceback": tb,
+        })
+        yield _event({"type": "done"})
 
+
+async def _run_agent_turn_inner(
+    user_message: str,
+    session_id: int,
+    user_id: int | None,
+    question_card_id: str | None,
+    db: AsyncSession,
+) -> AsyncGenerator[str, None]:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     # Load memory — anonymous users get no long-term memory

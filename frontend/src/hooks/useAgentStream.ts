@@ -11,6 +11,7 @@ export type StreamEvent =
   | { type: 'tool_result'; tool: string; result: unknown }
   | { type: 'ui_tree'; root: string; components: A2uiComponent[]; tool_use_id: string }
   | { type: 'plan_update'; steps: Array<{ step: number; description: string; done: boolean }> }
+  | { type: 'error'; error: string; traceback?: string }
   | { type: 'done' }
 
 export interface Message {
@@ -72,10 +73,17 @@ export function useAgentStream(sessionId: number | null) {
             if (event.type === 'plan_update') {
               setPlan(event.steps)
             }
+            if (event.type === 'error') {
+              console.error('agent stream error:', event.error, event.traceback)
+            }
+            const visibleEvents: StreamEvent[] =
+              event.type === 'error'
+                ? [event, { type: 'text', content: `⚠️ Agent error: ${event.error}` }]
+                : [event]
             setMessages(prev =>
               prev.map(m =>
                 m.id === agentMsgId
-                  ? { ...m, events: [...(m.events ?? []), event] }
+                  ? { ...m, events: [...(m.events ?? []), ...visibleEvents] }
                   : m
               )
             )
