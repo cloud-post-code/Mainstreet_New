@@ -19,13 +19,38 @@ async def load_short_term(session_id: int, db: AsyncSession) -> list[dict]:
     turns = list(reversed(result.scalars().all()))
 
     messages = []
+    # Track tool_use ids emitted by the most recent assistant turn so we can
+    # drop orphaned tool_result blocks (from older bugs where UI component ids
+    # were saved as tool_use_ids). Claude 400s if a tool_result references an
+    # id that wasn't in the immediately preceding assistant message.
+    pending_tool_use_ids: set[str] = set()
     for turn in turns:
         if turn.role == "user":
             content = turn.content
             # content can be a string, a list (tool_result blocks), or empty
             if not content:
                 continue
-            messages.append({"role": "user", "content": content})
+            if isinstance(content, list):
+                cleaned = []
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        if block.get("tool_use_id") in pending_tool_use_ids:
+                            cleaned.append(block)
+                            pending_tool_use_ids.discard(block.get("tool_use_id"))
+                        else:
+                            # Orphan tool_result — convert to plain text so the
+                            # answer isn't lost but Claude doesn't 400.
+                            text = block.get("content")
+                            if isinstance(text, str) and text:
+                                cleaned.append({"type": "text", "text": text})
+                    else:
+                        cleaned.append(block)
+                if not cleaned:
+                    continue
+                messages.append({"role": "user", "content": cleaned})
+            else:
+                messages.append({"role": "user", "content": content})
+            pending_tool_use_ids = set()
         elif turn.role == "assistant":
             # Reconstruct full assistant content block list
             content: list = []

@@ -160,13 +160,11 @@ async def _run_agent_turn_inner(
     long_term = await load_long_term(user_id, db) if user_id else ""
     history = await load_short_term(session_id, db)
 
-    # Save the user turn
+    # Save the user turn. question_card_id is a UI component id, not a Claude
+    # tool_use id, so we can't wrap the answer as a tool_result — that would
+    # produce a tool_result with no matching tool_use block and Claude returns
+    # a 400. Send the answer as a normal user text message instead.
     user_content: Any = user_message
-    if question_card_id:
-        # Wrap answer as a tool_result for the question card
-        user_content = [
-            {"type": "tool_result", "tool_use_id": question_card_id, "content": user_message}
-        ]
 
     await save_turn(session_id, "user", user_content, None, None, db)
 
