@@ -1,0 +1,77 @@
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--ms-primary, #015237);
+  color: var(--ms-cream, #f1e9d8);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.brand {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  font-size: 18px;
+  color: var(--ms-cream, #f1e9d8);
+  text-decoration: none;
+  padding: 6px 12px;
+  border: 2px solid var(--ms-cream, #f1e9d8);
+  border-radius: 6px;
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link {
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  color: var(--ms-cream, #f1e9d8);
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.link:hover {
+  background: rgba(241, 233, 216, 0.15);
+}
+
+.active {
+  background: rgba(241, 233, 216, 0.22);
+  font-weight: 600;
+}
+
+.button {
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  color: var(--ms-primary, #015237);
+  background: var(--ms-cream, #f1e9d8);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  margin-left: 8px;
+  transition: background 0.15s ease;
+}
+
+.button:hover {
+  background: #e8dcc2;
+}
+
+@media (max-width: 600px) {
+  .nav {
+    padding: 10px 14px;
+  }
+  .link {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+}

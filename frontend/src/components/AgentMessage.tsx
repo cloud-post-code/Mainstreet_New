@@ -114,16 +114,34 @@ function TreeWithQuestionCardAdapter({
   const patched: A2uiTree = {
     root: tree.root,
     components: (Array.isArray(tree.components) ? tree.components : []).map(c => {
-      if (c.type !== 'question_card') return c
-      const qid = (c.props as { question_id?: string }).question_id
-      return {
-        ...c,
-        props: {
-          ...c.props,
-          onAnswer,
-          answered: qid ? answeredQuestions.has(qid) : false,
-        },
+      if (c.type === 'question_card') {
+        const qid = (c.props as { question_id?: string }).question_id
+        return {
+          ...c,
+          props: {
+            ...c.props,
+            onAnswer,
+            answered: qid ? answeredQuestions.has(qid) : false,
+          },
+        }
       }
+      if (c.type === 'questionnaire') {
+        const props = c.props as {
+          current_step?: number
+          steps?: Array<{ step_id?: string }>
+        }
+        const steps = Array.isArray(props.steps) ? props.steps : []
+        const idx = typeof props.current_step === 'number' ? props.current_step : 0
+        const activeStepId = steps[idx]?.step_id
+        return {
+          ...c,
+          props: {
+            ...c.props,
+            answered: activeStepId ? answeredQuestions.has(activeStepId) : false,
+          },
+        }
+      }
+      return c
     }),
   }
   return <Renderer tree={patched} onIntent={intentHandler} />

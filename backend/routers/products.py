@@ -58,6 +58,70 @@ async def search_products(
     return products
 
 
+def _apply_product_filters(stmt, q, shop_id, min_price, max_price, in_stock_only):
+    if q:
+        ts_query = func.plainto_tsquery("english", q)
+        stmt = stmt.where(Product.search_vector.op("@@")(ts_query))
+    if shop_id is not None:
+        stmt = stmt.where(Product.shop_id == shop_id)
+    if min_price is not None:
+        stmt = stmt.where(Product.price >= min_price)
+    if max_price is not None:
+        stmt = stmt.where(Product.price <= max_price)
+    if in_stock_only:
+        stmt = stmt.where(Product.quantity > 0)
+    return stmt
+
+
+@router.get("/discover", response_model=list[ProductOut])
+async def discover_products(
+    q: Optional[str] = Query(default=None),
+    shop_id: Optional[int] = Query(default=None),
+    min_price: Optional[Decimal] = Query(default=None),
+    max_price: Optional[Decimal] = Query(default=None),
+    in_stock_only: bool = Query(default=False),
+    limit: int = Query(default=20, le=50),
+    offset: int = Query(default=0),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Product, Shop.name.label("shop_name"))
+        .join(Shop, Shop.id == Product.shop_id)
+    )
+    stmt = _apply_product_filters(stmt, q, shop_id, min_price, max_price, in_stock_only)
+    if q:
+        ts_query = func.plainto_tsquery("english", q)
+        stmt = stmt.order_by(func.ts_rank(Product.search_vector, ts_query).desc())
+    else:
+        stmt = stmt.order_by(Product.id)
+    stmt = stmt.limit(limit).offset(offset)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+    products = []
+    for product, shop_name in rows:
+        out = ProductOut.model_validate(product)
+        out.shop_name = shop_name
+        products.append(out)
+    return products
+
+
+@router.get("/discover/count")
+async def discover_count(
+    q: Optional[str] = Query(default=None),
+    shop_id: Optional[int] = Query(default=None),
+    min_price: Optional[Decimal] = Query(default=None),
+    max_price: Optional[Decimal] = Query(default=None),
+    in_stock_only: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(func.count(Product.id)).join(Shop, Shop.id == Product.shop_id)
+    stmt = _apply_product_filters(stmt, q, shop_id, min_price, max_price, in_stock_only)
+    result = await db.execute(stmt)
+    total = result.scalar() or 0
+    return {"total": int(total)}
+
+
 @router.get("/{product_id}", response_model=ProductOut)
 async def get_product(product_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
     result = await db.execute(

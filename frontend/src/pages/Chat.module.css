@@ -103,6 +103,23 @@
 }
 .newChat:hover { opacity: 0.85; }
 
+.discoverLink {
+  margin-top: 0.5rem;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  color: var(--ms-cream);
+  border: 1px solid rgba(241, 233, 216, 0.35);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.discoverLink:hover { background: rgba(241, 233, 216, 0.12); }
+
 .sessionList {
   flex: 1;
   overflow-y: auto;

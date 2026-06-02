@@ -371,6 +371,7 @@ export default function Chat() {
           </div>
         </div>
         <button className={styles.newChat} onClick={newSession}>+ New chat</button>
+        <button className={styles.discoverLink} onClick={() => navigate('/discover')}>Discover ↗</button>
 
         {/* Session list — only shown when logged in */}
         {token && (

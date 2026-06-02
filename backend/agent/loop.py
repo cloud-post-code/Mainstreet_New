@@ -47,8 +47,9 @@ Every response is a single render_ui(payload) call after any necessary searches.
 - `product_card` — single product. Props: {product_id, name, price, shop_name, image_url?, quantity?, description_summary?, tags?, shop_id?}. No children.
 - `product_grid` — multi-product container. Props: {layout(recommendation|comparison|curated), title, subtitle?}. Children: product_card ids.
 - `comparison_table` — row-per-product comparison. Each row is one product; columns are Product, Price, Pros, Cons (fixed). Props: {products: [{product_id, name, price, pros: [string], cons: [string], shop_name?, image_url?}], sort_by?}. Provide 2-5 short bullet-style strings for `pros` and `cons` per product (a phrase, not a full sentence). No children.
-- `multiple_choice` — preference question. Props: {question_id, question, choices, hint?}. No children.
-- `question_card` — free-text clarification. Props: {question_id, question, options?, hint?}. No children.
+- `multiple_choice` — single preference question (one of N). Props: {question_id, question, choices, hint?}. No children. Only use this when you need to ask exactly one thing; if you'd ask two or more questions in this turn, use `questionnaire` instead.
+- `question_card` — single free-text clarification. Props: {question_id, question, options?, hint?}. No children. Same rule as `multiple_choice` — only when asking exactly one thing.
+- `questionnaire` — multi-step preference walkthrough. Shows the user one step at a time. Props: {questionnaire_id, current_step (0-based int), steps: [{step_id (unique stable id), question, kind ('single'|'multi'|'text'), options? (string[] for single/multi), hint?, allow_other?:bool (multi only)}], title?}. No children. Each step's answer comes back as a normal user message. On the user's next turn, re-emit the same `questionnaire` with the same `questionnaire_id` and `steps`, with `current_step` incremented by 1. When you have enough info (or all steps are answered), stop emitting the questionnaire and render product results.
 - `product_details_modal` — expanded product view. Props: {product_id, name, price, shop_name, image_url?, gallery?, description_long?, tags?}. No children.
 - `next_actions` — follow-up chips. Props: {actions[{label, intent}]}. No children.
 - `shop_card` — shop card. Props: {shop_id, name, logo_url?, description?, website_url?, product_count?}. No children.
@@ -69,7 +70,8 @@ The root is always a `stack`. Children appear in this order:
 |---|---|
 | "Find X" / "Show X" | stack[product_grid(recommendation), text_block, next_actions?, reasoning_block] |
 | "Compare these" / "Compare top N" | stack[comparison_table, text_block, reasoning_block] |
-| "Help me choose" / preferences unclear | stack[multiple_choice, text_block]  (no reasoning yet) |
+| "Help me choose" / one preference unclear | stack[multiple_choice, text_block]  (no reasoning yet) |
+| Multiple preferences unclear (2+ questions) | stack[questionnaire, text_block]  (single card walks the user through all questions) |
 | "Show details for X" | stack[product_details_modal, text_block] |
 | "What shops sell Y" | stack[shop_card, shop_card, ..., text_block] |
 | "X under $Y" / filtered search | search_products with max_price filter → stack[product_grid, text_block, reasoning_block] |
@@ -84,6 +86,32 @@ The root is always a `stack`. Children appear in this order:
 5. Component ids must be unique and referenced from `root` through `children`. No orphans.
 6. Container components (`stack`, `product_grid`) use `children: [ids]`. Leaf components (cards, blocks, tables, panels) do not have children.
 7. If render_ui returns a validation error, fix it and call render_ui again in the same turn.
+8. Never emit more than one `multiple_choice` or `question_card` in the same payload. If you need to ask two or more things, use a single `questionnaire` instead.
+9. When using `questionnaire`, keep `questionnaire_id` and `steps` stable across turns. Only `current_step` changes between turns (it increments by 1 after each user answer).
+
+### Example payload — questionnaire (preferences unclear, asking 3 things)
+
+```
+{
+  "root": "root_1",
+  "components": [
+    {"id":"root_1","type":"stack","props":{},"children":["qn_1","text_1"]},
+    {"id":"qn_1","type":"questionnaire","props":{
+      "questionnaire_id":"qn_gift_1",
+      "current_step":0,
+      "title":"Let's narrow it down",
+      "steps":[
+        {"step_id":"qn_gift_1__s0","question":"What kind of treats are you in the mood for?","kind":"single","options":["Sweet","Savory","Spreads","Drinks"]},
+        {"step_id":"qn_gift_1__s1","question":"Any dietary needs?","kind":"multi","options":["Gluten-free","Vegan","Nut-free","Dairy-free"],"allow_other":true},
+        {"step_id":"qn_gift_1__s2","question":"Roughly what's your budget?","kind":"text","hint":"e.g., $25"}
+      ]
+    }},
+    {"id":"text_1","type":"text_block","props":{"content":"Tell me a bit more and I'll line up the best picks."}}
+  ]
+}
+```
+
+After the user answers step 0, the next turn re-emits the same questionnaire with `current_step: 1`. After all steps are answered, move on to product results instead of re-emitting the questionnaire.
 
 ### Example payload — "Find me running shoes under $100"
 

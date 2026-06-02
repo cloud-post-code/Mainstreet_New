@@ -2,6 +2,7 @@ import { useEffect, useState, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { api, Shop, Product, ListingDraft, ListingStage } from '../api'
+import TopNav from '../components/TopNav'
 import styles from './Admin.module.css'
 
 interface ImportResult {
@@ -182,6 +183,7 @@ export default function Admin() {
 
   return (
     <div className={styles.page}>
+      <TopNav />
       <header className={styles.header}>
         <button className={styles.back} onClick={() => navigate('/')}>← Back to chat</button>
         <h1 className={styles.title}>Admin Portal</h1>

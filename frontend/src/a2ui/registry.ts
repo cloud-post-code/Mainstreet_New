@@ -9,6 +9,7 @@ import ReasoningBlock from '../components/a2ui/ReasoningBlock'
 import ProductGrid from '../components/a2ui/ProductGrid'
 import ComparisonTable from '../components/a2ui/ComparisonTable'
 import MultipleChoice from '../components/a2ui/MultipleChoice'
+import Questionnaire from '../components/a2ui/Questionnaire'
 import ProductDetailsModal from '../components/a2ui/ProductDetailsModal'
 import NextActions from '../components/a2ui/NextActions'
 
@@ -22,6 +23,7 @@ export const REGISTRY: Record<string, ComponentType<any>> = {
   comparison_table: ComparisonTable,
   multiple_choice: MultipleChoice,
   question_card: QuestionCard,
+  questionnaire: Questionnaire,
   product_details_modal: ProductDetailsModal,
   next_actions: NextActions,
   shop_card: ShopCard,

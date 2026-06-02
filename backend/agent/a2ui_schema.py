@@ -17,6 +17,7 @@ ALLOWED_TYPES: set[str] = {
     "comparison_table",
     "multiple_choice",
     "question_card",
+    "questionnaire",
     "product_details_modal",
     "next_actions",
     "shop_card",
@@ -34,6 +35,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     "comparison_table": ("products",),
     "multiple_choice": ("question_id", "question", "choices"),
     "question_card": ("question_id", "question"),
+    "questionnaire": ("questionnaire_id", "steps", "current_step"),
     "product_details_modal": ("product_id", "name", "price", "shop_name"),
     "next_actions": ("actions",),
     "shop_card": ("shop_id", "name"),
@@ -125,6 +127,52 @@ def validate_render_ui(payload: Any) -> list[str]:
                         f"components[{cid}].props.product_ids contains ids not found "
                         f"in products: {missing}."
                     )
+        if ctype == "questionnaire":
+            steps = props.get("steps")
+            current_step = props.get("current_step")
+            if not isinstance(steps, list) or len(steps) == 0:
+                errors.append(
+                    f"components[{cid}].props.steps must be a non-empty array of step objects."
+                )
+            else:
+                seen_step_ids: set[str] = set()
+                for si, step in enumerate(steps):
+                    if not isinstance(step, dict):
+                        errors.append(f"components[{cid}].props.steps[{si}] must be an object")
+                        continue
+                    step_id = step.get("step_id")
+                    question = step.get("question")
+                    kind = step.get("kind")
+                    if not isinstance(step_id, str) or not step_id:
+                        errors.append(f"components[{cid}].props.steps[{si}].step_id must be a non-empty string")
+                    elif step_id in seen_step_ids:
+                        errors.append(f"components[{cid}].props.steps[{si}].step_id '{step_id}' is duplicated")
+                    else:
+                        seen_step_ids.add(step_id)
+                    if not isinstance(question, str) or not question:
+                        errors.append(f"components[{cid}].props.steps[{si}].question must be a non-empty string")
+                    if kind not in ("single", "multi", "text"):
+                        errors.append(
+                            f"components[{cid}].props.steps[{si}].kind '{kind}' invalid. "
+                            f"Allowed: 'single', 'multi', 'text'."
+                        )
+                    if kind in ("single", "multi"):
+                        options = step.get("options")
+                        if not isinstance(options, list) or len(options) == 0:
+                            errors.append(
+                                f"components[{cid}].props.steps[{si}].options must be a non-empty array of strings "
+                                f"when kind is '{kind}'."
+                            )
+                        elif not all(isinstance(o, str) for o in options):
+                            errors.append(
+                                f"components[{cid}].props.steps[{si}].options must contain only strings."
+                            )
+            if not isinstance(current_step, int) or isinstance(current_step, bool):
+                errors.append(f"components[{cid}].props.current_step must be an integer")
+            elif isinstance(steps, list) and (current_step < 0 or current_step > len(steps)):
+                errors.append(
+                    f"components[{cid}].props.current_step {current_step} out of range [0, {len(steps)}]."
+                )
         children = comp.get("children")
         if children is not None and not isinstance(children, list):
             errors.append(f"components[{cid}].children must be an array of ids")
@@ -219,6 +267,7 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "comparison_table{products[{product_id,name,price,pros[],cons[],shop_name?,image_url?}],sort_by?}, "
                                 "multiple_choice{question_id,question,choices,hint?}, "
                                 "question_card{question_id,question,options?,hint?}, "
+                                "questionnaire{questionnaire_id,current_step,steps:[{step_id,question,kind('single'|'multi'|'text'),options?:string[],hint?,allow_other?:bool}],title?}, "
                                 "product_details_modal{product_id,name,price,shop_name,image_url?,gallery?,description_long?,tags?}, "
                                 "next_actions{actions[{label,intent}]}, "
                                 "shop_card{shop_id,name,logo_url?,description?,website_url?,product_count?}, "

@@ -115,6 +115,44 @@ export const api = {
     return { blob: await res.blob(), filename: 'shops.csv' }
   },
 
+  getDiscoverProducts: (opts: {
+    q?: string
+    shop_id?: number
+    min_price?: number
+    max_price?: number
+    in_stock_only?: boolean
+    limit?: number
+    offset?: number
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.q) params.set('q', opts.q)
+    if (opts.shop_id != null) params.set('shop_id', String(opts.shop_id))
+    if (opts.min_price != null) params.set('min_price', String(opts.min_price))
+    if (opts.max_price != null) params.set('max_price', String(opts.max_price))
+    if (opts.in_stock_only) params.set('in_stock_only', 'true')
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    if (opts.offset != null) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request<Product[]>(`/api/products/discover${qs ? `?${qs}` : ''}`)
+  },
+
+  getDiscoverCount: (opts: {
+    q?: string
+    shop_id?: number
+    min_price?: number
+    max_price?: number
+    in_stock_only?: boolean
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.q) params.set('q', opts.q)
+    if (opts.shop_id != null) params.set('shop_id', String(opts.shop_id))
+    if (opts.min_price != null) params.set('min_price', String(opts.min_price))
+    if (opts.max_price != null) params.set('max_price', String(opts.max_price))
+    if (opts.in_stock_only) params.set('in_stock_only', 'true')
+    const qs = params.toString()
+    return request<{ total: number }>(`/api/products/discover/count${qs ? `?${qs}` : ''}`)
+  },
+
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
   createShop: (
     body: { name: string; logo_url?: string; description?: string; website_url?: string },
