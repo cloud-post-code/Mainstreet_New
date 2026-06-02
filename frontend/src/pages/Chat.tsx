@@ -180,7 +180,11 @@ export default function Chat() {
       setLoadedMessages(msgs)
       setHistoryHasMore(res.has_more)
       setHistoryCursor(res.next_cursor)
-    } catch { /* session may have no turns yet */ }
+    } catch (e) {
+      // Surface so we can diagnose "old chat won't load" — was previously
+      // swallowed which made auth/404/parse failures look like an empty chat.
+      console.error('[selectSession] failed to load turns for', id, e)
+    }
   }
 
   async function loadOlderMessages() {
