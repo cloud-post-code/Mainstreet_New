@@ -3,14 +3,14 @@ import logging
 import traceback
 from typing import Any
 from decimal import Decimal
-from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, delete
-from db.models import Product, Shop, AgentPlan, CartItem
+from sqlalchemy import select, func
+from db.models import Product, Shop, AgentPlan
 from agent.memory import save_preference
 from agent.a2ui_schema import RENDER_UI_TOOL_SCHEMA, validate_render_ui
+from services import cart as cart_service
 
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 
@@ -264,104 +264,26 @@ async def _search_shops(params: dict, db: AsyncSession) -> dict:
     return {"count": len(shops), "shops": shops}
 
 
-def _cart_owner_filter(user_id: int | None, session_id: int):
-    if user_id is not None:
-        return CartItem.user_id == user_id
-    return and_(CartItem.session_id == session_id, CartItem.user_id.is_(None))
-
-
 async def _add_to_cart(params: dict, user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    product_id = int(params["product_id"])
-    quantity = int(params.get("quantity") or 1)
-    if quantity < 1:
-        return {"added": False, "reason": "quantity_must_be_positive"}
-
-    product = (await db.execute(select(Product).where(Product.id == product_id))).scalars().first()
-    if product is None:
-        return {"added": False, "reason": "product_not_found", "product_id": product_id}
-
-    existing = (
-        await db.execute(select(CartItem).where(_cart_owner_filter(user_id, session_id), CartItem.product_id == product_id))
-    ).scalars().first()
-
-    if existing:
-        existing.quantity = existing.quantity + quantity
-        new_qty = existing.quantity
-    else:
-        item = CartItem(
-            user_id=user_id,
-            session_id=None if user_id is not None else session_id,
-            product_id=product_id,
-            quantity=quantity,
-        )
-        db.add(item)
-        new_qty = quantity
-
-    await db.flush()
-    line_subtotal = float(product.price) * new_qty
-    warning = None
-    if new_qty > product.quantity:
-        warning = f"Requested {new_qty} but only {product.quantity} in stock."
-
-    return {
-        "added": True,
-        "product_id": product_id,
-        "product_name": product.name,
-        "new_quantity": new_qty,
-        "unit_price": float(product.price),
-        "line_subtotal": round(line_subtotal, 2),
-        "warning": warning,
-    }
+    return await cart_service.add_item(
+        product_id=int(params["product_id"]),
+        quantity=int(params.get("quantity") or 1),
+        user_id=user_id,
+        session_id=session_id,
+        db=db,
+    )
 
 
 async def _view_cart(user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    stmt = (
-        select(CartItem, Product, Shop.name.label("shop_name"))
-        .join(Product, Product.id == CartItem.product_id)
-        .join(Shop, Shop.id == Product.shop_id)
-        .where(_cart_owner_filter(user_id, session_id))
-        .order_by(CartItem.created_at)
-    )
-    rows = (await db.execute(stmt)).all()
-    items = []
-    total = 0.0
-    for cart_item, product, shop_name in rows:
-        subtotal = float(product.price) * cart_item.quantity
-        total += subtotal
-        items.append({
-            "product_id": product.id,
-            "name": product.name,
-            "shop_name": shop_name,
-            "image_url": product.image_url,
-            "price": float(product.price),
-            "quantity": cart_item.quantity,
-            "subtotal": round(subtotal, 2),
-        })
-    return {"items": items, "item_count": len(items), "total": round(total, 2)}
+    return await cart_service.view(user_id, session_id, db)
 
 
 async def _remove_from_cart(params: dict, user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    product_id = int(params["product_id"])
-    result = await db.execute(
-        delete(CartItem).where(_cart_owner_filter(user_id, session_id), CartItem.product_id == product_id)
-    )
-    await db.flush()
-    return {"removed": (result.rowcount or 0) > 0, "product_id": product_id}
+    return await cart_service.remove_item(int(params["product_id"]), user_id, session_id, db)
 
 
 async def _checkout(user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    cart = await _view_cart(user_id, session_id, db)
-    if cart["item_count"] == 0:
-        return {"checkout_url": None, "items_count": 0, "total": 0.0, "reason": "cart_empty"}
-
-    checkout_url = f"https://checkout.example.com/c/{uuid4()}"
-    await db.execute(delete(CartItem).where(_cart_owner_filter(user_id, session_id)))
-    await db.flush()
-    return {
-        "checkout_url": checkout_url,
-        "items_count": cart["item_count"],
-        "total": cart["total"],
-    }
+    return await cart_service.checkout(user_id, session_id, db)
 
 
 async def _generate_plan(params: dict, session_id: int, db: AsyncSession) -> dict:

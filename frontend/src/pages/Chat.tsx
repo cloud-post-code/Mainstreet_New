@@ -350,7 +350,18 @@ export default function Chat() {
       {/* Sidebar */}
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
-          <div className={styles.brand}>MAIN ST</div>
+          <button
+            type="button"
+            className={styles.brand}
+            onClick={() => {
+              setLoadedMessages([])
+              reset()
+              navigate('/')
+            }}
+            aria-label="Main St. home"
+          >
+            MAIN ST
+          </button>
           <div className={styles.sidebarHeaderActions}>
             {token && (
               <button
@@ -473,8 +484,11 @@ export default function Chat() {
         {messages.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>🧱</div>
-            <h2>Your Local Shopper</h2>
-            <p>Ask Mason to help you find products from local shops near you.</p>
+            <h2>
+              {user
+                ? `Welcome back, ${user.display_name ?? user.email?.split('@')[0] ?? 'friend'} — anything I can help you find today?`
+                : 'Experience your local shopping assistant today'}
+            </h2>
             {!token && (
               <p className={styles.guestHint}>
                 <button onClick={() => openAuth('login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.

@@ -10,6 +10,13 @@ from db.models import User
 router = APIRouter(prefix="/api/shops", tags=["shops"])
 
 
+@router.get("/public")
+async def list_shops_public(db: AsyncSession = Depends(get_db)):
+    """Lightweight unauthenticated list of shops for filter UIs."""
+    result = await db.execute(select(Shop.id, Shop.name).order_by(Shop.name))
+    return [{"id": row.id, "name": row.name} for row in result.all()]
+
+
 @router.get("", response_model=list[ShopOut])
 async def list_shops(
     q: str = Query(default=None),

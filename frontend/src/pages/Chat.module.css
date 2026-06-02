@@ -35,6 +35,15 @@
   border-radius: 3px;
   outline: 1.5px solid rgba(255,255,255,0.3);
   outline-offset: 2px;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.brand:hover {
+  background: rgba(255,255,255,0.18);
 }
 .sidebarHeaderActions {
   display: flex;

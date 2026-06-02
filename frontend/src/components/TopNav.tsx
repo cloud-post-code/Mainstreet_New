@@ -17,7 +17,7 @@ export default function TopNav() {
 
   return (
     <nav className={styles.nav}>
-      <Link to="/discover" className={styles.brand}>MAIN ST</Link>
+      <Link to="/" className={styles.brand}>MAIN ST</Link>
       <div className={styles.links}>
         <Link
           to="/discover"
