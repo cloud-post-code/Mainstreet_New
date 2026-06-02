@@ -193,7 +193,7 @@ async def _run_agent_turn_inner(
         for kind, payload in stream_claude(
             client,
             model="claude-sonnet-4-6",
-            max_tokens=4096,
+            max_tokens=16384,
             system=system,
             tools=TOOL_DEFINITIONS,
             messages=messages,
