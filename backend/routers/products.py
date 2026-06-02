@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, or_
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from typing import Optional
 from decimal import Decimal
@@ -9,6 +9,23 @@ from db.models import Product, Shop
 from db.schemas import ProductOut
 from auth import get_current_user
 from db.models import User
+
+
+def _parse_csv_ints(value: Optional[str]) -> list[int]:
+    if not value:
+        return []
+    out = []
+    for tok in value.split(","):
+        tok = tok.strip()
+        if tok.isdigit():
+            out.append(int(tok))
+    return out
+
+
+def _parse_csv_strs(value: Optional[str]) -> list[str]:
+    if not value:
+        return []
+    return [t.strip() for t in value.split(",") if t.strip()]
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
