@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../cart/CartContext'
+import MainStLogo from './MainStLogo'
 import styles from './TopNav.module.css'
 
 export default function TopNav() {
@@ -27,7 +28,9 @@ export default function TopNav() {
   return (
     <nav className={styles.nav}>
       <div className={styles.links}>
-        <Link to="/" className={styles.brand}>MAIN ST</Link>
+        <Link to="/" className={styles.brand} aria-label="Main St. home">
+          <MainStLogo size="nav" />
+        </Link>
         {user?.is_admin && (
           <Link
             to="/admin"
@@ -38,6 +41,24 @@ export default function TopNav() {
         )}
       </div>
       <div className={styles.rightSide}>
+        <Link
+          to="/"
+          className={`${styles.link} ${location.pathname === '/' ? styles.active : ''}`}
+        >
+          Chat
+        </Link>
+        <Link
+          to="/discover"
+          className={`${styles.link} ${isActive('/discover') ? styles.active : ''}`}
+        >
+          Discover
+        </Link>
+        <Link
+          to="/inbox"
+          className={`${styles.link} ${isActive('/inbox') ? styles.active : ''}`}
+        >
+          Inbox
+        </Link>
         {token ? (
           <button type="button" className={styles.button} onClick={handleLogout}>
             Log out

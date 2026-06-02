@@ -12,15 +12,15 @@
 }
 
 .brand {
-  font-family: 'Playfair Display', serif;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  font-size: 18px;
-  color: var(--ms-cream, #f1e9d8);
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
-  padding: 6px 12px;
-  border: 2px solid var(--ms-cream, #f1e9d8);
-  border-radius: 6px;
+  line-height: 0;
+  transition: opacity 0.15s ease;
+}
+
+.brand:hover {
+  opacity: 0.9;
 }
 
 .links {

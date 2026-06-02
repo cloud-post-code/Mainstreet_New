@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../hooks/useAuth'
+import MainStLogo from '../components/MainStLogo'
 import styles from './Auth.module.css'
 
 export default function Register() {
@@ -31,7 +32,7 @@ export default function Register() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.logo}>MAIN STREET</div>
+        <MainStLogo size="auth" />
         <h1 className={styles.title}>Join Main Street</h1>
         <p className={styles.subtitle}>Create your account</p>
         <form onSubmit={handleSubmit} className={styles.form}>

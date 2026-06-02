@@ -1,0 +1,15 @@
+.logo {
+  display: block;
+  height: auto;
+  width: auto;
+  object-fit: contain;
+}
+
+.nav {
+  height: 36px;
+}
+
+.auth {
+  height: 56px;
+  margin: 0 auto 1.25rem;
+}
