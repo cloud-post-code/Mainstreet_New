@@ -10,6 +10,7 @@ from fastapi import Request
 from config import settings
 
 UPLOAD_SUBDIR = "listings"
+SHOP_LOGO_SUBDIR = "shops"
 
 
 def upload_root() -> Path:
@@ -21,6 +22,12 @@ def upload_root() -> Path:
 
 def listings_dir() -> Path:
     d = upload_root() / UPLOAD_SUBDIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def shops_dir() -> Path:
+    d = upload_root() / SHOP_LOGO_SUBDIR
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -38,3 +45,7 @@ def public_api_base(request: Optional[Request] = None) -> str:
 
 def listing_url(filename: str, base: str) -> str:
     return f"{base.rstrip('/')}/uploads/{UPLOAD_SUBDIR}/{filename}"
+
+
+def shop_logo_url(filename: str, base: str) -> str:
+    return f"{base.rstrip('/')}/uploads/{SHOP_LOGO_SUBDIR}/{filename}"

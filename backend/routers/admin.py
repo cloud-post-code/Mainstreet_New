@@ -1,11 +1,15 @@
 import csv
 import io
 import json
+import mimetypes
+import uuid
 from decimal import Decimal, InvalidOperation
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from agent.uploads import public_api_base, shop_logo_url, shops_dir
 from db.database import get_db
 from db.models import Shop, Product, User
 from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut
@@ -15,6 +19,32 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 EXPECTED_COLUMNS = {"shop_name", "product_name", "price", "quantity", "image_url", "description_json"}
 SHOP_EXPECTED_COLUMNS = {"name"}
+
+
+class UploadResponse(BaseModel):
+    image_url: str
+
+
+@router.post("/shops/upload-logo", response_model=UploadResponse)
+async def upload_shop_logo(
+    request: Request,
+    file: UploadFile = File(...),
+    _: User = Depends(get_admin_user),
+):
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    ext = mimetypes.guess_extension(file.content_type or "") or ".jpg"
+    if ext == ".jpe":
+        ext = ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest_path = shops_dir() / filename
+
+    body = await file.read()
+    dest_path.write_bytes(body)
+
+    image_url = shop_logo_url(filename, public_api_base(request))
+    return UploadResponse(image_url=image_url)
 
 
 @router.post("/import", response_model=ImportResult)

@@ -312,14 +312,18 @@ export default function Admin() {
               </label>
 
               <label className={styles.addLabel}>
-                Logo URL <span className={styles.optional}>(optional)</span>
+                Logo <span className={styles.optional}>(optional)</span>
                 <input
-                  className={styles.input}
-                  type="url"
-                  value={newShopLogoUrl}
-                  onChange={e => setNewShopLogoUrl(e.target.value)}
-                  placeholder="https://…"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleShopLogoUpload}
+                  disabled={uploadingShopLogo}
                 />
+                {uploadingShopLogo && <span className={styles.csvHint}>Uploading…</span>}
+                {shopLogoUploadError && <span className={styles.errorText}>{shopLogoUploadError}</span>}
+                {newShopLogoPreview && (
+                  <img src={newShopLogoPreview} alt="Logo preview" className={styles.previewImg} />
+                )}
               </label>
 
               <label className={styles.addLabel}>
@@ -344,7 +348,7 @@ export default function Admin() {
                 />
               </label>
 
-              <button type="submit" className={styles.saveBtn} disabled={addingShop || !newShopName.trim()}>
+              <button type="submit" className={styles.saveBtn} disabled={addingShop || uploadingShopLogo || !newShopName.trim()}>
                 {addingShop ? 'Adding…' : 'Save Shop'}
               </button>
               {addShopError && <div className={styles.errorText}>{addShopError}</div>}

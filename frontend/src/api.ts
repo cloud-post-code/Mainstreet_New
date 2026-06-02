@@ -149,6 +149,19 @@ export const api = {
     })
   },
 
+  uploadShopLogo: (file: File, token: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return fetch(`${BASE}/api/admin/shops/upload-logo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }).then(async r => {
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? 'Upload failed')
+      return r.json() as Promise<{ image_url: string }>
+    })
+  },
+
   streamListingDraft: async (
     body: { shop_id: number; image_url: string; user_text?: string; quantity?: number; price?: number },
     token: string,
