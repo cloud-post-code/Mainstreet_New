@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +40,19 @@ async def add_item(
         session_id=None,
         db=db,
     )
+    if result.get("reason") == "insufficient_stock":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": (
+                    f"Only {result['available']} of \"{result['product_name']}\" in stock"
+                    f" (you have {result.get('in_cart', 0)} in your cart)."
+                ),
+                **result,
+            },
+        )
+    if result.get("reason") == "product_not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
     cart = await cart_service.view(user_id=user.id, session_id=None, db=db)
     return {"result": result, "cart": cart}
 
@@ -58,6 +71,16 @@ async def set_item_quantity(
         session_id=None,
         db=db,
     )
+    if result.get("reason") == "insufficient_stock":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": (
+                    f"Only {result['available']} of \"{result['product_name']}\" in stock."
+                ),
+                **result,
+            },
+        )
     cart = await cart_service.view(user_id=user.id, session_id=None, db=db)
     return {"result": result, "cart": cart}
 

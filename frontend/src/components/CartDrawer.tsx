@@ -6,6 +6,8 @@ import styles from './CartDrawer.module.css'
 export default function CartDrawer() {
   const { isOpen, close, items, total, setQuantity, removeItem, checkout } = useCart()
   const [busy, setBusy] = useState(false)
+  const [pendingId, setPendingId] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -13,6 +15,8 @@ export default function CartDrawer() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [isOpen, close])
+
+  useEffect(() => { if (!isOpen) setError(null) }, [isOpen])
 
   if (!isOpen) return null
 
@@ -28,6 +32,28 @@ export default function CartDrawer() {
     }
   }
 
+  const onSetQty = async (productId: number, qty: number) => {
+    setError(null)
+    setPendingId(productId)
+    try {
+      const res = await setQuantity(productId, qty)
+      if (!res.ok && res.error) setError(res.error)
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  const onRemove = async (productId: number) => {
+    setError(null)
+    setPendingId(productId)
+    try {
+      const res = await removeItem(productId)
+      if (!res.ok && res.error) setError(res.error)
+    } finally {
+      setPendingId(null)
+    }
+  }
+
   return createPortal(
     <>
       <div className={styles.backdrop} onClick={close} aria-hidden="true" />
@@ -37,9 +63,14 @@ export default function CartDrawer() {
           <button className={styles.closeBtn} onClick={close} aria-label="Close cart">×</button>
         </div>
         <div className={styles.body}>
+          {error && (
+            <div className={styles.errorBanner} role="alert">{error}</div>
+          )}
           {items.length === 0 ? (
             <div className={styles.empty}>Your cart is empty.</div>
-          ) : items.map(it => (
+          ) : items.map(it => {
+            const rowBusy = busy || pendingId === it.product_id
+            return (
             <div key={it.product_id} className={styles.item}>
               <div className={styles.thumb}>
                 {it.image_url
@@ -52,16 +83,16 @@ export default function CartDrawer() {
                 <div className={styles.qtyRow}>
                   <button
                     className={styles.qtyBtn}
-                    onClick={() => setQuantity(it.product_id, it.quantity - 1)}
+                    onClick={() => onSetQty(it.product_id, it.quantity - 1)}
                     aria-label="Decrease quantity"
-                    disabled={busy}
+                    disabled={rowBusy}
                   >−</button>
                   <span className={styles.qty}>{it.quantity}</span>
                   <button
                     className={styles.qtyBtn}
-                    onClick={() => setQuantity(it.product_id, it.quantity + 1)}
+                    onClick={() => onSetQty(it.product_id, it.quantity + 1)}
                     aria-label="Increase quantity"
-                    disabled={busy}
+                    disabled={rowBusy}
                   >+</button>
                 </div>
               </div>
@@ -69,12 +100,13 @@ export default function CartDrawer() {
                 <span className={styles.itemPrice}>${it.subtotal.toFixed(2)}</span>
                 <button
                   className={styles.removeBtn}
-                  onClick={() => removeItem(it.product_id)}
-                  disabled={busy}
-                >Remove</button>
+                  onClick={() => onRemove(it.product_id)}
+                  disabled={rowBusy}
+                >{pendingId === it.product_id ? 'Removing…' : 'Remove'}</button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
         <div className={styles.footer}>
           <div className={styles.totalRow}>

@@ -65,6 +65,17 @@
   padding: 16px 22px;
 }
 
+.errorBanner {
+  background: #fdecec;
+  color: #8a1a1a;
+  border: 1px solid #f0bcbc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-family: 'Lora', serif;
+  font-size: 13px;
+}
+
 .empty {
   font-family: 'Lora', serif;
   text-align: center;

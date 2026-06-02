@@ -132,6 +132,18 @@
   cursor: not-allowed;
 }
 
+.addError {
+  margin: 0.4rem 0 0;
+  padding: 0.45rem 0.6rem;
+  background: #fdecec;
+  color: #8a1a1a;
+  border: 1px solid #f0bcbc;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
 /* ── Shop Card ── */
 .shopCard {
   display: flex;

@@ -61,24 +61,30 @@ async def add_item(
         )
     ).scalars().first()
 
+    current_qty = existing.quantity if existing else 0
+    new_qty = current_qty + quantity
+    if new_qty > product.quantity:
+        return {
+            "added": False,
+            "reason": "insufficient_stock",
+            "product_id": product_id,
+            "product_name": product.name,
+            "requested_quantity": new_qty,
+            "available": product.quantity,
+            "in_cart": current_qty,
+        }
+
     if existing:
-        existing.quantity = existing.quantity + quantity
-        new_qty = existing.quantity
+        existing.quantity = new_qty
     else:
-        item = CartItem(
+        db.add(CartItem(
             user_id=user_id,
             session_id=None if user_id is not None else session_id,
             product_id=product_id,
             quantity=quantity,
-        )
-        db.add(item)
-        new_qty = quantity
+        ))
 
     await db.flush()
-    warning = None
-    if new_qty > product.quantity:
-        warning = f"Requested {new_qty} but only {product.quantity} in stock."
-
     return {
         "added": True,
         "product_id": product_id,
@@ -86,7 +92,6 @@ async def add_item(
         "new_quantity": new_qty,
         "unit_price": float(product.price),
         "line_subtotal": round(float(product.price) * new_qty, 2),
-        "warning": warning,
     }
 
 
@@ -111,6 +116,19 @@ async def set_quantity(
         await db.delete(existing)
         await db.flush()
         return {"updated": True, "removed": True, "product_id": product_id}
+
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalars().first()
+    if product is None:
+        return {"updated": False, "reason": "product_not_found", "product_id": product_id}
+    if quantity > product.quantity:
+        return {
+            "updated": False,
+            "reason": "insufficient_stock",
+            "product_id": product_id,
+            "product_name": product.name,
+            "requested_quantity": quantity,
+            "available": product.quantity,
+        }
 
     existing.quantity = quantity
     await db.flush()

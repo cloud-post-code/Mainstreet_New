@@ -11,9 +11,9 @@ interface CartContextValue {
   close: () => void
   toggle: () => void
   refresh: () => Promise<void>
-  addItem: (productId: number, quantity?: number) => Promise<{ ok: boolean; reason?: string }>
-  setQuantity: (productId: number, quantity: number) => Promise<void>
-  removeItem: (productId: number) => Promise<void>
+  addItem: (productId: number, quantity?: number) => Promise<{ ok: boolean; reason?: string; error?: string }>
+  setQuantity: (productId: number, quantity: number) => Promise<{ ok: boolean; error?: string }>
+  removeItem: (productId: number) => Promise<{ ok: boolean; error?: string }>
   checkout: () => Promise<string | null>
 }
 
@@ -45,21 +45,35 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback(async (productId: number, quantity = 1) => {
     if (!token) return { ok: false, reason: 'not_logged_in' as const }
-    const res = await api.addCartItem(productId, quantity, token)
-    setCart(res.cart)
-    return { ok: true }
+    try {
+      const res = await api.addCartItem(productId, quantity, token)
+      setCart(res.cart)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Failed to add to cart.' }
+    }
   }, [token])
 
   const setQuantity = useCallback(async (productId: number, quantity: number) => {
-    if (!token) return
-    const res = await api.setCartItemQuantity(productId, quantity, token)
-    setCart(res.cart)
+    if (!token) return { ok: false, error: 'Not signed in.' }
+    try {
+      const res = await api.setCartItemQuantity(productId, quantity, token)
+      setCart(res.cart)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Failed to update cart.' }
+    }
   }, [token])
 
   const removeItem = useCallback(async (productId: number) => {
-    if (!token) return
-    const res = await api.removeCartItem(productId, token)
-    setCart(res.cart)
+    if (!token) return { ok: false, error: 'Not signed in.' }
+    try {
+      const res = await api.removeCartItem(productId, token)
+      setCart(res.cart)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Failed to remove item.' }
+    }
   }, [token])
 
   const checkout = useCallback(async () => {

@@ -19,7 +19,13 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
       window.location.reload()
     }
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Request failed')
+    const detail = err.detail
+    const message = typeof detail === 'string'
+      ? detail
+      : (detail && typeof detail === 'object' && typeof detail.message === 'string')
+        ? detail.message
+        : 'Request failed'
+    throw new Error(message)
   }
   if (res.status === 204) return undefined as T
   return res.json()

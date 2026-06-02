@@ -28,6 +28,7 @@ export default function ProductCard(props: Props) {
   const navigate = useNavigate()
   const [added, setAdded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const isGrid = props.variant === 'grid'
 
@@ -38,11 +39,15 @@ export default function ProductCard(props: Props) {
       return
     }
     setBusy(true)
+    setError(null)
     try {
       const res = await cart.addItem(props.product_id, 1)
       if (res.ok) {
         setAdded(true)
         setTimeout(() => setAdded(false), 1200)
+      } else if (res.error) {
+        setError(res.error)
+        setTimeout(() => setError(null), 3500)
       }
     } finally {
       setBusy(false)
@@ -79,14 +84,17 @@ export default function ProductCard(props: Props) {
           </span>
         </div>
         {props.showAddToCart && (
-          <button
-            type="button"
-            className={styles.addBtn}
-            onClick={onAdd}
-            disabled={!inStock || busy}
-          >
-            {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
-          </button>
+          <>
+            <button
+              type="button"
+              className={styles.addBtn}
+              onClick={onAdd}
+              disabled={!inStock || busy}
+            >
+              {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
+            </button>
+            {error && <p className={styles.addError} role="alert">{error}</p>}
+          </>
         )}
       </div>
     </div>
