@@ -34,6 +34,45 @@ export interface InboxMessage { id: number; user_id: number; session_id: number 
 export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
 
+export interface CartItem {
+  product_id: number
+  name: string
+  shop_name: string | null
+  image_url: string | null
+  price: number
+  quantity: number
+  subtotal: number
+}
+export interface CartView { items: CartItem[]; item_count: number; total: number }
+
+export interface DiscoverOpts {
+  q?: string
+  shop_id?: number
+  shop_ids?: number[]
+  tags?: string[]
+  min_price?: number
+  max_price?: number
+  in_stock_only?: boolean
+  limit?: number
+  offset?: number
+}
+
+function buildDiscoverQuery(opts: DiscoverOpts, includePaging: boolean): string {
+  const params = new URLSearchParams()
+  if (opts.q) params.set('q', opts.q)
+  if (opts.shop_id != null) params.set('shop_id', String(opts.shop_id))
+  if (opts.shop_ids && opts.shop_ids.length) params.set('shop_ids', opts.shop_ids.join(','))
+  if (opts.tags && opts.tags.length) params.set('tags', opts.tags.join(','))
+  if (opts.min_price != null) params.set('min_price', String(opts.min_price))
+  if (opts.max_price != null) params.set('max_price', String(opts.max_price))
+  if (opts.in_stock_only) params.set('in_stock_only', 'true')
+  if (includePaging) {
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    if (opts.offset != null) params.set('offset', String(opts.offset))
+  }
+  return params.toString()
+}
+
 export const api = {
   register: (email: string, password: string, display_name?: string) =>
     request<Token>('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, display_name }) }),
@@ -115,43 +154,42 @@ export const api = {
     return { blob: await res.blob(), filename: 'shops.csv' }
   },
 
-  getDiscoverProducts: (opts: {
-    q?: string
-    shop_id?: number
-    min_price?: number
-    max_price?: number
-    in_stock_only?: boolean
-    limit?: number
-    offset?: number
-  } = {}) => {
-    const params = new URLSearchParams()
-    if (opts.q) params.set('q', opts.q)
-    if (opts.shop_id != null) params.set('shop_id', String(opts.shop_id))
-    if (opts.min_price != null) params.set('min_price', String(opts.min_price))
-    if (opts.max_price != null) params.set('max_price', String(opts.max_price))
-    if (opts.in_stock_only) params.set('in_stock_only', 'true')
-    if (opts.limit != null) params.set('limit', String(opts.limit))
-    if (opts.offset != null) params.set('offset', String(opts.offset))
-    const qs = params.toString()
+  getDiscoverProducts: (opts: DiscoverOpts = {}) => {
+    const qs = buildDiscoverQuery(opts, true)
     return request<Product[]>(`/api/products/discover${qs ? `?${qs}` : ''}`)
   },
 
-  getDiscoverCount: (opts: {
-    q?: string
-    shop_id?: number
-    min_price?: number
-    max_price?: number
-    in_stock_only?: boolean
-  } = {}) => {
-    const params = new URLSearchParams()
-    if (opts.q) params.set('q', opts.q)
-    if (opts.shop_id != null) params.set('shop_id', String(opts.shop_id))
-    if (opts.min_price != null) params.set('min_price', String(opts.min_price))
-    if (opts.max_price != null) params.set('max_price', String(opts.max_price))
-    if (opts.in_stock_only) params.set('in_stock_only', 'true')
-    const qs = params.toString()
+  getDiscoverCount: (opts: DiscoverOpts = {}) => {
+    const qs = buildDiscoverQuery(opts, false)
     return request<{ total: number }>(`/api/products/discover/count${qs ? `?${qs}` : ''}`)
   },
+
+  getPublicShops: () =>
+    request<Array<{ id: number; name: string }>>('/api/shops/public'),
+
+  getProductTags: () => request<string[]>('/api/products/tags'),
+
+  getCart: (token: string) => request<CartView>('/api/cart', {}, token),
+  addCartItem: (product_id: number, quantity: number, token: string) =>
+    request<{ result: unknown; cart: CartView }>('/api/cart/items', {
+      method: 'POST',
+      body: JSON.stringify({ product_id, quantity }),
+    }, token),
+  setCartItemQuantity: (product_id: number, quantity: number, token: string) =>
+    request<{ result: unknown; cart: CartView }>(`/api/cart/items/${product_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ quantity }),
+    }, token),
+  removeCartItem: (product_id: number, token: string) =>
+    request<{ result: unknown; cart: CartView }>(`/api/cart/items/${product_id}`, {
+      method: 'DELETE',
+    }, token),
+  checkoutCart: (token: string) =>
+    request<{ checkout_url: string | null; items_count: number; total: number; reason?: string }>(
+      '/api/cart/checkout',
+      { method: 'POST' },
+      token,
+    ),
 
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
   createShop: (

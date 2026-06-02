@@ -29,6 +29,52 @@
   gap: 6px;
 }
 
+.rightSide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cartBtn {
+  position: relative;
+  background: transparent;
+  border: 2px solid var(--ms-cream, #f1e9d8);
+  color: var(--ms-cream, #f1e9d8);
+  border-radius: 8px;
+  width: 40px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  margin-left: 4px;
+}
+
+.cartBtn:hover {
+  background: rgba(241, 233, 216, 0.15);
+}
+
+.cartIcon { line-height: 1; }
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--ms-terra, #be6e46);
+  color: #fff;
+  font-family: 'Lora', serif;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .link {
   font-family: 'Lora', serif;
   font-size: 14px;

@@ -1,19 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, Product } from '../api'
 import ProductCard from '../components/ProductCard'
-import TopNav from '../components/TopNav'
 import styles from './Discover.module.css'
 
-const PAGE_SIZE = 20
-
-function shuffle<T>(arr: T[]): T[] {
-  const out = arr.slice()
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[out[i], out[j]] = [out[j], out[i]]
-  }
-  return out
-}
+const PAGE_SIZE = 24
 
 function descriptionSummary(d: Product['description']): string | undefined {
   if (!d || typeof d !== 'object') return undefined
@@ -31,28 +21,39 @@ export default function Discover() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [inStockOnly, setInStockOnly] = useState(false)
-  const [page, setPage] = useState(0)
+  const [shopIds, setShopIds] = useState<number[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+
   const [products, setProducts] = useState<Product[]>([])
   const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shops, setShops] = useState<Array<{ id: number; name: string }>>([])
+  const [tagOptions, setTagOptions] = useState<string[]>([])
+  const [showFilters, setShowFilters] = useState(false)
 
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // Debounce search input.
   const debounceRef = useRef<number | null>(null)
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current)
-    debounceRef.current = window.setTimeout(() => {
-      setSearch(searchInput)
-      setPage(0)
-    }, 300)
-    return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current)
-    }
+    debounceRef.current = window.setTimeout(() => setSearch(searchInput), 300)
+    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current) }
   }, [searchInput])
 
+  // Load filter option lists once.
   useEffect(() => {
-    setPage(0)
-  }, [inStockOnly])
+    api.getPublicShops().then(setShops).catch(() => {})
+    api.getProductTags().then(setTagOptions).catch(() => {})
+  }, [])
 
+  const filterKey = useMemo(
+    () => JSON.stringify({ search, inStockOnly, shopIds, selectedTags }),
+    [search, inStockOnly, shopIds, selectedTags],
+  )
+
+  // Fetch first page whenever filters change.
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -60,16 +61,23 @@ export default function Discover() {
     const opts = {
       q: search || undefined,
       in_stock_only: inStockOnly || undefined,
+      shop_ids: shopIds.length ? shopIds : undefined,
+      tags: selectedTags.length ? selectedTags : undefined,
       limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
+      offset: 0,
     }
     Promise.all([
       api.getDiscoverProducts(opts),
-      api.getDiscoverCount({ q: opts.q, in_stock_only: opts.in_stock_only }),
+      api.getDiscoverCount({
+        q: opts.q,
+        in_stock_only: opts.in_stock_only,
+        shop_ids: opts.shop_ids,
+        tags: opts.tags,
+      }),
     ])
       .then(([items, countRes]) => {
         if (cancelled) return
-        setProducts(shuffle(items))
+        setProducts(items)
         setTotal(countRes.total)
       })
       .catch(err => {
@@ -78,28 +86,59 @@ export default function Discover() {
         setProducts([])
         setTotal(null)
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [filterKey])
+
+  const loadMore = useCallback(async () => {
+    if (loading) return
+    if (total != null && products.length >= total) return
+    setLoading(true)
+    try {
+      const more = await api.getDiscoverProducts({
+        q: search || undefined,
+        in_stock_only: inStockOnly || undefined,
+        shop_ids: shopIds.length ? shopIds : undefined,
+        tags: selectedTags.length ? selectedTags : undefined,
+        limit: PAGE_SIZE,
+        offset: products.length,
       })
-    return () => {
-      cancelled = true
+      setProducts(prev => [...prev, ...more])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load more')
+    } finally {
+      setLoading(false)
     }
-  }, [search, inStockOnly, page])
+  }, [loading, total, products.length, search, inStockOnly, shopIds, selectedTags])
 
-  const rangeLabel = useMemo(() => {
-    if (total == null) return ''
-    if (total === 0) return '0 results'
-    const start = page * PAGE_SIZE + 1
-    const end = Math.min(total, page * PAGE_SIZE + products.length)
-    return `Showing ${start}–${end} of ${total}`
-  }, [page, products.length, total])
+  // Infinite scroll via IntersectionObserver.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) loadMore()
+    }, { rootMargin: '600px 0px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [loadMore])
 
-  const hasNext = total != null && (page + 1) * PAGE_SIZE < total
-  const hasPrev = page > 0
+  const exhausted = total != null && products.length >= total
+  const activeFilterCount = (shopIds.length ? 1 : 0) + (selectedTags.length ? 1 : 0) + (inStockOnly ? 1 : 0)
+
+  const toggleShop = (id: number) => {
+    setShopIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const toggleTag = (t: string) => {
+    setSelectedTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+  }
+  const clearFilters = () => {
+    setShopIds([])
+    setSelectedTags([])
+    setInStockOnly(false)
+  }
 
   return (
     <div className={styles.page}>
-      <TopNav />
       <header className={styles.header}>
         <h1 className={styles.title}>Discover</h1>
         <p className={styles.tagline}>A fresh look at every shop on Main Street.</p>
@@ -109,32 +148,77 @@ export default function Discover() {
         <input
           className={styles.search}
           type="search"
-          placeholder="Search products…"
+          placeholder="Search by product, shop, or description…"
           value={searchInput}
           onChange={e => setSearchInput(e.target.value)}
           aria-label="Search products"
         />
-        <label className={styles.checkbox}>
-          <input
-            type="checkbox"
-            checked={inStockOnly}
-            onChange={e => setInStockOnly(e.target.checked)}
-          />
-          In stock only
-        </label>
-        <span className={styles.count}>{rangeLabel}</span>
+        <button
+          type="button"
+          className={styles.filterToggle}
+          onClick={() => setShowFilters(s => !s)}
+        >
+          Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+        </button>
+        <span className={styles.count}>
+          {total != null ? `${total} result${total === 1 ? '' : 's'}` : ''}
+        </span>
       </div>
+
+      {showFilters && (
+        <div className={styles.filtersPanel}>
+          <div className={styles.filterGroup}>
+            <div className={styles.filterLabel}>Shops</div>
+            <div className={styles.chipRow}>
+              {shops.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`${styles.chip} ${shopIds.includes(s.id) ? styles.chipActive : ''}`}
+                  onClick={() => toggleShop(s.id)}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={styles.filterGroup}>
+            <div className={styles.filterLabel}>Tags</div>
+            <div className={styles.chipRow}>
+              {tagOptions.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  className={`${styles.chip} ${selectedTags.includes(t) ? styles.chipActive : ''}`}
+                  onClick={() => toggleTag(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={styles.filterGroup}>
+            <label className={styles.checkbox}>
+              <input
+                type="checkbox"
+                checked={inStockOnly}
+                onChange={e => setInStockOnly(e.target.checked)}
+              />
+              In stock only
+            </label>
+            {activeFilterCount > 0 && (
+              <button type="button" className={styles.clearBtn} onClick={clearFilters}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className={styles.content}>
         {error && <div className={styles.error}>{error}</div>}
 
-        {loading ? (
-          <div className={styles.grid}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className={styles.skeleton} />
-            ))}
-          </div>
-        ) : products.length === 0 ? (
+        {products.length === 0 && !loading ? (
           <div className={styles.empty}>No products match your filters.</div>
         ) : (
           <div className={styles.grid}>
@@ -150,33 +234,21 @@ export default function Discover() {
                 shop_id={p.shop_id}
                 description_summary={descriptionSummary(p.description)}
                 tags={descriptionTags(p.description)}
+                variant="grid"
+                showAddToCart
               />
+            ))}
+            {loading && Array.from({ length: 3 }).map((_, i) => (
+              <div key={`sk-${i}`} className={styles.skeleton} />
             ))}
           </div>
         )}
 
-        <div className={styles.pagination}>
-          <button
-            type="button"
-            className={styles.pageButton}
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={!hasPrev || loading}
-          >
-            ← Previous
-          </button>
-          <span className={styles.pageIndicator}>
-            Page {page + 1}
-            {total != null ? ` of ${Math.max(1, Math.ceil(total / PAGE_SIZE))}` : ''}
-          </span>
-          <button
-            type="button"
-            className={styles.pageButton}
-            onClick={() => setPage(p => p + 1)}
-            disabled={!hasNext || loading}
-          >
-            Next →
-          </button>
-        </div>
+        <div ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
+
+        {exhausted && products.length > 0 && (
+          <div className={styles.endOfList}>No more results.</div>
+        )}
       </main>
     </div>
   )

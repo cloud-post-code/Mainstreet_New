@@ -87,16 +87,113 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+}
+
+@media (max-width: 600px) {
+  .grid { grid-template-columns: 1fr; gap: 16px; }
 }
 
 .skeleton {
-  height: 220px;
+  height: 360px;
   background: linear-gradient(90deg, #ece3d0 0%, #f3ecdb 50%, #ece3d0 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
   border-radius: 12px;
+}
+
+.sentinel {
+  height: 1px;
+  width: 100%;
+}
+
+.endOfList {
+  text-align: center;
+  padding: 32px 0;
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.filterToggle {
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ms-primary, #015237);
+  background: #fff;
+  color: var(--ms-primary, #015237);
+  cursor: pointer;
+}
+
+.filterToggle:hover { background: rgba(1, 82, 55, 0.06); }
+
+.filtersPanel {
+  background: #fff;
+  border-bottom: 1px solid rgba(15, 24, 5, 0.1);
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filterGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.filterLabel {
+  font-family: 'Lora', serif;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ms-primary, #015237);
+  min-width: 60px;
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 24, 5, 0.2);
+  background: #fff;
+  color: var(--ms-dark, #0f1805);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.chip:hover { background: #f3ecdb; }
+
+.chipActive {
+  background: var(--ms-primary, #015237);
+  color: var(--ms-cream, #f1e9d8);
+  border-color: var(--ms-primary, #015237);
+}
+
+.clearBtn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--ms-terra, #be6e46);
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 @keyframes shimmer {

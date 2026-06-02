@@ -117,6 +117,8 @@ def _apply_product_filters(
 async def discover_products(
     q: Optional[str] = Query(default=None),
     shop_id: Optional[int] = Query(default=None),
+    shop_ids: Optional[str] = Query(default=None, description="Comma-separated shop ids"),
+    tags: Optional[str] = Query(default=None, description="Comma-separated tag names"),
     min_price: Optional[Decimal] = Query(default=None),
     max_price: Optional[Decimal] = Query(default=None),
     in_stock_only: bool = Query(default=False),
@@ -128,7 +130,16 @@ async def discover_products(
         select(Product, Shop.name.label("shop_name"))
         .join(Shop, Shop.id == Product.shop_id)
     )
-    stmt = _apply_product_filters(stmt, q, shop_id, min_price, max_price, in_stock_only)
+    stmt = _apply_product_filters(
+        stmt,
+        q,
+        shop_id,
+        min_price,
+        max_price,
+        in_stock_only,
+        shop_ids=_parse_csv_ints(shop_ids),
+        tags=_parse_csv_strs(tags),
+    )
     if q:
         ts_query = func.plainto_tsquery("english", q)
         stmt = stmt.order_by(func.ts_rank(Product.search_vector, ts_query).desc())
@@ -150,16 +161,38 @@ async def discover_products(
 async def discover_count(
     q: Optional[str] = Query(default=None),
     shop_id: Optional[int] = Query(default=None),
+    shop_ids: Optional[str] = Query(default=None),
+    tags: Optional[str] = Query(default=None),
     min_price: Optional[Decimal] = Query(default=None),
     max_price: Optional[Decimal] = Query(default=None),
     in_stock_only: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(func.count(Product.id)).join(Shop, Shop.id == Product.shop_id)
-    stmt = _apply_product_filters(stmt, q, shop_id, min_price, max_price, in_stock_only)
+    stmt = _apply_product_filters(
+        stmt,
+        q,
+        shop_id,
+        min_price,
+        max_price,
+        in_stock_only,
+        shop_ids=_parse_csv_ints(shop_ids),
+        tags=_parse_csv_strs(tags),
+    )
     result = await db.execute(stmt)
     total = result.scalar() or 0
     return {"total": int(total)}
+
+
+@router.get("/tags")
+async def list_tags(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        text(
+            "SELECT DISTINCT jsonb_array_elements_text(description->'tags') AS tag "
+            "FROM products WHERE description ? 'tags' ORDER BY tag"
+        )
+    )
+    return [row.tag for row in result.all() if row.tag]
 
 
 @router.get("/{product_id}", response_model=ProductOut)

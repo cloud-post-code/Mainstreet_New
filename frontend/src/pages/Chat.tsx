@@ -6,6 +6,7 @@ import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
 import AgentErrorBoundary from '../components/AgentErrorBoundary'
 import InboxPanel from '../components/InboxPanel'
+import { useCart } from '../cart/CartContext'
 import styles from './Chat.module.css'
 
 type AuthMode = 'none' | 'login' | 'register'
@@ -102,6 +103,15 @@ export default function Chat() {
   const skipNextScrollRef = useRef(false)
 
   const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
+  const cart = useCart()
+  const prevStreamingRef = useRef(streaming)
+  useEffect(() => {
+    // When a turn finishes, the agent may have mutated the cart — refresh.
+    if (prevStreamingRef.current && !streaming) {
+      cart.refresh()
+    }
+    prevStreamingRef.current = streaming
+  }, [streaming, cart])
   // Memoize so the array reference is stable across renders that don't touch
   // either source list. Otherwise every keystroke or stream chunk would
   // re-fire the scroll effect below and rebuild downstream memos.

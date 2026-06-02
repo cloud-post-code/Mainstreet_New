@@ -94,6 +94,44 @@
 .inStock { color: var(--ms-primary); }
 .outOfStock { color: #c0392b; }
 
+/* Grid variant for Discover (vertical, larger) */
+.productCardGrid {
+  flex-direction: column;
+  max-width: none;
+  height: 100%;
+}
+.productImageGrid {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  height: auto;
+}
+.productNameGrid {
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+.priceGrid { font-size: 1.35rem; }
+
+.addBtn {
+  margin-top: 0.6rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--ms-primary, #015237);
+  color: var(--ms-cream, #f1e9d8);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.addBtn:hover:not(:disabled) { opacity: 0.9; }
+.addBtn:disabled {
+  background: rgba(15, 24, 5, 0.2);
+  cursor: not-allowed;
+}
+
 /* ── Shop Card ── */
 .shopCard {
   display: flex;
