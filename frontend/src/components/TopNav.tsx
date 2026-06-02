@@ -31,6 +31,8 @@ export default function TopNav() {
         <Link to="/" className={styles.brand} aria-label="Main St. home">
           <MainStLogo size="nav" />
         </Link>
+      </div>
+      <div className={styles.rightSide}>
         {user?.is_admin && (
           <Link
             to="/admin"
@@ -39,8 +41,6 @@ export default function TopNav() {
             Admin
           </Link>
         )}
-      </div>
-      <div className={styles.rightSide}>
         <Link
           to="/"
           className={`${styles.link} ${location.pathname === '/' ? styles.active : ''}`}
