@@ -145,10 +145,8 @@ async def execute_tool(
     try:
         if tool_name == "search_products":
             return await _search_products(tool_input, db), None
-
         if tool_name == "search_shops":
             return await _search_shops(tool_input, db), None
-
         if tool_name == "render_ui":
             errors = validate_render_ui(tool_input)
             if errors:
@@ -161,28 +159,27 @@ async def execute_tool(
                     None,
                 )
             return {"rendered": True}, "ui_tree"
-
         if tool_name == "generate_plan":
             return await _generate_plan(tool_input, session_id, db), "plan_update"
-
         if tool_name == "save_preference":
             if user_id is None:
                 return {"saved": False, "reason": "not_logged_in"}, None
             await save_preference(user_id, tool_input["key"], tool_input["value"], db)
             return {"saved": True, "key": tool_input["key"]}, None
-
         if tool_name == "add_to_cart":
-            return await _add_to_cart(tool_input, user_id, session_id, db), None
-
+            return await cart_service.add_item(
+                product_id=int(tool_input["product_id"]),
+                quantity=int(tool_input.get("quantity") or 1),
+                user_id=user_id,
+                session_id=session_id,
+                db=db,
+            ), None
         if tool_name == "view_cart":
-            return await _view_cart(user_id, session_id, db), None
-
+            return await cart_service.view(user_id, session_id, db), None
         if tool_name == "remove_from_cart":
-            return await _remove_from_cart(tool_input, user_id, session_id, db), None
-
+            return await cart_service.remove_item(int(tool_input["product_id"]), user_id, session_id, db), None
         if tool_name == "checkout":
-            return await _checkout(user_id, session_id, db), None
-
+            return await cart_service.checkout(user_id, session_id, db), None
         return {"error": f"Unknown tool: {tool_name}"}, None
     except Exception as e:
         logger.exception("Tool %s failed with input %s", tool_name, tool_input)
@@ -262,28 +259,6 @@ async def _search_shops(params: dict, db: AsyncSession) -> dict:
             "product_count": count,
         })
     return {"count": len(shops), "shops": shops}
-
-
-async def _add_to_cart(params: dict, user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    return await cart_service.add_item(
-        product_id=int(params["product_id"]),
-        quantity=int(params.get("quantity") or 1),
-        user_id=user_id,
-        session_id=session_id,
-        db=db,
-    )
-
-
-async def _view_cart(user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    return await cart_service.view(user_id, session_id, db)
-
-
-async def _remove_from_cart(params: dict, user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    return await cart_service.remove_item(int(params["product_id"]), user_id, session_id, db)
-
-
-async def _checkout(user_id: int | None, session_id: int, db: AsyncSession) -> dict:
-    return await cart_service.checkout(user_id, session_id, db)
 
 
 async def _generate_plan(params: dict, session_id: int, db: AsyncSession) -> dict:

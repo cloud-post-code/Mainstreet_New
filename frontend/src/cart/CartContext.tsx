@@ -9,7 +9,6 @@ interface CartContextValue {
   isOpen: boolean
   open: () => void
   close: () => void
-  toggle: () => void
   refresh: () => Promise<void>
   addItem: (productId: number, quantity?: number) => Promise<{ ok: boolean; reason?: string; error?: string }>
   setQuantity: (productId: number, quantity: number) => Promise<{ ok: boolean; error?: string }>
@@ -90,7 +89,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     isOpen,
     open: () => setIsOpen(true),
     close: () => setIsOpen(false),
-    toggle: () => setIsOpen(o => !o),
     refresh,
     addItem,
     setQuantity,

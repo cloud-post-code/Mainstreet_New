@@ -79,7 +79,6 @@ export default function Chat() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [input, setInput] = useState('')
-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set())
   const [loadedMessages, setLoadedMessages] = useState<import('../hooks/useAgentStream').Message[]>([])
   const [historyCursor, setHistoryCursor] = useState<string | null>(null)
   const [historyHasMore, setHistoryHasMore] = useState(false)
@@ -169,7 +168,6 @@ export default function Chat() {
       const s = await api.createGuestSession()
       setActiveSessionId(s.id)
     }
-    setAnsweredQuestions(new Set())
     setLoadedMessages([])
     reset()
   }
@@ -178,7 +176,6 @@ export default function Chat() {
     if (id === activeSessionId) return
     const myToken = ++selectTokenRef.current
     setActiveSessionId(id)
-    setAnsweredQuestions(new Set())
     setLoadedMessages([])
     setHistoryCursor(null)
     setHistoryHasMore(false)
@@ -249,7 +246,6 @@ export default function Chat() {
   }
 
   const handleAnswer = useCallback((answer: string, questionCardId: string) => {
-    setAnsweredQuestions(prev => new Set([...prev, questionCardId]))
     sendMessage(answer, questionCardId)
   }, [sendMessage])
 
@@ -349,7 +345,6 @@ export default function Chat() {
     logout()
     setSessions([])
     setActiveSessionId(null)
-    setAnsweredQuestions(new Set())
     reset()
     // Create a fresh guest session
     api.createGuestSession().then(s => setActiveSessionId(s.id))
@@ -520,7 +515,6 @@ export default function Chat() {
                           streaming={streaming && idx === lastAgentIdx}
                           onAnswer={handleAnswer}
                           onIntent={handleIntent}
-                          answeredQuestions={answeredQuestions}
                         />
                       </AgentErrorBoundary>
                     )}

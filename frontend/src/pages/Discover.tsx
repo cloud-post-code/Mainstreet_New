@@ -5,17 +5,12 @@ import styles from './Discover.module.css'
 
 const PAGE_SIZE = 24
 
-function descriptionSummary(d: Product['description']): string | undefined {
-  if (!d || typeof d !== 'object') return undefined
-  const s = (d as Record<string, unknown>).summary
-  return typeof s === 'string' ? s : undefined
-}
-
-function descriptionTags(d: Product['description']): string[] | undefined {
-  if (!d || typeof d !== 'object') return undefined
-  const t = (d as Record<string, unknown>).tags
-  return Array.isArray(t) ? t.filter((x): x is string => typeof x === 'string') : undefined
-}
+const descSummary = (d: Product['description']) =>
+  typeof (d as Record<string, unknown> | null)?.summary === 'string' ? (d as Record<string, string>).summary : undefined
+const descTags = (d: Product['description']) =>
+  Array.isArray((d as Record<string, unknown> | null)?.tags)
+    ? ((d as Record<string, unknown>).tags as unknown[]).filter((x): x is string => typeof x === 'string')
+    : undefined
 
 export default function Discover() {
   const [searchInput, setSearchInput] = useState('')
@@ -53,19 +48,21 @@ export default function Discover() {
     [search, inStockOnly, shopIds, selectedTags],
   )
 
+  const buildFilters = useCallback((offset: number) => ({
+    q: search || undefined,
+    in_stock_only: inStockOnly || undefined,
+    shop_ids: shopIds.length ? shopIds : undefined,
+    tags: selectedTags.length ? selectedTags : undefined,
+    limit: PAGE_SIZE,
+    offset,
+  }), [search, inStockOnly, shopIds, selectedTags])
+
   // Fetch first page whenever filters change.
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    const opts = {
-      q: search || undefined,
-      in_stock_only: inStockOnly || undefined,
-      shop_ids: shopIds.length ? shopIds : undefined,
-      tags: selectedTags.length ? selectedTags : undefined,
-      limit: PAGE_SIZE,
-      offset: 0,
-    }
+    const opts = buildFilters(0)
     Promise.all([
       api.getDiscoverProducts(opts),
       api.getDiscoverCount({
@@ -95,21 +92,14 @@ export default function Discover() {
     if (total != null && products.length >= total) return
     setLoading(true)
     try {
-      const more = await api.getDiscoverProducts({
-        q: search || undefined,
-        in_stock_only: inStockOnly || undefined,
-        shop_ids: shopIds.length ? shopIds : undefined,
-        tags: selectedTags.length ? selectedTags : undefined,
-        limit: PAGE_SIZE,
-        offset: products.length,
-      })
+      const more = await api.getDiscoverProducts(buildFilters(products.length))
       setProducts(prev => [...prev, ...more])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more')
     } finally {
       setLoading(false)
     }
-  }, [loading, total, products.length, search, inStockOnly, shopIds, selectedTags])
+  }, [loading, total, products.length, buildFilters])
 
   // Infinite scroll via IntersectionObserver.
   useEffect(() => {
@@ -232,8 +222,8 @@ export default function Discover() {
                 image_url={p.image_url ?? undefined}
                 shop_name={p.shop_name ?? ''}
                 shop_id={p.shop_id}
-                description_summary={descriptionSummary(p.description)}
-                tags={descriptionTags(p.description)}
+                description_summary={descSummary(p.description)}
+                tags={descTags(p.description)}
                 variant="grid"
                 showAddToCart
               />

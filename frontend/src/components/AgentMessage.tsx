@@ -12,10 +12,9 @@ interface Props {
   streaming?: boolean
   onAnswer: (answer: string, questionCardId: string) => void
   onIntent?: (intent: string, payload?: unknown) => void
-  answeredQuestions: Set<string>
 }
 
-function AgentMessageImpl({ events, streaming, onAnswer, onIntent, answeredQuestions }: Props) {
+function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
   const rendered: React.ReactNode[] = []
   const textBlocks: string[] = []
 
@@ -80,7 +79,6 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent, answeredQuest
             tree={latestTree}
             intentHandler={intentHandler}
             onAnswer={onAnswer}
-            answeredQuestions={answeredQuestions}
           />
         </AgentErrorBoundary>
       </div>
@@ -90,56 +88,23 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent, answeredQuest
   return <div className={styles.wrapper}>{rendered}</div>
 }
 
-// Memoize so unrelated parent re-renders (e.g., textarea keystrokes) don't
-// rebuild every historical agent message. `events` is a stable reference held
-// inside the Message object, and `answeredQuestions` only changes when a
-// question is actually answered.
 const AgentMessage = React.memo(AgentMessageImpl)
 export default AgentMessage
 
-// QuestionCard expects onAnswer, not onIntent. Patch the tree's question_card nodes
-// at render time to pass the right props.
 function TreeWithQuestionCardAdapter({
   tree,
   intentHandler,
   onAnswer,
-  answeredQuestions,
 }: {
   tree: A2uiTree
   intentHandler: (intent: string, payload?: unknown) => void
   onAnswer: (answer: string, questionCardId: string) => void
-  answeredQuestions: Set<string>
 }) {
-  // Build a shadow component map where question_card props get onAnswer + answered injected
   const patched: A2uiTree = {
     root: tree.root,
     components: (Array.isArray(tree.components) ? tree.components : []).map(c => {
       if (c.type === 'question_card') {
-        const qid = (c.props as { question_id?: string }).question_id
-        return {
-          ...c,
-          props: {
-            ...c.props,
-            onAnswer,
-            answered: qid ? answeredQuestions.has(qid) : false,
-          },
-        }
-      }
-      if (c.type === 'questionnaire') {
-        const props = c.props as {
-          current_step?: number
-          steps?: Array<{ step_id?: string }>
-        }
-        const steps = Array.isArray(props.steps) ? props.steps : []
-        const idx = typeof props.current_step === 'number' ? props.current_step : 0
-        const activeStepId = steps[idx]?.step_id
-        return {
-          ...c,
-          props: {
-            ...c.props,
-            answered: activeStepId ? answeredQuestions.has(activeStepId) : false,
-          },
-        }
+        return { ...c, props: { ...c.props, onAnswer } }
       }
       return c
     }),

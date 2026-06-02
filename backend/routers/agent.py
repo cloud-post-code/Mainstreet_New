@@ -1,43 +1,18 @@
-import asyncio
 import logging
 import traceback
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from db.database import get_db
 from db.models import AgentSession, AgentPlan, User
 from db.schemas import SessionOut, TurnIn, PlanOut
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from agent.loop import run_agent_turn
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
-
-
-
-async def get_optional_user(
-    authorization: Optional[str] = Header(default=None),
-    db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
-    """Return the authenticated user or None for anonymous requests."""
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    token = authorization.split(" ", 1)[1]
-    try:
-        from auth import get_current_user as _get
-        from fastapi.security import OAuth2PasswordBearer
-        from jose import JWTError, jwt
-        from config import settings
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id = payload.get("sub")
-        if not user_id:
-            return None
-        result = await db.execute(select(User).where(User.id == int(user_id)))
-        return result.scalars().first()
-    except Exception:
-        return None
 
 
 @router.get("/sessions", response_model=list[SessionOut])
@@ -214,20 +189,21 @@ async def agent_turn(
     await db.commit()
 
     user_id = current_user.id if current_user else None
+    session_id = body.session_id
 
-    async def stream_and_release():
+    async def stream():
+        import json as _json
         try:
             async for chunk in run_agent_turn(
                 user_message=body.message,
-                session_id=body.session_id,
+                session_id=session_id,
                 user_id=user_id,
                 question_card_id=body.question_card_id,
                 db=db,
             ):
                 yield chunk
         except Exception as e:
-            logger.exception("agent_turn stream crashed for session %s", body.session_id)
-            import json as _json
+            logger.exception("agent_turn stream crashed for session %s", session_id)
             yield _json.dumps({
                 "type": "error",
                 "error": f"{type(e).__name__}: {e}",
@@ -236,10 +212,10 @@ async def agent_turn(
         finally:
             try:
                 await db.execute(
-                    update(AgentSession).where(AgentSession.id == body.session_id).values(processing=False)
+                    update(AgentSession).where(AgentSession.id == session_id).values(processing=False)
                 )
                 await db.commit()
             except Exception:
-                logger.exception("Failed to clear processing flag for session %s", body.session_id)
+                logger.exception("Failed to clear processing flag for session %s", session_id)
 
-    return StreamingResponse(stream_and_release(), media_type="application/x-ndjson")
+    return StreamingResponse(stream(), media_type="application/x-ndjson")

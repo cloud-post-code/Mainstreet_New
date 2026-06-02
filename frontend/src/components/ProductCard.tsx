@@ -26,11 +26,12 @@ export default function ProductCard(props: Props) {
   const cart = useCart()
   const { token } = useAuth()
   const navigate = useNavigate()
-  const [added, setAdded] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const isGrid = props.variant === 'grid'
+  const busy = status === 'loading'
+  const added = status === 'success'
 
   const onAdd = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -38,19 +39,16 @@ export default function ProductCard(props: Props) {
       navigate('/login')
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await cart.addItem(props.product_id, 1)
-      if (res.ok) {
-        setAdded(true)
-        setTimeout(() => setAdded(false), 1200)
-      } else if (res.error) {
-        setError(res.error)
-        setTimeout(() => setError(null), 3500)
-      }
-    } finally {
-      setBusy(false)
+    setStatus('loading')
+    setErrorMsg(null)
+    const res = await cart.addItem(props.product_id, 1)
+    if (res.ok) {
+      setStatus('success')
+      setTimeout(() => setStatus('idle'), 1200)
+    } else {
+      setStatus('error')
+      setErrorMsg(res.error ?? null)
+      setTimeout(() => { setStatus('idle'); setErrorMsg(null) }, 3500)
     }
   }
 
@@ -93,7 +91,7 @@ export default function ProductCard(props: Props) {
             >
               {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
             </button>
-            {error && <p className={styles.addError} role="alert">{error}</p>}
+            {errorMsg && <p className={styles.addError} role="alert">{errorMsg}</p>}
           </>
         )}
       </div>

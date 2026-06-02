@@ -11,22 +11,6 @@ from auth import get_current_user
 from db.models import User
 
 
-def _parse_csv_ints(value: Optional[str]) -> list[int]:
-    if not value:
-        return []
-    out = []
-    for tok in value.split(","):
-        tok = tok.strip()
-        if tok.isdigit():
-            out.append(int(tok))
-    return out
-
-
-def _parse_csv_strs(value: Optional[str]) -> list[str]:
-    if not value:
-        return []
-    return [t.strip() for t in value.split(",") if t.strip()]
-
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
@@ -137,8 +121,8 @@ async def discover_products(
         min_price,
         max_price,
         in_stock_only,
-        shop_ids=_parse_csv_ints(shop_ids),
-        tags=_parse_csv_strs(tags),
+        shop_ids=[int(t) for t in (shop_ids or "").split(",") if t.strip().isdigit()],
+        tags=[t.strip() for t in (tags or "").split(",") if t.strip()],
     )
     if q:
         ts_query = func.plainto_tsquery("english", q)
@@ -176,8 +160,8 @@ async def discover_count(
         min_price,
         max_price,
         in_stock_only,
-        shop_ids=_parse_csv_ints(shop_ids),
-        tags=_parse_csv_strs(tags),
+        shop_ids=[int(t) for t in (shop_ids or "").split(",") if t.strip().isdigit()],
+        tags=[t.strip() for t in (tags or "").split(",") if t.strip()],
     )
     result = await db.execute(stmt)
     total = result.scalar() or 0

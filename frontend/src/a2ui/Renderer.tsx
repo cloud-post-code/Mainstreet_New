@@ -1,6 +1,32 @@
-import { ReactNode, useMemo } from 'react'
+import { ComponentType, ReactNode, useMemo } from 'react'
 import { A2uiComponent, A2uiTree, IntentHandler } from './types'
-import { REGISTRY } from './registry'
+import a2uiStyles from '../components/a2ui/A2ui.module.css'
+import ProductCard from '../components/ProductCard'
+import ShopCard from '../components/ShopCard'
+import QuestionCard from '../components/QuestionCard'
+import PlanDropdown from '../components/PlanDropdown'
+import ProductGrid from '../components/a2ui/ProductGrid'
+import ComparisonTable from '../components/a2ui/ComparisonTable'
+import MultipleChoice from '../components/a2ui/MultipleChoice'
+import Questionnaire from '../components/a2ui/Questionnaire'
+import ProductDetailsModal from '../components/a2ui/ProductDetailsModal'
+import NextActions from '../components/a2ui/NextActions'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyComp = ComponentType<any>
+
+const COMPONENTS: Record<string, AnyComp> = {
+  product_card: ProductCard,
+  product_grid: ProductGrid,
+  comparison_table: ComparisonTable,
+  multiple_choice: MultipleChoice,
+  question_card: QuestionCard,
+  questionnaire: Questionnaire,
+  product_details_modal: ProductDetailsModal,
+  next_actions: NextActions,
+  shop_card: ShopCard,
+  plan: PlanDropdown,
+}
 
 interface NodeProps {
   tree: Map<string, A2uiComponent>
@@ -11,13 +37,38 @@ interface NodeProps {
 function Node({ tree, id, onIntent }: NodeProps): ReactNode {
   const node = tree.get(id)
   if (!node) return <div style={{ color: '#c0392b' }}>Missing component: {id}</div>
-  const Comp = REGISTRY[node.type]
-  if (!Comp) return <div style={{ color: '#c0392b' }}>Unknown type: {node.type}</div>
+  const p = node.props as Record<string, unknown>
   const children = (node.children ?? []).map(cid => (
     <Node key={cid} tree={tree} id={cid} onIntent={onIntent} />
   ))
+
+  // Inline trivial wrappers — they're a pure CSS shell, not worth a separate file.
+  switch (node.type) {
+    case 'stack':
+      return (
+        <div className={a2uiStyles.stack} style={p.gap ? { gap: p.gap as string } : undefined}>
+          {children}
+        </div>
+      )
+    case 'text_block':
+      return (
+        <p className={`${a2uiStyles.textBlock} ${p.tone === 'muted' ? a2uiStyles.textBlockMuted : ''}`}>
+          {p.content as string}
+        </p>
+      )
+    case 'reasoning_block':
+      return (
+        <details className={a2uiStyles.reasoning}>
+          <summary>View reasoning</summary>
+          <div className={a2uiStyles.reasoningBody}>{p.summary as string}</div>
+        </details>
+      )
+  }
+
+  const Comp = COMPONENTS[node.type]
+  if (!Comp) return <div style={{ color: '#c0392b' }}>Unknown type: {node.type}</div>
   return (
-    <Comp {...node.props} _a2uiId={id} onIntent={onIntent}>
+    <Comp {...p} _a2uiId={id} onIntent={onIntent}>
       {children}
     </Comp>
   )
