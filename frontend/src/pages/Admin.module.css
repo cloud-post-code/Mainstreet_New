@@ -132,7 +132,8 @@
   cursor: not-allowed;
 }
 
-.addShopSection {
+.addShopSection,
+.addProductSection {
   margin-top: 1.25rem;
   padding-top: 1.25rem;
   border-top: 1px solid rgba(122,158,126,0.25);
@@ -140,6 +141,27 @@
   flex-direction: column;
   gap: 1rem;
 }
+
+.addShopSection .seedBtn,
+.addProductSection .seedBtn {
+  width: 100%;
+}
+
+.saveBtn {
+  width: 100%;
+  padding: 0.65rem 1.25rem;
+  background: #b8928a;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.saveBtn:hover:not(:disabled) { opacity: 0.85; }
+.saveBtn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .importResult {
   margin-top: 1rem;
@@ -274,6 +296,9 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--ms-dark);
+}
+.addLabel .select {
+  width: 100%;
 }
 .required { color: #c0392b; font-weight: 700; }
 .optional { color: #888; font-weight: 400; font-size: 0.8rem; }

@@ -25,12 +25,16 @@ export default function Admin() {
   const [downloadError, setDownloadError] = useState<string | null>(null)
   const [showAddShop, setShowAddShop] = useState(false)
   const [newShopName, setNewShopName] = useState('')
-  const [newShopLogoUrl, setNewShopLogoUrl] = useState('')
+  const [newShopLogoUrl, setNewShopLogoUrl] = useState<string | null>(null)
+  const [newShopLogoPreview, setNewShopLogoPreview] = useState<string | null>(null)
+  const [uploadingShopLogo, setUploadingShopLogo] = useState(false)
+  const [shopLogoUploadError, setShopLogoUploadError] = useState<string | null>(null)
   const [newShopDescription, setNewShopDescription] = useState('')
   const [newShopWebsiteUrl, setNewShopWebsiteUrl] = useState('')
   const [addingShop, setAddingShop] = useState(false)
   const [addShopError, setAddShopError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'shops' | 'products' | 'add'>('shops')
+  const [showAddProduct, setShowAddProduct] = useState(false)
+  const [tab, setTab] = useState<'shops' | 'products'>('shops')
 
   useEffect(() => {
     if (!token) return
@@ -126,10 +130,29 @@ export default function Admin() {
 
   function resetAddShopForm() {
     setNewShopName('')
-    setNewShopLogoUrl('')
+    setNewShopLogoUrl(null)
+    setNewShopLogoPreview(null)
+    setShopLogoUploadError(null)
     setNewShopDescription('')
     setNewShopWebsiteUrl('')
     setAddShopError(null)
+  }
+
+  async function handleShopLogoUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !token) return
+    setUploadingShopLogo(true)
+    setShopLogoUploadError(null)
+    try {
+      const { image_url } = await api.uploadShopLogo(file, token)
+      setNewShopLogoUrl(image_url)
+      setNewShopLogoPreview(URL.createObjectURL(file))
+    } catch (err) {
+      setShopLogoUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploadingShopLogo(false)
+      e.target.value = ''
+    }
   }
 
   async function handleAddShop(e: FormEvent) {
@@ -141,7 +164,7 @@ export default function Admin() {
       const shop = await api.createShop(
         {
           name: newShopName.trim(),
-          logo_url: newShopLogoUrl.trim() || undefined,
+          logo_url: newShopLogoUrl ?? undefined,
           description: newShopDescription.trim() || undefined,
           website_url: newShopWebsiteUrl.trim() || undefined,
         },
@@ -201,6 +224,28 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        <div className={styles.addProductSection}>
+          <button
+            type="button"
+            className={styles.seedBtn}
+            onClick={() => setShowAddProduct(v => !v)}
+          >
+            {showAddProduct ? 'Cancel' : '+ Add Product'}
+          </button>
+
+          {showAddProduct && token && (
+            <AddProductPanel
+              shops={shops}
+              token={token}
+              onApproved={() => {
+                api.adminProducts(token, selectedShop).then(setProducts)
+                setShowAddProduct(false)
+                setTab('products')
+              }}
+            />
+          )}
+        </div>
       </section>
 
       {/* CSV Import — Shops */}
@@ -299,7 +344,7 @@ export default function Admin() {
                 />
               </label>
 
-              <button type="submit" className={styles.seedBtn} disabled={addingShop || !newShopName.trim()}>
+              <button type="submit" className={styles.saveBtn} disabled={addingShop || !newShopName.trim()}>
                 {addingShop ? 'Adding…' : 'Save Shop'}
               </button>
               {addShopError && <div className={styles.errorText}>{addShopError}</div>}
@@ -318,21 +363,7 @@ export default function Admin() {
         <button className={`${styles.tab} ${tab === 'products' ? styles.activeTab : ''}`} onClick={() => setTab('products')}>
           Products ({products.length})
         </button>
-        <button className={`${styles.tab} ${tab === 'add' ? styles.activeTab : ''}`} onClick={() => setTab('add')}>
-          + Add Product
-        </button>
       </div>
-
-      {tab === 'add' && token && (
-        <AddProductPanel
-          shops={shops}
-          token={token}
-          onApproved={() => {
-            api.adminProducts(token, selectedShop).then(setProducts)
-            setTab('products')
-          }}
-        />
-      )}
 
       {tab === 'shops' && (
         <div className={styles.tableWrapper}>
@@ -452,7 +483,29 @@ function AddProductPanel({
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
 
-  const canGenerate = sellerId !== '' && !!imageUrl && !generating
+  const canSave = sellerId !== '' && !!imageUrl && !generating
+
+  function resetForm() {
+    setSellerId('')
+    setImageUrl(null)
+    setImagePreview(null)
+    setUploadError(null)
+    setNotes('')
+    setQtyInput('')
+    setPriceInput('')
+    setGenError(null)
+    setDraft(null)
+    setStages({
+      vision: { status: 'idle' },
+      market: { status: 'idle' },
+      writer: { status: 'idle' },
+      verify: { status: 'idle' },
+      image_enhance: { status: 'idle' },
+    })
+    setThinkingByStage({})
+    setLivePreviewImages({})
+    setApproveError(null)
+  }
 
   async function handleImage(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -471,7 +524,7 @@ function AddProductPanel({
     }
   }
 
-  async function handleGenerate() {
+  async function runGeneration() {
     if (sellerId === '' || !imageUrl) return
     setGenerating(true)
     setGenError(null)
@@ -522,6 +575,11 @@ function AddProductPanel({
     }
   }
 
+  async function handleSave(e: FormEvent) {
+    e.preventDefault()
+    await runGeneration()
+  }
+
   async function handleApprove() {
     if (!draft || sellerId === '') return
     setApproving(true)
@@ -541,22 +599,7 @@ function AddProductPanel({
         },
         token,
       )
-      // Reset for next listing
-      setDraft(null)
-      setImageUrl(null)
-      setImagePreview(null)
-      setNotes('')
-      setQtyInput('')
-      setPriceInput('')
-      setStages({
-        vision: { status: 'idle' },
-        market: { status: 'idle' },
-        writer: { status: 'idle' },
-        verify: { status: 'idle' },
-        image_enhance: { status: 'idle' },
-      })
-      setThinkingByStage({})
-      setLivePreviewImages({})
+      resetForm()
       onApproved()
     } catch (err) {
       setApproveError(err instanceof Error ? err.message : 'Approve failed')
@@ -570,13 +613,8 @@ function AddProductPanel({
   }
 
   return (
-    <section className={styles.importSection}>
-      <h2 className={styles.sectionTitle}>AI-Assisted Product Listing</h2>
-      <p className={styles.csvHint}>
-        Select a seller, upload a photo, optionally add notes. The agent will draft a listing for review.
-      </p>
-
-      <div className={styles.addForm}>
+    <>
+      <form className={styles.addForm} onSubmit={handleSave}>
         <label className={styles.addLabel}>
           Seller profile <span className={styles.required}>*</span>
           <select
@@ -591,64 +629,57 @@ function AddProductPanel({
           </select>
         </label>
 
-        <fieldset className={styles.addFieldset} disabled={sellerId === ''}>
-          <label className={styles.addLabel}>
-            Product photo <span className={styles.required}>*</span>
-            <input type="file" accept="image/*" onChange={handleImage} disabled={uploading} />
-            {uploading && <span className={styles.csvHint}>Uploading…</span>}
-            {uploadError && <span className={styles.errorText}>{uploadError}</span>}
-            {imagePreview && (
-              <img src={imagePreview} alt="preview" className={styles.previewImg} />
-            )}
-          </label>
+        <label className={styles.addLabel}>
+          Product photo <span className={styles.required}>*</span>
+          <input type="file" accept="image/*" onChange={handleImage} disabled={uploading} />
+          {uploading && <span className={styles.csvHint}>Uploading…</span>}
+          {uploadError && <span className={styles.errorText}>{uploadError}</span>}
+          {imagePreview && (
+            <img src={imagePreview} alt="preview" className={styles.previewImg} />
+          )}
+        </label>
 
-          <label className={styles.addLabel}>
-            Notes <span className={styles.optional}>(optional)</span>
-            <textarea
-              className={styles.textarea}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Anything the agent should know — brand, condition, materials…"
-              rows={3}
-            />
-          </label>
+        <label className={styles.addLabel}>
+          Notes <span className={styles.optional}>(optional)</span>
+          <textarea
+            className={styles.textarea}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Anything the agent should know — brand, condition, materials…"
+            rows={3}
+          />
+        </label>
 
-          <div className={styles.addRow}>
-            <label className={styles.addLabel}>
-              Quantity <span className={styles.optional}>(default 1)</span>
-              <input
-                type="number"
-                min={1}
-                className={styles.input}
-                value={qtyInput}
-                onChange={e => setQtyInput(e.target.value)}
-                placeholder="1"
-              />
-            </label>
-            <label className={styles.addLabel}>
-              Price <span className={styles.optional}>(agent decides if blank)</span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                className={styles.input}
-                value={priceInput}
-                onChange={e => setPriceInput(e.target.value)}
-                placeholder="agent decides"
-              />
-            </label>
-          </div>
+        <label className={styles.addLabel}>
+          Quantity <span className={styles.optional}>(optional, default 1)</span>
+          <input
+            type="number"
+            min={1}
+            className={styles.input}
+            value={qtyInput}
+            onChange={e => setQtyInput(e.target.value)}
+            placeholder="1"
+          />
+        </label>
 
-          <button
-            className={styles.seedBtn}
-            onClick={handleGenerate}
-            disabled={!canGenerate}
-          >
-            {generating ? 'Generating…' : 'Generate Listing'}
-          </button>
-          {genError && <div className={styles.errorText}>{genError}</div>}
-        </fieldset>
-      </div>
+        <label className={styles.addLabel}>
+          Price <span className={styles.optional}>(optional, agent decides if blank)</span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            className={styles.input}
+            value={priceInput}
+            onChange={e => setPriceInput(e.target.value)}
+            placeholder="agent decides if blank"
+          />
+        </label>
+
+        <button type="submit" className={styles.saveBtn} disabled={!canSave}>
+          {generating ? 'Saving…' : 'Save Product'}
+        </button>
+        {genError && <div className={styles.errorText}>{genError}</div>}
+      </form>
 
       {/* Stage timeline + live thinking */}
       {(generating || draft) && (
@@ -821,16 +852,16 @@ function AddProductPanel({
           )}
 
           <div className={styles.addRow}>
-            <button className={styles.seedBtn} onClick={handleApprove} disabled={approving}>
+            <button type="button" className={styles.saveBtn} onClick={handleApprove} disabled={approving}>
               {approving ? 'Saving…' : 'Approve & publish'}
             </button>
-            <button className={styles.reseedBtn} onClick={handleGenerate} disabled={generating}>
+            <button type="button" className={styles.reseedBtn} onClick={() => void runGeneration()} disabled={generating || !canSave}>
               Regenerate
             </button>
           </div>
           {approveError && <div className={styles.errorText}>{approveError}</div>}
         </div>
       )}
-    </section>
+    </>
   )
 }
