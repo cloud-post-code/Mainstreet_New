@@ -1,5 +1,3 @@
-<!-- /autoplan restore point: /Users/christophermauri/.gstack/projects/cloud-post-code-Mainstreet_New/main-autoplan-restore-20260528-152526.md -->
-
 # Plan: Admin Portal — Full Product & Shop Management
 
 **Branch:** main  

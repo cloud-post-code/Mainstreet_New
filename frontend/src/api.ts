@@ -92,7 +92,34 @@ export const api = {
     }).then(r => r.json())
   },
 
+  downloadProductsCsv: async (token: string, shopId?: number) => {
+    const qs = shopId ? `?shop_id=${shopId}` : ''
+    const res = await fetch(`${BASE}/api/admin/export/products${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail ?? 'Download failed')
+    }
+    return { blob: await res.blob(), filename: 'products.csv' }
+  },
+
+  downloadShopsCsv: async (token: string) => {
+    const res = await fetch(`${BASE}/api/admin/export/shops`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail ?? 'Download failed')
+    }
+    return { blob: await res.blob(), filename: 'shops.csv' }
+  },
+
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
+  createShop: (
+    body: { name: string; logo_url?: string; description?: string; website_url?: string },
+    token: string,
+  ) => request<Shop>('/api/admin/shops', { method: 'POST', body: JSON.stringify(body) }, token),
   adminProducts: (token: string, shopId?: number, limit = 500) =>
     request<Product[]>(`/api/admin/products?limit=${limit}${shopId ? `&shop_id=${shopId}` : ''}`, {}, token),
   deleteShop: (id: number, token: string) =>

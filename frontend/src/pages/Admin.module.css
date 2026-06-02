@@ -88,6 +88,13 @@
   font-family: monospace;
 }
 
+.csvActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .uploadLabel { display: inline-block; cursor: pointer; }
 .uploadBtn {
   display: inline-block;
@@ -103,6 +110,36 @@
 }
 .uploadBtn:hover:not(.disabled) { opacity: 0.85; }
 .uploadBtn.disabled { opacity: 0.5; cursor: not-allowed; }
+
+.downloadBtn {
+  padding: 0.65rem 1.25rem;
+  background: transparent;
+  color: var(--ms-primary);
+  border: 1.5px solid var(--ms-primary);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.downloadBtn:hover:not(:disabled) {
+  background: var(--ms-primary);
+  color: white;
+}
+.downloadBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.addShopSection {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(122,158,126,0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
 
 .importResult {
   margin-top: 1rem;

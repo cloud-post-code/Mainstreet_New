@@ -3,11 +3,12 @@ import io
 import json
 from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from db.database import get_db
 from db.models import Shop, Product, User
-from db.schemas import ImportResult, ShopOut, ProductOut
+from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut
 from auth import get_admin_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -166,6 +167,73 @@ async def import_shops_csv(
     return ImportResult(rows_added=rows_added, rows_updated=rows_updated, errors=errors)
 
 
+def _csv_response(content: str, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        iter([content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/products")
+async def export_products_csv(
+    shop_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    stmt = (
+        select(Product, Shop.name.label("shop_name"))
+        .join(Shop, Shop.id == Product.shop_id)
+        .order_by(Shop.name, Product.name)
+    )
+    if shop_id:
+        stmt = stmt.where(Product.shop_id == shop_id)
+
+    result = await db.execute(stmt)
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=["shop_name", "product_name", "price", "quantity", "image_url", "description_json"],
+    )
+    writer.writeheader()
+    for product, shop_name in result.all():
+        description_json = ""
+        if product.description is not None:
+            description_json = json.dumps(product.description, ensure_ascii=False)
+        writer.writerow(
+            {
+                "shop_name": shop_name,
+                "product_name": product.name,
+                "price": str(product.price),
+                "quantity": product.quantity,
+                "image_url": product.image_url or "",
+                "description_json": description_json,
+            }
+        )
+    return _csv_response(output.getvalue(), "products.csv")
+
+
+@router.get("/export/shops")
+async def export_shops_csv(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    result = await db.execute(select(Shop).order_by(Shop.name))
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["name", "logo_url", "description", "website_url"])
+    writer.writeheader()
+    for shop in result.scalars().all():
+        writer.writerow(
+            {
+                "name": shop.name,
+                "logo_url": shop.logo_url or "",
+                "description": shop.description or "",
+                "website_url": shop.website_url or "",
+            }
+        )
+    return _csv_response(output.getvalue(), "shops.csv")
+
+
 @router.get("/shops", response_model=list[ShopOut])
 async def admin_list_shops(db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
     from sqlalchemy import func
@@ -181,6 +249,31 @@ async def admin_list_shops(db: AsyncSession = Depends(get_db), _: User = Depends
         out.product_count = count
         shops.append(out)
     return shops
+
+
+@router.post("/shops", response_model=ShopOut, status_code=201)
+async def create_shop(
+    body: ShopCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    result = await db.execute(select(Shop).where(Shop.name == body.name))
+    if result.scalars().first():
+        raise HTTPException(status_code=409, detail="A shop with this name already exists")
+
+    shop = Shop(
+        name=body.name,
+        logo_url=body.logo_url.strip() if body.logo_url and body.logo_url.strip() else None,
+        description=body.description.strip() if body.description and body.description.strip() else None,
+        website_url=body.website_url.strip() if body.website_url and body.website_url.strip() else None,
+    )
+    db.add(shop)
+    await db.commit()
+    await db.refresh(shop)
+
+    out = ShopOut.model_validate(shop)
+    out.product_count = 0
+    return out
 
 
 @router.delete("/shops/{shop_id}", status_code=204)

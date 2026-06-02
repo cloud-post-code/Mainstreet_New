@@ -1,4 +1,4 @@
-import { useEffect, useState, ChangeEvent } from 'react'
+import { useEffect, useState, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { api, Shop, Product, ListingDraft, ListingStage } from '../api'
@@ -20,6 +20,16 @@ export default function Admin() {
   const [importing, setImporting] = useState(false)
   const [shopImportResult, setShopImportResult] = useState<ImportResult | null>(null)
   const [importingShops, setImportingShops] = useState(false)
+  const [downloadingProducts, setDownloadingProducts] = useState(false)
+  const [downloadingShops, setDownloadingShops] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [showAddShop, setShowAddShop] = useState(false)
+  const [newShopName, setNewShopName] = useState('')
+  const [newShopLogoUrl, setNewShopLogoUrl] = useState('')
+  const [newShopDescription, setNewShopDescription] = useState('')
+  const [newShopWebsiteUrl, setNewShopWebsiteUrl] = useState('')
+  const [addingShop, setAddingShop] = useState(false)
+  const [addShopError, setAddShopError] = useState<string | null>(null)
   const [tab, setTab] = useState<'shops' | 'products' | 'add'>('shops')
 
   useEffect(() => {
@@ -77,6 +87,76 @@ export default function Admin() {
     }
   }
 
+  function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleDownloadProductsCsv() {
+    if (!token) return
+    setDownloadingProducts(true)
+    setDownloadError(null)
+    try {
+      const { blob, filename } = await api.downloadProductsCsv(token)
+      triggerDownload(blob, filename)
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Download failed')
+    } finally {
+      setDownloadingProducts(false)
+    }
+  }
+
+  async function handleDownloadShopsCsv() {
+    if (!token) return
+    setDownloadingShops(true)
+    setDownloadError(null)
+    try {
+      const { blob, filename } = await api.downloadShopsCsv(token)
+      triggerDownload(blob, filename)
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Download failed')
+    } finally {
+      setDownloadingShops(false)
+    }
+  }
+
+  function resetAddShopForm() {
+    setNewShopName('')
+    setNewShopLogoUrl('')
+    setNewShopDescription('')
+    setNewShopWebsiteUrl('')
+    setAddShopError(null)
+  }
+
+  async function handleAddShop(e: FormEvent) {
+    e.preventDefault()
+    if (!token || !newShopName.trim()) return
+    setAddingShop(true)
+    setAddShopError(null)
+    try {
+      const shop = await api.createShop(
+        {
+          name: newShopName.trim(),
+          logo_url: newShopLogoUrl.trim() || undefined,
+          description: newShopDescription.trim() || undefined,
+          website_url: newShopWebsiteUrl.trim() || undefined,
+        },
+        token,
+      )
+      setShops(prev => [...prev, shop].sort((a, b) => a.name.localeCompare(b.name)))
+      resetAddShopForm()
+      setShowAddShop(false)
+    } catch (err) {
+      setAddShopError(err instanceof Error ? err.message : 'Failed to add shop')
+    } finally {
+      setAddingShop(false)
+    }
+  }
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -90,12 +170,22 @@ export default function Admin() {
         <p className={styles.csvHint}>
           Required columns: <code>shop_name, product_name, price, quantity, image_url, description_json</code>
         </p>
-        <label className={styles.uploadLabel}>
-          <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={importing} hidden />
-          <span className={`${styles.uploadBtn} ${importing ? styles.disabled : ''}`}>
-            {importing ? 'Importing…' : 'Upload Products CSV'}
-          </span>
-        </label>
+        <div className={styles.csvActions}>
+          <label className={styles.uploadLabel}>
+            <input type="file" accept=".csv" onChange={handleCsvUpload} disabled={importing} hidden />
+            <span className={`${styles.uploadBtn} ${importing ? styles.disabled : ''}`}>
+              {importing ? 'Importing…' : 'Upload Products CSV'}
+            </span>
+          </label>
+          <button
+            type="button"
+            className={styles.downloadBtn}
+            onClick={handleDownloadProductsCsv}
+            disabled={downloadingProducts}
+          >
+            {downloadingProducts ? 'Downloading…' : 'Download Products CSV'}
+          </button>
+        </div>
         {importResult && (
           <div className={styles.importResult}>
             <p>✅ {importResult.rows_added} added, {importResult.rows_updated} updated</p>
@@ -119,12 +209,22 @@ export default function Admin() {
         <p className={styles.csvHint}>
           Required: <code>name</code> &nbsp;|&nbsp; Optional: <code>logo_url, description, website_url</code>
         </p>
-        <label className={styles.uploadLabel}>
-          <input type="file" accept=".csv" onChange={handleShopCsvUpload} disabled={importingShops} hidden />
-          <span className={`${styles.uploadBtn} ${importingShops ? styles.disabled : ''}`}>
-            {importingShops ? 'Importing…' : 'Upload Shops CSV'}
-          </span>
-        </label>
+        <div className={styles.csvActions}>
+          <label className={styles.uploadLabel}>
+            <input type="file" accept=".csv" onChange={handleShopCsvUpload} disabled={importingShops} hidden />
+            <span className={`${styles.uploadBtn} ${importingShops ? styles.disabled : ''}`}>
+              {importingShops ? 'Importing…' : 'Upload Shops CSV'}
+            </span>
+          </label>
+          <button
+            type="button"
+            className={styles.downloadBtn}
+            onClick={handleDownloadShopsCsv}
+            disabled={downloadingShops}
+          >
+            {downloadingShops ? 'Downloading…' : 'Download Shops CSV'}
+          </button>
+        </div>
         {shopImportResult && (
           <div className={styles.importResult}>
             <p>✅ {shopImportResult.rows_added} added, {shopImportResult.rows_updated} updated</p>
@@ -140,7 +240,75 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        <div className={styles.addShopSection}>
+          <button
+            type="button"
+            className={styles.seedBtn}
+            onClick={() => {
+              setShowAddShop(v => !v)
+              if (showAddShop) resetAddShopForm()
+            }}
+          >
+            {showAddShop ? 'Cancel' : '+ Add Shop'}
+          </button>
+
+          {showAddShop && (
+            <form className={styles.addForm} onSubmit={handleAddShop}>
+              <label className={styles.addLabel}>
+                Shop name <span className={styles.required}>*</span>
+                <input
+                  className={styles.input}
+                  value={newShopName}
+                  onChange={e => setNewShopName(e.target.value)}
+                  placeholder="e.g. Main Street Pottery"
+                  required
+                />
+              </label>
+
+              <label className={styles.addLabel}>
+                Logo URL <span className={styles.optional}>(optional)</span>
+                <input
+                  className={styles.input}
+                  type="url"
+                  value={newShopLogoUrl}
+                  onChange={e => setNewShopLogoUrl(e.target.value)}
+                  placeholder="https://…"
+                />
+              </label>
+
+              <label className={styles.addLabel}>
+                Description <span className={styles.optional}>(optional)</span>
+                <textarea
+                  className={styles.textarea}
+                  rows={3}
+                  value={newShopDescription}
+                  onChange={e => setNewShopDescription(e.target.value)}
+                  placeholder="Short shop bio or tagline"
+                />
+              </label>
+
+              <label className={styles.addLabel}>
+                Website URL <span className={styles.optional}>(optional)</span>
+                <input
+                  className={styles.input}
+                  type="url"
+                  value={newShopWebsiteUrl}
+                  onChange={e => setNewShopWebsiteUrl(e.target.value)}
+                  placeholder="https://…"
+                />
+              </label>
+
+              <button type="submit" className={styles.seedBtn} disabled={addingShop || !newShopName.trim()}>
+                {addingShop ? 'Adding…' : 'Save Shop'}
+              </button>
+              {addShopError && <div className={styles.errorText}>{addShopError}</div>}
+            </form>
+          )}
+        </div>
       </section>
+
+      {downloadError && <div className={styles.errorText}>{downloadError}</div>}
 
       {/* Tabs */}
       <div className={styles.tabs}>

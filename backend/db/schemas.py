@@ -53,6 +53,20 @@ class ShopOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ShopCreate(BaseModel):
+    name: str
+    logo_url: Optional[str] = None
+    description: Optional[str] = None
+    website_url: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Shop name is required")
+        return v.strip()
+
+
 # --- Products ---
 
 class ProductOut(BaseModel):
