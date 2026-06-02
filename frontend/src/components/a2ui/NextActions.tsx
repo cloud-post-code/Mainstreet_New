@@ -12,9 +12,10 @@ interface Props {
 }
 
 export default function NextActions({ actions, onIntent }: Props) {
+  const items = Array.isArray(actions) ? actions : []
   return (
     <div className={styles.actions}>
-      {actions.map((a, i) => (
+      {items.map((a, i) => (
         <button
           key={`${a.intent}-${i}`}
           className={styles.actionChip}

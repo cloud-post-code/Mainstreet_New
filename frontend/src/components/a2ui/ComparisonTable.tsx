@@ -40,9 +40,12 @@ export default function ComparisonTable({ product_ids, products, attributes }: P
   // Anything in product_ids without a matching product is skipped (validator
   // shouldn't let this happen, but be defensive). Products not referenced by
   // product_ids are ignored — the agent should keep the two arrays in sync.
+  const productList = Array.isArray(products) ? products : []
+  const idList = Array.isArray(product_ids) ? product_ids : []
+  const attrList = Array.isArray(attributes) ? attributes : []
   const byId = new Map<number, InlineProduct>()
-  for (const p of products) byId.set(p.product_id, p)
-  const ordered = product_ids
+  for (const p of productList) byId.set(p.product_id, p)
+  const ordered = idList
     .map(id => byId.get(id))
     .filter((p): p is InlineProduct => p != null)
 
@@ -58,7 +61,7 @@ export default function ComparisonTable({ product_ids, products, attributes }: P
           </tr>
         </thead>
         <tbody>
-          {attributes.map(attr => (
+          {attrList.map(attr => (
             <tr key={attr}>
               <td className={styles.compAttr}>{attr.replace(/_/g, ' ')}</td>
               {ordered.map(p => (

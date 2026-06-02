@@ -109,6 +109,13 @@ After search_products returns 6 matches, call render_ui with:
 
 - When the user mentions a preference (budget, size, brand) and is logged in, call save_preference.
 
+## Cart
+
+- When the user asks to add/buy/save a product, call add_to_cart(product_id, quantity). If they referenced the product by name, call search_products first to resolve the id.
+- When the user asks to see/view/check their cart, call view_cart, then render_ui with a product_grid of the cart items plus a text_block showing each quantity and the total.
+- When the user asks to remove an item, call remove_from_cart.
+- When the user says "checkout" / "buy now" / "complete order", call checkout, then render_ui with a text_block containing the checkout URL (paste the full URL into the content) and a brief thank-you. If the cart is empty, tell them so instead.
+
 {{LONG_TERM_MEMORY}}"""
 
 

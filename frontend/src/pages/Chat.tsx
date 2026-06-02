@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAgentStream } from '../hooks/useAgentStream'
 import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
+import AgentErrorBoundary from '../components/AgentErrorBoundary'
 import InboxPanel from '../components/InboxPanel'
 import styles from './Chat.module.css'
 
@@ -517,13 +518,15 @@ export default function Chat() {
                     {msg.from === 'user' ? (
                       <p className={styles.userText}>{msg.text}</p>
                     ) : (
-                      <AgentMessage
-                        events={msg.events ?? []}
-                        streaming={streaming && idx === lastAgentIdx}
-                        onAnswer={handleAnswer}
-                        onIntent={handleIntent}
-                        answeredQuestions={answeredQuestions}
-                      />
+                      <AgentErrorBoundary>
+                        <AgentMessage
+                          events={msg.events ?? []}
+                          streaming={streaming && idx === lastAgentIdx}
+                          onAnswer={handleAnswer}
+                          onIntent={handleIntent}
+                          answeredQuestions={answeredQuestions}
+                        />
+                      </AgentErrorBoundary>
                     )}
                   </div>
                   {msg.from === 'user' && <div className={styles.avatar}>👤</div>}

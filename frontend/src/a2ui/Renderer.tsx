@@ -26,7 +26,8 @@ function Node({ tree, id, onIntent }: NodeProps): ReactNode {
 export default function Renderer({ tree, onIntent }: { tree: A2uiTree; onIntent: IntentHandler }) {
   const map = useMemo(() => {
     const m = new Map<string, A2uiComponent>()
-    for (const c of tree.components) m.set(c.id, c)
+    const components = Array.isArray(tree?.components) ? tree.components : []
+    for (const c of components) m.set(c.id, c)
     return m
   }, [tree])
   return <Node tree={map} id={tree.root} onIntent={onIntent} />

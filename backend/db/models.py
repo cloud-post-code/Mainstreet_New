@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Boolean, Numeric, Text,
-    ForeignKey, DateTime, func, Index
+    ForeignKey, DateTime, func, Index, CheckConstraint, text
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -128,4 +128,33 @@ class UserMemory(Base):
 
     __table_args__ = (
         Index("ix_user_memory_user_key", "user_id", "key", unique=True),
+    )
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    product = relationship("Product")
+
+    __table_args__ = (
+        Index(
+            "ix_cart_user_product", "user_id", "product_id", unique=True,
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_cart_session_product", "session_id", "product_id", unique=True,
+            postgresql_where=text("session_id IS NOT NULL AND user_id IS NULL"),
+        ),
+        CheckConstraint(
+            "(user_id IS NOT NULL) OR (session_id IS NOT NULL)",
+            name="cart_owner_required",
+        ),
     )

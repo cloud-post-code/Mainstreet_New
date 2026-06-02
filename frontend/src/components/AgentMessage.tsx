@@ -4,6 +4,7 @@ import PlanDropdown from './PlanDropdown'
 import LiveReasoning from './LiveReasoning'
 import Renderer from '../a2ui/Renderer'
 import { A2uiTree } from '../a2ui/types'
+import AgentErrorBoundary from './AgentErrorBoundary'
 import styles from './AgentMessage.module.css'
 
 interface Props {
@@ -74,12 +75,14 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent, answeredQuest
   if (latestTree) {
     rendered.push(
       <div key="ui-tree" className={styles.uiTreeWrapper}>
-        <TreeWithQuestionCardAdapter
-          tree={latestTree}
-          intentHandler={intentHandler}
-          onAnswer={onAnswer}
-          answeredQuestions={answeredQuestions}
-        />
+        <AgentErrorBoundary>
+          <TreeWithQuestionCardAdapter
+            tree={latestTree}
+            intentHandler={intentHandler}
+            onAnswer={onAnswer}
+            answeredQuestions={answeredQuestions}
+          />
+        </AgentErrorBoundary>
       </div>
     )
   }
@@ -110,7 +113,7 @@ function TreeWithQuestionCardAdapter({
   // Build a shadow component map where question_card props get onAnswer + answered injected
   const patched: A2uiTree = {
     root: tree.root,
-    components: tree.components.map(c => {
+    components: (Array.isArray(tree.components) ? tree.components : []).map(c => {
       if (c.type !== 'question_card') return c
       const qid = (c.props as { question_id?: string }).question_id
       return {

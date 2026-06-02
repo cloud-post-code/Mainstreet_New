@@ -12,6 +12,7 @@ interface Props {
 
 export default function MultipleChoice({ question_id, question, choices, onIntent }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
+  const items = Array.isArray(choices) ? choices : []
 
   function pick(choice: string) {
     if (selected) return
@@ -23,7 +24,7 @@ export default function MultipleChoice({ question_id, question, choices, onInten
     <div className={styles.choiceCard}>
       <p className={styles.choiceQ}>{question}</p>
       <div className={styles.choiceList}>
-        {choices.map(c => (
+        {items.map(c => (
           <button
             key={c}
             className={`${styles.choiceBtn} ${selected === c ? styles.choiceBtnSelected : ''}`}
