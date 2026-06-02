@@ -151,12 +151,10 @@ def test_comparison_table_valid():
                 "id": "ct",
                 "type": "comparison_table",
                 "props": {
-                    "product_ids": [1, 2],
                     "products": [
-                        {"product_id": 1, "name": "A", "price": 10},
-                        {"product_id": 2, "name": "B", "price": 20},
+                        {"product_id": 1, "name": "A", "price": 10, "pros": ["light"], "cons": ["fragile"]},
+                        {"product_id": 2, "name": "B", "price": 20, "pros": ["sturdy"], "cons": ["heavy"]},
                     ],
-                    "attributes": ["price"],
                 },
             },
             {"id": "t", "type": "text_block", "props": {"content": "x"}},
@@ -170,13 +168,34 @@ def test_comparison_table_missing_required_props():
         "root": "r",
         "components": [
             {"id": "r", "type": "stack", "props": {}, "children": ["ct", "t"]},
-            {"id": "ct", "type": "comparison_table", "props": {"product_ids": [1]}},
+            {"id": "ct", "type": "comparison_table", "props": {}},
             {"id": "t", "type": "text_block", "props": {"content": "x"}},
         ],
     }
     errors = validate_render_ui(payload)
     assert any("products" in e for e in errors), errors
-    assert any("attributes" in e for e in errors), errors
+
+
+def test_comparison_table_row_missing_pros_or_cons():
+    payload = {
+        "root": "r",
+        "components": [
+            {"id": "r", "type": "stack", "props": {}, "children": ["ct", "t"]},
+            {
+                "id": "ct",
+                "type": "comparison_table",
+                "props": {
+                    "products": [
+                        {"product_id": 1, "name": "A", "price": 10},
+                    ],
+                },
+            },
+            {"id": "t", "type": "text_block", "props": {"content": "x"}},
+        ],
+    }
+    errors = validate_render_ui(payload)
+    assert any("pros" in e for e in errors), errors
+    assert any("cons" in e for e in errors), errors
 
 
 def test_comparison_table_product_ids_missing_from_products():
@@ -190,10 +209,9 @@ def test_comparison_table_product_ids_missing_from_products():
                 "props": {
                     "product_ids": [1, 2, 99],
                     "products": [
-                        {"product_id": 1, "name": "A"},
-                        {"product_id": 2, "name": "B"},
+                        {"product_id": 1, "name": "A", "price": 10, "pros": [], "cons": []},
+                        {"product_id": 2, "name": "B", "price": 20, "pros": [], "cons": []},
                     ],
-                    "attributes": ["price"],
                 },
             },
             {"id": "t", "type": "text_block", "props": {"content": "x"}},

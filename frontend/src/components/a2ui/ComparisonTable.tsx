@@ -4,69 +4,78 @@ interface InlineProduct {
   product_id: number
   name: string
   price?: number
-  quantity?: number
+  pros?: string[]
+  cons?: string[]
   shop_name?: string
-  tags?: string[]
   image_url?: string
-  description_summary?: string
   [key: string]: unknown
 }
 
 interface Props {
-  product_ids: number[]
   products: InlineProduct[]
-  attributes: string[]
+  product_ids?: number[]
+  attributes?: string[]
   sort_by?: string
 }
 
-function fmt(attr: string, value: unknown): string {
-  if (value == null || value === '') return '—'
-  if (attr === 'price' && typeof value === 'number') return `$${value.toFixed(2)}`
-  if (attr === 'stock' || attr === 'quantity') {
-    const n = Number(value)
-    return n > 0 ? `${n} in stock` : 'Out of stock'
-  }
-  if (Array.isArray(value)) return value.join(', ')
-  return String(value)
+function formatPrice(price: unknown): string {
+  if (typeof price === 'number') return `$${price.toFixed(2)}`
+  if (typeof price === 'string' && price !== '') return price
+  return '—'
 }
 
-function valueFor(product: InlineProduct, attr: string): unknown {
-  if (attr === 'stock') return product.quantity
-  return product[attr]
+function PointsList({ items, tone }: { items: unknown; tone: 'pro' | 'con' }) {
+  const list = Array.isArray(items) ? items.filter(Boolean).map(String) : []
+  if (list.length === 0) return <span className={styles.compEmpty}>—</span>
+  return (
+    <ul className={styles.compPoints}>
+      {list.map((point, i) => (
+        <li key={i} className={tone === 'pro' ? styles.compPro : styles.compCon}>
+          <span className={styles.compPointMark} aria-hidden>{tone === 'pro' ? '+' : '−'}</span>
+          <span>{point}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
-export default function ComparisonTable({ product_ids, products, attributes }: Props) {
-  // product_ids is the canonical column order. Look up each id in products.
-  // Anything in product_ids without a matching product is skipped (validator
-  // shouldn't let this happen, but be defensive). Products not referenced by
-  // product_ids are ignored — the agent should keep the two arrays in sync.
+export default function ComparisonTable({ products, product_ids }: Props) {
   const productList = Array.isArray(products) ? products : []
-  const idList = Array.isArray(product_ids) ? product_ids : []
-  const attrList = Array.isArray(attributes) ? attributes : []
-  const byId = new Map<number, InlineProduct>()
-  for (const p of productList) byId.set(p.product_id, p)
-  const ordered = idList
-    .map(id => byId.get(id))
-    .filter((p): p is InlineProduct => p != null)
+  const ordered = Array.isArray(product_ids) && product_ids.length > 0
+    ? product_ids
+        .map(id => productList.find(p => p.product_id === id))
+        .filter((p): p is InlineProduct => p != null)
+    : productList
+
+  if (ordered.length === 0) {
+    return (
+      <div className={styles.tableWrapper}>
+        <div className={styles.compEmptyState}>No products to compare.</div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.tableWrapper}>
       <table className={styles.compTable}>
         <thead>
           <tr>
-            <th></th>
-            {ordered.map(p => (
-              <th key={p.product_id}>{p.name}</th>
-            ))}
+            <th className={styles.compColProduct}>Product</th>
+            <th className={styles.compColPrice}>Price</th>
+            <th className={styles.compColPros}>Pros</th>
+            <th className={styles.compColCons}>Cons</th>
           </tr>
         </thead>
         <tbody>
-          {attrList.map(attr => (
-            <tr key={attr}>
-              <td className={styles.compAttr}>{attr.replace(/_/g, ' ')}</td>
-              {ordered.map(p => (
-                <td key={p.product_id}>{fmt(attr, valueFor(p, attr))}</td>
-              ))}
+          {ordered.map(p => (
+            <tr key={p.product_id}>
+              <td className={styles.compProductCell}>
+                <div className={styles.compProductName}>{p.name}</div>
+                {p.shop_name && <div className={styles.compProductShop}>{p.shop_name}</div>}
+              </td>
+              <td className={styles.compPriceCell}>{formatPrice(p.price)}</td>
+              <td><PointsList items={p.pros} tone="pro" /></td>
+              <td><PointsList items={p.cons} tone="con" /></td>
             </tr>
           ))}
         </tbody>

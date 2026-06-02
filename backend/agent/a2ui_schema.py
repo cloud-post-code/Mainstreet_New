@@ -31,7 +31,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     "reasoning_block": ("summary",),
     "product_card": ("product_id", "name", "price", "shop_name"),
     "product_grid": ("layout", "title"),
-    "comparison_table": ("product_ids", "attributes", "products"),
+    "comparison_table": ("products",),
     "multiple_choice": ("question_id", "question", "choices"),
     "question_card": ("question_id", "question"),
     "product_details_modal": ("product_id", "name", "price", "shop_name"),
@@ -93,8 +93,28 @@ def validate_render_ui(payload: Any) -> list[str]:
                     f"Allowed: {sorted(VALID_GRID_LAYOUTS)}"
                 )
         if ctype == "comparison_table":
-            product_ids = props.get("product_ids")
             products = props.get("products")
+            if not isinstance(products, list) or len(products) == 0:
+                errors.append(
+                    f"components[{cid}].props.products must be a non-empty array of "
+                    f"product objects with at minimum {{product_id, name, price, pros, cons}}."
+                )
+            else:
+                for i, p in enumerate(products):
+                    if not isinstance(p, dict):
+                        errors.append(f"components[{cid}].props.products[{i}] must be an object")
+                        continue
+                    for required in ("product_id", "name", "price", "pros", "cons"):
+                        if required not in p:
+                            errors.append(
+                                f"components[{cid}].props.products[{i}] missing '{required}'. "
+                                f"Each product row needs product_id, name, price, pros (array of strings), cons (array of strings)."
+                            )
+                    if "pros" in p and not isinstance(p["pros"], list):
+                        errors.append(f"components[{cid}].props.products[{i}].pros must be an array of strings")
+                    if "cons" in p and not isinstance(p["cons"], list):
+                        errors.append(f"components[{cid}].props.products[{i}].cons must be an array of strings")
+            product_ids = props.get("product_ids")
             if isinstance(product_ids, list) and isinstance(products, list):
                 pids_in_products = {
                     p.get("product_id") for p in products if isinstance(p, dict)
@@ -103,8 +123,7 @@ def validate_render_ui(payload: Any) -> list[str]:
                 if missing:
                     errors.append(
                         f"components[{cid}].props.product_ids contains ids not found "
-                        f"in products: {missing}. Every id in product_ids must have a "
-                        f"matching entry in products."
+                        f"in products: {missing}."
                     )
         children = comp.get("children")
         if children is not None and not isinstance(children, list):
@@ -197,7 +216,7 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "reasoning_block{summary}, "
                                 "product_card{product_id,name,price,shop_name,image_url?,quantity?,description_summary?,tags?,shop_id?}, "
                                 "product_grid{layout(recommendation|comparison|curated),title,subtitle?}, "
-                                "comparison_table{product_ids,products,attributes,sort_by?}, "
+                                "comparison_table{products[{product_id,name,price,pros[],cons[],shop_name?,image_url?}],sort_by?}, "
                                 "multiple_choice{question_id,question,choices,hint?}, "
                                 "question_card{question_id,question,options?,hint?}, "
                                 "product_details_modal{product_id,name,price,shop_name,image_url?,gallery?,description_long?,tags?}, "

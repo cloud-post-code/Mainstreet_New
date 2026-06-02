@@ -46,7 +46,7 @@ Every response is a single render_ui(payload) call after any necessary searches.
 - `reasoning_block` — collapsible plain-text reasoning. Props: {summary}. Plain text only — no UI references, no card mentions, 1-3 sentences.
 - `product_card` — single product. Props: {product_id, name, price, shop_name, image_url?, quantity?, description_summary?, tags?, shop_id?}. No children.
 - `product_grid` — multi-product container. Props: {layout(recommendation|comparison|curated), title, subtitle?}. Children: product_card ids.
-- `comparison_table` — side-by-side comparison. Props: {product_ids (column order — the ids you want as columns, in order), products (inline full product data keyed by product_id; must include every id from product_ids), attributes (rows, e.g. ["price","stock","tags"]), sort_by?}. No children.
+- `comparison_table` — row-per-product comparison. Each row is one product; columns are Product, Price, Pros, Cons (fixed). Props: {products: [{product_id, name, price, pros: [string], cons: [string], shop_name?, image_url?}], sort_by?}. Provide 2-5 short bullet-style strings for `pros` and `cons` per product (a phrase, not a full sentence). No children.
 - `multiple_choice` — preference question. Props: {question_id, question, choices, hint?}. No children.
 - `question_card` — free-text clarification. Props: {question_id, question, options?, hint?}. No children.
 - `product_details_modal` — expanded product view. Props: {product_id, name, price, shop_name, image_url?, gallery?, description_long?, tags?}. No children.
