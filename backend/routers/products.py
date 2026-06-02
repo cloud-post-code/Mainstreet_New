@@ -75,18 +75,41 @@ async def search_products(
     return products
 
 
-def _apply_product_filters(stmt, q, shop_id, min_price, max_price, in_stock_only):
+def _apply_product_filters(
+    stmt,
+    q,
+    shop_id,
+    min_price,
+    max_price,
+    in_stock_only,
+    shop_ids: list[int] | None = None,
+    tags: list[str] | None = None,
+):
     if q:
         ts_query = func.plainto_tsquery("english", q)
-        stmt = stmt.where(Product.search_vector.op("@@")(ts_query))
+        like = f"%{q}%"
+        # Match products whose tsvector matches OR whose shop name matches.
+        stmt = stmt.where(
+            or_(
+                Product.search_vector.op("@@")(ts_query),
+                Shop.name.ilike(like),
+                Product.name.ilike(like),
+            )
+        )
     if shop_id is not None:
         stmt = stmt.where(Product.shop_id == shop_id)
+    if shop_ids:
+        stmt = stmt.where(Product.shop_id.in_(shop_ids))
     if min_price is not None:
         stmt = stmt.where(Product.price >= min_price)
     if max_price is not None:
         stmt = stmt.where(Product.price <= max_price)
     if in_stock_only:
         stmt = stmt.where(Product.quantity > 0)
+    if tags:
+        stmt = stmt.where(
+            text("(products.description->'tags') ?| :tag_arr").bindparams(tag_arr=tags)
+        )
     return stmt
 
 
