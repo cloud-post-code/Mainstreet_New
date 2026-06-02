@@ -9,8 +9,7 @@ export default function TopNav() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const isActive = (path: string) =>
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+  const isActive = (path: string) => location.pathname.startsWith(path)
 
   const handleLogout = () => {
     logout()
@@ -28,6 +27,7 @@ export default function TopNav() {
   return (
     <nav className={styles.nav}>
       <div className={styles.links}>
+        <Link to="/" className={styles.brand}>MAIN ST</Link>
         {user?.is_admin && (
           <Link
             to="/admin"
@@ -36,27 +36,8 @@ export default function TopNav() {
             Admin
           </Link>
         )}
-        <Link
-          to="/"
-          className={`${styles.link} ${isActive('/') ? styles.active : ''}`}
-        >
-          Chat
-        </Link>
-        <Link
-          to="/discover"
-          className={`${styles.link} ${isActive('/discover') ? styles.active : ''}`}
-        >
-          Discover
-        </Link>
-        <Link
-          to="/inbox"
-          className={`${styles.link} ${isActive('/inbox') ? styles.active : ''}`}
-        >
-          Inbox
-        </Link>
       </div>
       <div className={styles.rightSide}>
-        <Link to="/discover" className={styles.brand}>MAIN ST</Link>
         {token ? (
           <button type="button" className={styles.button} onClick={handleLogout}>
             Log out

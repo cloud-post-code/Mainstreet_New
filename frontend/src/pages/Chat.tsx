@@ -359,19 +359,8 @@ export default function Chat() {
     <div className={styles.layout}>
       {/* Sidebar */}
       <aside className={styles.sidebar}>
+        {(token || user?.is_admin) && (
         <div className={styles.sidebarHeader}>
-          <button
-            type="button"
-            className={styles.brand}
-            onClick={() => {
-              setLoadedMessages([])
-              reset()
-              navigate('/')
-            }}
-            aria-label="Main St. home"
-          >
-            MAIN ST
-          </button>
           <div className={styles.sidebarHeaderActions}>
             {token && (
               <button
@@ -391,8 +380,12 @@ export default function Chat() {
             )}
           </div>
         </div>
+        )}
         <button className={styles.newChat} onClick={newSession}>+ New chat</button>
-        <button className={styles.discoverLink} onClick={() => navigate('/discover')}>Discover ↗</button>
+
+        <div className={styles.recentDivider}>
+          <span>Recent</span>
+        </div>
 
         {/* Session list — only shown when logged in */}
         {token && (

@@ -112,22 +112,23 @@
 }
 .newChat:hover { opacity: 0.85; }
 
-.discoverLink {
+.recentDivider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   margin-top: 0.5rem;
-  padding: 0.55rem 1rem;
-  background: transparent;
-  color: var(--ms-cream);
-  border: 1px solid rgba(241, 233, 216, 0.35);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  font-family: var(--font-body);
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s;
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
 }
-
-.discoverLink:hover { background: rgba(241, 233, 216, 0.12); }
+.recentDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+}
 
 .sessionList {
   flex: 1;
