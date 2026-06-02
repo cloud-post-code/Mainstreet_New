@@ -141,12 +141,15 @@ def _stream_stage_thinking(
     *,
     stage: str,
     preamble: str,
+    enable_thinking: bool = True,
     **create_kwargs: Any,
 ) -> Generator[dict, None, anthropic.types.Message]:
     """Yield thinking events for a stage, then return the final message."""
     yield _event({"type": "thinking", "stage": stage, "content": preamble})
     response = None
-    for kind, payload in stream_claude(client, model=MODEL, **create_kwargs):
+    for kind, payload in stream_claude(
+        client, model=MODEL, enable_thinking=enable_thinking, **create_kwargs
+    ):
         if kind in ("thinking", "text"):
             yield _event({"type": "thinking", "stage": stage, "content": payload})
         elif kind == "done":
@@ -280,6 +283,7 @@ async def run_listing_agent(
             client,
             stage="vision",
             preamble="Examining the product photo for category, materials, colors, and title ideas…\n",
+            enable_thinking=False,
             max_tokens=1024,
             tools=[VISION_TOOL],
             tool_choice={"type": "tool", "name": "record_vision_attributes"},
@@ -346,6 +350,7 @@ async def run_listing_agent(
                 client,
                 stage="market",
                 preamble="Web search unavailable — estimating price from catalog knowledge…\n",
+                enable_thinking=False,
                 max_tokens=1024,
                 tools=[MARKET_TOOL],
                 tool_choice={"type": "tool", "name": "record_market_research"},
@@ -406,6 +411,7 @@ async def run_listing_agent(
             client,
             stage="writer",
             preamble="Drafting title, summary, long description, and tags…\n",
+            enable_thinking=False,
             max_tokens=1024,
             tools=[WRITER_TOOL],
             tool_choice={"type": "tool", "name": "record_listing_copy"},
@@ -461,6 +467,7 @@ async def run_listing_agent(
             client,
             stage="verify",
             preamble="Checking the draft for missing fields, pricing, and quality issues…\n",
+            enable_thinking=False,
             max_tokens=1024,
             tools=[VERIFY_TOOL],
             tool_choice={"type": "tool", "name": "record_verification"},
