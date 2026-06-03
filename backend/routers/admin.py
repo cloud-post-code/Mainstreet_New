@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, or_
 from agent.uploads import public_api_base, shop_logo_url, shops_dir
 from db.database import get_db
 from db.models import Shop, Product, User
-from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut
+from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut, AdminProductsPage
 from auth import get_admin_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -316,25 +316,42 @@ async def delete_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User 
     await db.commit()
 
 
-@router.get("/products", response_model=list[ProductOut])
+@router.get("/products", response_model=AdminProductsPage)
 async def admin_list_products(
     shop_id: int | None = None,
-    limit: int = 500,
+    q: str | None = None,
+    limit: int = 100,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
-    stmt = select(Product, Shop.name.label("shop_name")).join(Shop, Shop.id == Product.shop_id)
+    if limit <= 0:
+        limit = 100
+
+    base = select(Product, Shop.name.label("shop_name")).join(Shop, Shop.id == Product.shop_id)
+    count_stmt = select(func.count(Product.id)).join(Shop, Shop.id == Product.shop_id)
+
     if shop_id:
-        stmt = stmt.where(Product.shop_id == shop_id)
-    stmt = stmt.order_by(Product.name).limit(min(limit, 1000)).offset(offset)
+        base = base.where(Product.shop_id == shop_id)
+        count_stmt = count_stmt.where(Product.shop_id == shop_id)
+    if q:
+        like = f"%{q.strip()}%"
+        clause = or_(Product.name.ilike(like), Shop.name.ilike(like))
+        base = base.where(clause)
+        count_stmt = count_stmt.where(clause)
+
+    stmt = base.order_by(Product.name).limit(limit).offset(offset)
     result = await db.execute(stmt)
-    products = []
+    items: list[ProductOut] = []
     for product, shop_name in result.all():
         out = ProductOut.model_validate(product)
         out.shop_name = shop_name
-        products.append(out)
-    return products
+        items.append(out)
+
+    total_result = await db.execute(count_stmt)
+    total = int(total_result.scalar() or 0)
+
+    return AdminProductsPage(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.delete("/products/{product_id}", status_code=204)

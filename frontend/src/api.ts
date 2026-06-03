@@ -35,6 +35,7 @@ export interface User { id: number; email: string; display_name: string | null; 
 export interface Token { access_token: string; user: User }
 export interface Shop { id: number; name: string; logo_url: string | null; description: string | null; website_url: string | null; product_count: number | null }
 export interface Product { id: number; shop_id: number; shop_name: string | null; name: string; price: string; quantity: number; image_url: string | null; description: Record<string, unknown> | null }
+export interface AdminProductsPage { items: Product[]; total: number; limit: number; offset: number }
 export interface Session { id: number; title: string; created_at: string; updated_at: string }
 export interface InboxMessage { id: number; user_id: number; session_id: number | null; title: string; preview: string; body: string; read: boolean; created_at: string }
 export interface PlanStep { step: number; description: string; done: boolean }
@@ -205,8 +206,17 @@ export const api = {
     body: { name: string; logo_url?: string; description?: string; website_url?: string },
     token: string,
   ) => request<Shop>('/api/admin/shops', { method: 'POST', body: JSON.stringify(body) }, token),
-  adminProducts: (token: string, shopId?: number, limit = 500) =>
-    request<Product[]>(`/api/admin/products?limit=${limit}${shopId ? `&shop_id=${shopId}` : ''}`, {}, token),
+  adminProducts: (
+    token: string,
+    opts: { shopId?: number; limit?: number; offset?: number; q?: string } = {},
+  ) => {
+    const params = new URLSearchParams()
+    params.set('limit', String(opts.limit ?? 100))
+    params.set('offset', String(opts.offset ?? 0))
+    if (opts.shopId != null) params.set('shop_id', String(opts.shopId))
+    if (opts.q && opts.q.trim()) params.set('q', opts.q.trim())
+    return request<AdminProductsPage>(`/api/admin/products?${params.toString()}`, {}, token)
+  },
   deleteShop: (id: number, token: string) =>
     request<void>(`/api/admin/shops/${id}`, { method: 'DELETE' }, token),
   deleteProduct: (id: number, token: string) =>

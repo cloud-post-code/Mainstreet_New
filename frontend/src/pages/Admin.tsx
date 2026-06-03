@@ -15,7 +15,12 @@ export default function Admin() {
   const navigate = useNavigate()
   const [shops, setShops] = useState<Shop[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [productsTotal, setProductsTotal] = useState(0)
   const [selectedShop, setSelectedShop] = useState<number | undefined>()
+  const [productSearch, setProductSearch] = useState('')
+  const [productSearchInput, setProductSearchInput] = useState('')
+  const [productOffset, setProductOffset] = useState(0)
+  const [productPageSize, setProductPageSize] = useState(100)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importing, setImporting] = useState(false)
   const [shopImportResult, setShopImportResult] = useState<ImportResult | null>(null)
@@ -43,8 +48,23 @@ export default function Admin() {
 
   useEffect(() => {
     if (!token) return
-    api.adminProducts(token, selectedShop).then(setProducts)
-  }, [token, selectedShop])
+    api
+      .adminProducts(token, {
+        shopId: selectedShop,
+        limit: productPageSize,
+        offset: productOffset,
+        q: productSearch || undefined,
+      })
+      .then(page => {
+        setProducts(page.items)
+        setProductsTotal(page.total)
+      })
+  }, [token, selectedShop, productPageSize, productOffset, productSearch])
+
+  // Reset to first page whenever filters change.
+  useEffect(() => {
+    setProductOffset(0)
+  }, [selectedShop, productSearch, productPageSize])
 
   async function handleCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -56,7 +76,17 @@ export default function Admin() {
       setImportResult(result)
       // Refresh
       api.adminShops(token).then(setShops)
-      api.adminProducts(token, selectedShop).then(setProducts)
+      api
+        .adminProducts(token, {
+          shopId: selectedShop,
+          limit: productPageSize,
+          offset: productOffset,
+          q: productSearch || undefined,
+        })
+        .then(page => {
+          setProducts(page.items)
+          setProductsTotal(page.total)
+        })
     } finally {
       setImporting(false)
       e.target.value = ''
@@ -74,6 +104,7 @@ export default function Admin() {
     if (!token || !confirm('Delete this product?')) return
     await api.deleteProduct(id, token)
     setProducts(prev => prev.filter(p => p.id !== id))
+    setProductsTotal(t => Math.max(0, t - 1))
   }
 
   async function handleShopCsvUpload(e: ChangeEvent<HTMLInputElement>) {
@@ -239,7 +270,17 @@ export default function Admin() {
               shops={shops}
               token={token}
               onApproved={() => {
-                api.adminProducts(token, selectedShop).then(setProducts)
+                api
+                  .adminProducts(token, {
+                    shopId: selectedShop,
+                    limit: productPageSize,
+                    offset: productOffset,
+                    q: productSearch || undefined,
+                  })
+                  .then(page => {
+                    setProducts(page.items)
+                    setProductsTotal(page.total)
+                  })
                 setShowAddProduct(false)
                 setTab('products')
               }}
@@ -365,7 +406,7 @@ export default function Admin() {
           Shops ({shops.length})
         </button>
         <button className={`${styles.tab} ${tab === 'products' ? styles.activeTab : ''}`} onClick={() => setTab('products')}>
-          Products ({products.length})
+          Products ({productsTotal})
         </button>
       </div>
 
@@ -404,6 +445,39 @@ export default function Admin() {
               <option value="">All shops</option>
               {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            <form
+              onSubmit={e => { e.preventDefault(); setProductSearch(productSearchInput.trim()) }}
+              style={{ display: 'flex', gap: '0.5rem', flex: 1 }}
+            >
+              <input
+                className={styles.input}
+                value={productSearchInput}
+                onChange={e => setProductSearchInput(e.target.value)}
+                placeholder="Search products or shop name…"
+                style={{ flex: 1 }}
+              />
+              {productSearch && (
+                <button
+                  type="button"
+                  className={styles.deleteBtn}
+                  onClick={() => { setProductSearchInput(''); setProductSearch('') }}
+                >
+                  Clear
+                </button>
+              )}
+              <button type="submit" className={styles.uploadBtn}>Search</button>
+            </form>
+            <select
+              className={styles.select}
+              value={productPageSize}
+              onChange={e => setProductPageSize(Number(e.target.value))}
+            >
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={250}>250 / page</option>
+              <option value={1000}>1000 / page</option>
+              <option value={100000}>All</option>
+            </select>
           </div>
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
@@ -430,6 +504,31 @@ export default function Admin() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className={styles.filterBar} style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+              {productsTotal === 0
+                ? 'No products'
+                : `Showing ${productOffset + 1}–${Math.min(productOffset + products.length, productsTotal)} of ${productsTotal}`}
+            </span>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className={styles.uploadBtn}
+                disabled={productOffset === 0}
+                onClick={() => setProductOffset(o => Math.max(0, o - productPageSize))}
+              >
+                ← Prev
+              </button>
+              <button
+                type="button"
+                className={styles.uploadBtn}
+                disabled={productOffset + products.length >= productsTotal}
+                onClick={() => setProductOffset(o => o + productPageSize)}
+              >
+                Next →
+              </button>
+            </div>
           </div>
         </>
       )}

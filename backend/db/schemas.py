@@ -126,6 +126,13 @@ class ImportResult(BaseModel):
     errors: list[dict[str, Any]]
 
 
+class AdminProductsPage(BaseModel):
+    items: list[ProductOut]
+    total: int
+    limit: int
+    offset: int
+
+
 # --- Inbox ---
 
 class InboxMessageOut(BaseModel):
