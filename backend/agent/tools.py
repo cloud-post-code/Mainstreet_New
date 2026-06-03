@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from db.models import Product, Shop, AgentPlan
 from agent.memory import save_preference
 from agent.a2ui_schema import RENDER_UI_TOOL_SCHEMA, validate_render_ui
-from services import cart as cart_service
+from routers import cart as cart_service
 
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 
