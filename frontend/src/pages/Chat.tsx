@@ -490,7 +490,24 @@ export default function Chat() {
             )}
             <div className={styles.suggestions}>
               {(suggestions ?? FALLBACK_SUGGESTIONS).map(s => (
-                <button key={s} className={styles.suggestion} onClick={() => { setInput(s) }}>
+                <button
+                  key={s}
+                  className={styles.suggestion}
+                  disabled={streaming}
+                  onClick={async () => {
+                    if (streaming) return
+                    if (!activeSessionId) {
+                      const sess = token
+                        ? await api.createSession(token)
+                        : await api.createGuestSession()
+                      if (token) setSessions(prev => [sess, ...prev])
+                      setActiveSessionId(sess.id)
+                      setTimeout(() => sendMessage(s), 50)
+                      return
+                    }
+                    sendMessage(s)
+                  }}
+                >
                   {s}
                 </button>
               ))}

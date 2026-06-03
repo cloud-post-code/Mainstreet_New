@@ -16,8 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from db.models import AgentSession, CartItem, Product, UserMemory
-from agent.memory import load_long_term, save_preference
+from db.models import AgentSession, CartItem, Product, User, UserMemory
+from agent.memory import save_preference
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,27 @@ async def _cart_product_names(user_id: int, db: AsyncSession) -> list[str]:
     return [n for n in result.scalars().all() if n]
 
 
+async def _user_preferences(user_id: int, db: AsyncSession) -> str:
+    """Long-term memory minus the suggestion cache key itself."""
+    result = await db.execute(
+        select(UserMemory)
+        .where(UserMemory.user_id == user_id, UserMemory.key != CACHE_KEY)
+        .order_by(UserMemory.updated_at.desc())
+    )
+    memories = result.scalars().all()
+    if not memories:
+        return ""
+    lines = ["## User preferences & history"]
+    for m in memories:
+        lines.append(f"- **{m.key}**: {m.value}")
+    return "\n".join(lines)
+
+
+async def _display_name(user_id: int, db: AsyncSession) -> str | None:
+    result = await db.execute(select(User.display_name).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
 def _read_cache(memory_row: UserMemory | None) -> list[str] | None:
     if not memory_row:
         return None
@@ -85,22 +106,38 @@ def _validate_suggestions(value: Any) -> bool:
 def _generate_with_claude(signals: str) -> list[str]:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     system = (
-        "You generate welcome-screen prompt chips for a personal-shopper chat assistant. "
-        "Produce exactly 4 concise prompts (≤8 words each) that this specific user would plausibly "
-        "send. Vary the categories — don't repeat a single theme. Write in first person, like the "
-        "user is asking. Return STRICT JSON only, no prose, in this shape: "
+        "You generate welcome-screen prompt chips for a personal-shopper chat assistant "
+        "that helps people discover products and local shops. Produce exactly 4 distinct "
+        "prompts the user would plausibly send, written in first person (like the user "
+        "is talking). Each prompt must be <= 10 words.\n\n"
+        "MIX of complexity is required across the 4 chips:\n"
+        "  - 2 SIMPLE queries: a quick product lookup or category browse "
+        "(e.g., \"Show me wool socks\", \"What's on sale today?\").\n"
+        "  - 2 COMPLEX queries: multi-constraint, gift, comparison, or planning "
+        "prompts (e.g., \"Build a gift basket under $75 for a coffee lover\", "
+        "\"Compare two espresso machines for a small kitchen\").\n\n"
+        "Vary categories — never repeat the same theme twice. Tailor strongly to the "
+        "signals provided; if signals are sparse, choose broadly appealing everyday "
+        "shopping prompts and still keep the simple/complex mix.\n\n"
+        "Return STRICT JSON only, no prose, in this exact shape: "
         '{"suggestions": ["...", "...", "...", "..."]}'
     )
     response = client.messages.create(
         model=MODEL,
-        max_tokens=200,
+        max_tokens=300,
         system=system,
-        messages=[{"role": "user", "content": signals}],
+        messages=[{"role": "user", "content": signals or "(new user, no prior signals)"}],
     )
     text = ""
     for block in response.content:
         if getattr(block, "type", None) == "text":
             text += block.text
+    text = text.strip()
+    # Tolerate ```json fences if the model adds them despite instructions
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
     parsed = json.loads(text)
     suggestions = parsed.get("suggestions")
     if not _validate_suggestions(suggestions):
@@ -110,7 +147,6 @@ def _generate_with_claude(signals: str) -> list[str]:
 
 async def get_suggestions(user_id: int, db: AsyncSession) -> list[str]:
     """Return 4 personalized prompts, falling back to static defaults on any failure."""
-    # Check cache first
     cache_row = (
         await db.execute(
             select(UserMemory).where(UserMemory.user_id == user_id, UserMemory.key == CACHE_KEY)
@@ -120,18 +156,16 @@ async def get_suggestions(user_id: int, db: AsyncSession) -> list[str]:
     if cached is not None:
         return cached
 
-    # Gather signals
-    long_term = await load_long_term(user_id, db)
+    preferences = await _user_preferences(user_id, db)
     titles = await _recent_session_titles(user_id, db)
     cart_names = await _cart_product_names(user_id, db)
+    display_name = await _display_name(user_id, db)
 
-    # Cold start — nothing to personalize from
-    if not long_term and not titles and not cart_names:
-        return FALLBACK_SUGGESTIONS
-
-    signals_parts = []
-    if long_term:
-        signals_parts.append(long_term)
+    signals_parts: list[str] = []
+    if display_name:
+        signals_parts.append(f"## User\nDisplay name: {display_name}")
+    if preferences:
+        signals_parts.append(preferences)
     if titles:
         signals_parts.append("## Recent conversation topics\n" + "\n".join(f"- {t}" for t in titles))
     if cart_names:
@@ -140,15 +174,20 @@ async def get_suggestions(user_id: int, db: AsyncSession) -> list[str]:
 
     try:
         suggestions = _generate_with_claude(signals)
-    except Exception as exc:
-        logger.warning("suggestion generation failed for user %s: %s", user_id, exc)
+    except Exception:
+        logger.exception("suggestion generation failed for user %s", user_id)
         return FALLBACK_SUGGESTIONS
 
-    await save_preference(
-        user_id,
-        CACHE_KEY,
-        {"generated_at": datetime.now(timezone.utc).isoformat(), "suggestions": suggestions},
-        db,
-    )
-    await db.commit()
+    try:
+        await save_preference(
+            user_id,
+            CACHE_KEY,
+            {"generated_at": datetime.now(timezone.utc).isoformat(), "suggestions": suggestions},
+            db,
+        )
+        await db.commit()
+    except Exception:
+        logger.exception("failed to cache suggestions for user %s", user_id)
+        await db.rollback()
+
     return suggestions
