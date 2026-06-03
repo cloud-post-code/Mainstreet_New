@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from config import settings
 from db.database import create_tables
 from agent.uploads import upload_root
@@ -22,6 +24,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Personal Shopper API", version="1.0.0", lifespan=lifespan)
+
+# Rate-limit exceeded → 429. The Limiter instance lives in routers.auth and is
+# referenced via decorators; this just registers the handler at the app level.
+app.state.limiter = auth.limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Allow multiple frontend origins via comma-separated FRONTEND_URL, plus
 # localhost dev and any *.up.railway.app preview/production URL. The regex

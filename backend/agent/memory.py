@@ -2,10 +2,12 @@
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from agent.prompt_safety import wrap_untrusted
 from db.models import AgentTurn, UserMemory
 
 MAX_SHORT_TERM_TURNS = 20   # last N turns loaded into context
 MAX_LONG_TERM_KEYS = 50     # cap per user
+MAX_MEMORY_VALUE_CHARS = 500
 
 
 async def load_short_term(session_id: int, db: AsyncSession) -> list[dict]:
@@ -90,10 +92,12 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     memories = result.scalars().all()
     if not memories:
         return ""
-    lines = ["## User Preferences & History"]
-    for m in memories:
-        lines.append(f"- **{m.key}**: {m.value}")
-    return "\n".join(lines)
+    # The keys and values are user-controlled. Wrap them as untrusted data so
+    # the model treats them as information, not instructions.
+    items = "\n".join(
+        f"- {m.key}: {str(m.value)[:MAX_MEMORY_VALUE_CHARS]}" for m in memories
+    )
+    return "## User Preferences & History\n" + wrap_untrusted(items, label="user_memory")
 
 
 async def save_turn(

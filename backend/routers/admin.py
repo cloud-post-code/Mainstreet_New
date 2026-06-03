@@ -1,7 +1,6 @@
 import csv
 import io
 import json
-import mimetypes
 import uuid
 from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
@@ -10,10 +9,14 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, or_
 from agent.uploads import public_api_base, shop_logo_url, shops_dir
+from agent.upload_safety import read_capped, validate_image_bytes
 from db.database import get_db
 from db.models import Shop, Product, User
 from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut, AdminProductsPage
 from auth import get_admin_user
+
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_CSV_BYTES = 10 * 1024 * 1024
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -31,16 +34,10 @@ async def upload_shop_logo(
     file: UploadFile = File(...),
     _: User = Depends(get_admin_user),
 ):
-    if not (file.content_type or "").startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    ext = mimetypes.guess_extension(file.content_type or "") or ".jpg"
-    if ext == ".jpe":
-        ext = ".jpg"
+    body = await read_capped(file, MAX_IMAGE_BYTES)
+    _, ext = validate_image_bytes(body)
     filename = f"{uuid.uuid4().hex}{ext}"
     dest_path = shops_dir() / filename
-
-    body = await file.read()
     dest_path.write_bytes(body)
 
     image_url = shop_logo_url(filename, public_api_base(request))
@@ -56,7 +53,7 @@ async def import_csv(
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
 
-    content = await file.read()
+    content = await read_capped(file, MAX_CSV_BYTES)
     text = content.decode("utf-8-sig")  # handle BOM
     reader = csv.DictReader(io.StringIO(text))
 

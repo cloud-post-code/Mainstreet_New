@@ -8,7 +8,6 @@ AI Listing Agent — admin-only endpoints.
 from __future__ import annotations
 
 import json
-import mimetypes
 import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
@@ -20,8 +19,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.listing_orchestrator import run_listing_agent
+from agent.upload_safety import read_capped, validate_image_bytes
 from agent.uploads import UPLOAD_SUBDIR, listings_dir, listing_url, public_api_base
 from auth import get_admin_user
+
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
 from db.database import get_db
 from db.models import Product, Shop, User
 from db.schemas import ProductOut
@@ -62,16 +64,10 @@ async def upload_image(
     file: UploadFile = File(...),
     _: User = Depends(get_admin_user),
 ):
-    if not (file.content_type or "").startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    ext = mimetypes.guess_extension(file.content_type or "") or ".jpg"
-    if ext == ".jpe":
-        ext = ".jpg"
+    body = await read_capped(file, MAX_IMAGE_BYTES)
+    _, ext = validate_image_bytes(body)
     filename = f"{uuid.uuid4().hex}{ext}"
     dest_path = listings_dir() / filename
-
-    body = await file.read()
     dest_path.write_bytes(body)
 
     image_url = listing_url(filename, public_api_base(request))

@@ -4,7 +4,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    # 24h. Was 7 days. Shorter expiry limits the blast radius of a stolen token.
+    # Long-term plan: migrate to httpOnly cookies + refresh-token rotation.
+    access_token_expire_minutes: int = 60 * 24
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     frontend_url: str = "http://localhost:5173"
