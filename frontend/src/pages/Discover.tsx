@@ -5,6 +5,28 @@ import styles from './Discover.module.css'
 
 const PAGE_SIZE = 24
 
+// Total chips shown in the session-scoped filter set.
+const TOTAL_FILTERS = 20
+
+// Price buckets are always present in the filter set.
+type PriceBucket = { id: string; label: string; min?: number; max?: number }
+const PRICE_BUCKETS: PriceBucket[] = [
+  { id: 'p1', label: 'Under $10', max: 10 },
+  { id: 'p2', label: '$10 – $25', min: 10, max: 25 },
+  { id: 'p3', label: '$25 – $50', min: 25, max: 50 },
+  { id: 'p4', label: '$50+', min: 50 },
+]
+
+function sampleN<T>(arr: T[], n: number): T[] {
+  if (arr.length <= n) return [...arr]
+  const copy = [...arr]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy.slice(0, n)
+}
+
 const descSummary = (d: Product['description']) =>
   typeof (d as Record<string, unknown> | null)?.summary === 'string' ? (d as Record<string, string>).summary : undefined
 const descTags = (d: Product['description']) =>
@@ -23,8 +45,9 @@ export default function Discover() {
   const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [shops, setShops] = useState<Array<{ id: number; name: string }>>([])
-  const [tagOptions, setTagOptions] = useState<string[]>([])
+  const [sessionShops, setSessionShops] = useState<Array<{ id: number; name: string }>>([])
+  const [sessionTags, setSessionTags] = useState<string[]>([])
+  const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
@@ -37,15 +60,41 @@ export default function Discover() {
     return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current) }
   }, [searchInput])
 
-  // Load filter option lists once.
+  // On session join (page mount), pull available shops + tags and randomly
+  // sample a fixed total of TOTAL_FILTERS chips. Price chips are always
+  // included, and the remaining slots are split between shops and tags.
   useEffect(() => {
-    api.getPublicShops().then(setShops).catch(() => {})
-    api.getProductTags().then(setTagOptions).catch(() => {})
+    let cancelled = false
+    Promise.all([
+      api.getPublicShops().catch(() => [] as Array<{ id: number; name: string }>),
+      api.getProductTags().catch(() => [] as string[]),
+    ]).then(([shops, tags]) => {
+      if (cancelled) return
+      const remaining = Math.max(0, TOTAL_FILTERS - PRICE_BUCKETS.length)
+      // Split the remaining slots roughly evenly between shops and tags,
+      // then top up from the other pool if one runs out.
+      const shopTarget = Math.min(shops.length, Math.ceil(remaining / 2))
+      const tagTarget = Math.min(tags.length, remaining - shopTarget)
+      const shopShort = Math.ceil(remaining / 2) - shopTarget
+      const finalTagTarget = Math.min(tags.length, tagTarget + shopShort)
+      const finalShopTarget = Math.min(
+        shops.length,
+        shopTarget + Math.max(0, remaining - shopTarget - finalTagTarget),
+      )
+      setSessionShops(sampleN(shops, finalShopTarget))
+      setSessionTags(sampleN(tags, finalTagTarget))
+    })
+    return () => { cancelled = true }
   }, [])
 
+  const selectedPrice = useMemo(
+    () => PRICE_BUCKETS.find(p => p.id === selectedPriceId) ?? null,
+    [selectedPriceId],
+  )
+
   const filterKey = useMemo(
-    () => JSON.stringify({ search, inStockOnly, shopIds, selectedTags }),
-    [search, inStockOnly, shopIds, selectedTags],
+    () => JSON.stringify({ search, inStockOnly, shopIds, selectedTags, selectedPriceId }),
+    [search, inStockOnly, shopIds, selectedTags, selectedPriceId],
   )
 
   const buildFilters = useCallback((offset: number) => ({
@@ -53,9 +102,11 @@ export default function Discover() {
     in_stock_only: inStockOnly || undefined,
     shop_ids: shopIds.length ? shopIds : undefined,
     tags: selectedTags.length ? selectedTags : undefined,
+    min_price: selectedPrice?.min,
+    max_price: selectedPrice?.max,
     limit: PAGE_SIZE,
     offset,
-  }), [search, inStockOnly, shopIds, selectedTags])
+  }), [search, inStockOnly, shopIds, selectedTags, selectedPrice])
 
   // Fetch first page whenever filters change.
   useEffect(() => {
@@ -70,6 +121,8 @@ export default function Discover() {
         in_stock_only: opts.in_stock_only,
         shop_ids: opts.shop_ids,
         tags: opts.tags,
+        min_price: opts.min_price,
+        max_price: opts.max_price,
       }),
     ])
       .then(([items, countRes]) => {
@@ -113,7 +166,11 @@ export default function Discover() {
   }, [loadMore])
 
   const exhausted = total != null && products.length >= total
-  const activeFilterCount = (shopIds.length ? 1 : 0) + (selectedTags.length ? 1 : 0) + (inStockOnly ? 1 : 0)
+  const activeFilterCount =
+    (shopIds.length ? 1 : 0)
+    + (selectedTags.length ? 1 : 0)
+    + (inStockOnly ? 1 : 0)
+    + (selectedPriceId ? 1 : 0)
 
   const toggleShop = (id: number) => {
     setShopIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -125,6 +182,10 @@ export default function Discover() {
     setShopIds([])
     setSelectedTags([])
     setInStockOnly(false)
+    setSelectedPriceId(null)
+  }
+  const togglePrice = (id: string) => {
+    setSelectedPriceId(prev => (prev === id ? null : id))
   }
 
   return (
@@ -158,35 +219,54 @@ export default function Discover() {
       {showFilters && (
         <div className={styles.filtersPanel}>
           <div className={styles.filterGroup}>
-            <div className={styles.filterLabel}>Shops</div>
+            <div className={styles.filterLabel}>Price</div>
             <div className={styles.chipRow}>
-              {shops.map(s => (
+              {PRICE_BUCKETS.map(p => (
                 <button
-                  key={s.id}
+                  key={p.id}
                   type="button"
-                  className={`${styles.chip} ${shopIds.includes(s.id) ? styles.chipActive : ''}`}
-                  onClick={() => toggleShop(s.id)}
+                  className={`${styles.chip} ${selectedPriceId === p.id ? styles.chipActive : ''}`}
+                  onClick={() => togglePrice(p.id)}
                 >
-                  {s.name}
+                  {p.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className={styles.filterGroup}>
-            <div className={styles.filterLabel}>Tags</div>
-            <div className={styles.chipRow}>
-              {tagOptions.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`${styles.chip} ${selectedTags.includes(t) ? styles.chipActive : ''}`}
-                  onClick={() => toggleTag(t)}
-                >
-                  {t}
-                </button>
-              ))}
+          {sessionShops.length > 0 && (
+            <div className={styles.filterGroup}>
+              <div className={styles.filterLabel}>Shops</div>
+              <div className={styles.chipRow}>
+                {sessionShops.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`${styles.chip} ${shopIds.includes(s.id) ? styles.chipActive : ''}`}
+                    onClick={() => toggleShop(s.id)}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {sessionTags.length > 0 && (
+            <div className={styles.filterGroup}>
+              <div className={styles.filterLabel}>Tags</div>
+              <div className={styles.chipRow}>
+                {sessionTags.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`${styles.chip} ${selectedTags.includes(t) ? styles.chipActive : ''}`}
+                    onClick={() => toggleTag(t)}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className={styles.filterGroup}>
             <label className={styles.checkbox}>
               <input

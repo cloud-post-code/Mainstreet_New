@@ -10,9 +10,18 @@ from db.models import AgentSession, AgentPlan, User
 from db.schemas import SessionOut, TurnIn, PlanOut
 from auth import get_current_user, get_optional_user
 from agent.loop import run_agent_turn
+from agent.suggestions import get_suggestions
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/suggestions")
+async def welcome_suggestions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return {"suggestions": await get_suggestions(current_user.id, db)}
 
 
 @router.get("/sessions", response_model=list[SessionOut])

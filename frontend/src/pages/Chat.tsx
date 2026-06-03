@@ -11,6 +11,13 @@ import styles from './Chat.module.css'
 
 type AuthMode = 'none' | 'login' | 'register'
 
+const FALLBACK_SUGGESTIONS = [
+  "Find me running shoes under $100",
+  "What shops sell electronics?",
+  "I need a gift for a home cook",
+  "Show me in-stock yoga gear",
+]
+
 type Turn = {
   role: string
   content: unknown
@@ -91,6 +98,7 @@ export default function Chat() {
   const [authName, setAuthName] = useState('')
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState<string[] | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   // Token used to discard stale in-flight `selectSession` fetches when the
   // user switches conversations rapidly. Without this, a slow request for
@@ -139,6 +147,16 @@ export default function Chat() {
   useEffect(() => {
     if (!token) return
     api.getInbox(token).then(msgs => setInboxUnread(msgs.filter(m => !m.read).length))
+  }, [token])
+
+  // Fetch personalized welcome suggestions. Silent failure → keep fallback.
+  useEffect(() => {
+    if (!token) { setSuggestions(null); return }
+    let cancelled = false
+    api.getSuggestions(token)
+      .then(r => { if (!cancelled) setSuggestions(r.suggestions) })
+      .catch(() => { /* fallback chips remain */ })
+    return () => { cancelled = true }
   }, [token])
 
   // Smooth-scroll only when content grows during the active session. On a
@@ -471,12 +489,7 @@ export default function Chat() {
               </p>
             )}
             <div className={styles.suggestions}>
-              {[
-                "Find me running shoes under $100",
-                "What shops sell electronics?",
-                "I need a gift for a home cook",
-                "Show me in-stock yoga gear",
-              ].map(s => (
+              {(suggestions ?? FALLBACK_SUGGESTIONS).map(s => (
                 <button key={s} className={styles.suggestion} onClick={() => { setInput(s) }}>
                   {s}
                 </button>

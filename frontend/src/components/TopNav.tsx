@@ -42,16 +42,16 @@ export default function TopNav() {
           </Link>
         )}
         <Link
-          to="/"
-          className={`${styles.link} ${location.pathname === '/' ? styles.active : ''}`}
-        >
-          Chat
-        </Link>
-        <Link
           to="/discover"
           className={`${styles.link} ${isActive('/discover') ? styles.active : ''}`}
         >
           Discover
+        </Link>
+        <Link
+          to="/"
+          className={`${styles.link} ${location.pathname === '/' ? styles.active : ''}`}
+        >
+          Chat
         </Link>
         <Link
           to="/inbox"

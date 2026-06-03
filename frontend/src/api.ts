@@ -89,6 +89,9 @@ export const api = {
   getSessions: (token: string) =>
     request<Session[]>('/api/agent/sessions', {}, token),
 
+  getSuggestions: (token: string) =>
+    request<{ suggestions: string[] }>('/api/agent/suggestions', {}, token),
+
   createSession: (token: string) =>
     request<Session>('/api/agent/sessions', { method: 'POST' }, token),
 
