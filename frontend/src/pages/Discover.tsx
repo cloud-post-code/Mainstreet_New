@@ -191,7 +191,7 @@ export default function Discover() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Discover</h1>
+        <h1 className={styles.title}>Window Display</h1>
         <p className={styles.tagline}>A fresh look at every shop on Main Street.</p>
       </header>
 

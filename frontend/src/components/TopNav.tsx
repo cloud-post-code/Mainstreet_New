@@ -42,12 +42,6 @@ export default function TopNav() {
           </Link>
         )}
         <Link
-          to="/discover"
-          className={`${styles.link} ${isActive('/discover') ? styles.active : ''}`}
-        >
-          Discover
-        </Link>
-        <Link
           to="/"
           className={`${styles.link} ${location.pathname === '/' ? styles.active : ''}`}
         >
@@ -58,6 +52,12 @@ export default function TopNav() {
           className={`${styles.link} ${isActive('/inbox') ? styles.active : ''}`}
         >
           Inbox
+        </Link>
+        <Link
+          to="/discover"
+          className={`${styles.link} ${isActive('/discover') ? styles.active : ''}`}
+        >
+          Discover
         </Link>
         {token ? (
           <button type="button" className={styles.button} onClick={handleLogout}>
