@@ -197,6 +197,17 @@ async def import_shops_csv(
     return ImportResult(rows_added=rows_added, rows_updated=rows_updated, errors=errors)
 
 
+def _csv_safe(value) -> str:
+    """Defuse CSV-formula injection. Excel/Sheets execute cells starting with
+    =, +, -, @, tab, or CR as formulas. Prefix with a single quote when needed."""
+    if value is None:
+        return ""
+    s = str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 def _csv_response(content: str, filename: str) -> StreamingResponse:
     return StreamingResponse(
         iter([content]),
@@ -232,12 +243,12 @@ async def export_products_csv(
             description_json = json.dumps(product.description, ensure_ascii=False)
         writer.writerow(
             {
-                "shop_name": shop_name,
-                "product_name": product.name,
+                "shop_name": _csv_safe(shop_name),
+                "product_name": _csv_safe(product.name),
                 "price": str(product.price),
                 "quantity": product.quantity,
-                "image_url": product.image_url or "",
-                "description_json": description_json,
+                "image_url": _csv_safe(product.image_url or ""),
+                "description_json": _csv_safe(description_json),
             }
         )
     return _csv_response(output.getvalue(), "products.csv")
@@ -255,10 +266,10 @@ async def export_shops_csv(
     for shop in result.scalars().all():
         writer.writerow(
             {
-                "name": shop.name,
-                "logo_url": shop.logo_url or "",
-                "description": shop.description or "",
-                "website_url": shop.website_url or "",
+                "name": _csv_safe(shop.name),
+                "logo_url": _csv_safe(shop.logo_url or ""),
+                "description": _csv_safe(shop.description or ""),
+                "website_url": _csv_safe(shop.website_url or ""),
             }
         )
     return _csv_response(output.getvalue(), "shops.csv")

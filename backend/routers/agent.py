@@ -211,12 +211,11 @@ async def agent_turn(
                 db=db,
             ):
                 yield chunk
-        except Exception as e:
+        except Exception:
             logger.exception("agent_turn stream crashed for session %s", session_id)
             yield _json.dumps({
                 "type": "error",
-                "error": f"{type(e).__name__}: {e}",
-                "traceback": traceback.format_exc(),
+                "error": "Agent failed. Please retry.",
             }) + "\n"
         finally:
             try:

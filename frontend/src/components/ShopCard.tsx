@@ -1,4 +1,5 @@
 import styles from './Cards.module.css'
+import { safeHref } from '../lib/safeHref'
 
 interface Props {
   shop_id: number
@@ -25,8 +26,8 @@ export default function ShopCard(props: Props) {
           {props.product_count != null && (
             <span className={styles.productCount}>{props.product_count} products</span>
           )}
-          {props.website_url && (
-            <a href={props.website_url} target="_blank" rel="noreferrer" className={styles.shopLink}>
+          {safeHref(props.website_url) && (
+            <a href={safeHref(props.website_url)} target="_blank" rel="noopener noreferrer" className={styles.shopLink}>
               Visit shop →
             </a>
           )}

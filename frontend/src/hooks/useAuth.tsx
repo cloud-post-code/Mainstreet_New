@@ -20,7 +20,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
   const [user, setUser] = useState<User | null>(() => {
     const u = localStorage.getItem('user')
-    return u ? JSON.parse(u) : null
+    if (!u) return null
+    try {
+      return JSON.parse(u) as User
+    } catch {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      return null
+    }
   })
 
   const login = useCallback((t: string, u: User) => {

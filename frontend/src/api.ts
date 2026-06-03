@@ -1,4 +1,9 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
+const BASE = import.meta.env.VITE_API_URL
+if (!BASE) {
+  throw new Error(
+    'VITE_API_URL is not set. Configure it in your .env file (see frontend/.env.example).',
+  )
+}
 
 export function clearStoredAuth() {
   localStorage.removeItem('token')

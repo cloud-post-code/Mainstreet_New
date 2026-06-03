@@ -2,6 +2,7 @@ import { useEffect, useState, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { api, Shop, Product, ListingDraft, ListingStage } from '../api'
+import { safeHref } from '../lib/safeHref'
 import styles from './Admin.module.css'
 
 interface ImportResult {
@@ -427,7 +428,7 @@ export default function Admin() {
                     {shop.name}
                   </td>
                   <td>{shop.product_count ?? '—'}</td>
-                  <td>{shop.website_url ? <a href={shop.website_url} target="_blank" rel="noreferrer">Visit</a> : '—'}</td>
+                  <td>{safeHref(shop.website_url) ? <a href={safeHref(shop.website_url)} target="_blank" rel="noopener noreferrer">Visit</a> : '—'}</td>
                   <td>
                     <button className={styles.deleteBtn} onClick={() => handleDeleteShop(shop.id)}>Delete</button>
                   </td>
@@ -946,7 +947,7 @@ function AddProductPanel({
               <ul>
                 {draft.description.market_comps.map((c, i) => (
                   <li key={i}>
-                    {c.url ? <a href={c.url} target="_blank" rel="noreferrer">{c.title ?? 'comp'}</a> : (c.title ?? 'comp')}
+                    {safeHref(c.url) ? <a href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">{c.title ?? 'comp'}</a> : (c.title ?? 'comp')}
                     {typeof c.price === 'number' ? ` — $${c.price.toFixed(2)}` : ''}
                   </li>
                 ))}

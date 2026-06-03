@@ -11,6 +11,11 @@ from routers import auth, shops, products, agent, admin, inbox, listing_agent, c
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if len(settings.secret_key) < 32:
+        raise RuntimeError(
+            "SECRET_KEY must be set to a 32+ character random value. "
+            "Generate with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        )
     upload_root().mkdir(parents=True, exist_ok=True)
     await create_tables()
     yield
@@ -30,7 +35,10 @@ _explicit_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_explicit_origins,
-    allow_origin_regex=r"https://.*\.up\.railway\.app",
+    # Only match this project's Railway-managed subdomains (frontend-*), not every
+    # tenant on *.up.railway.app. Adjust the prefix list if new Railway services
+    # are added to this project.
+    allow_origin_regex=r"^https://(frontend|mainstreet)[a-z0-9-]*\.up\.railway\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
