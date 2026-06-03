@@ -31,6 +31,6 @@ etsy-data-pull/cache/
 etsy-data-pull/output/
 etsy-data-pull/.venv/
 
-# Scraping scripts and output
-scripts/scrape*
-scripts/*_assorted_goods.csv
+# Scraping output (scrapers in scripts/ are tracked)
+scripts/*.csv
+scripts/*.progress.json
