@@ -24,7 +24,12 @@ async def create_tables():
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_products_embedding_hnsw "
+            "ON products USING hnsw (embedding vector_cosine_ops)"
+        ))
         # Create tsvector trigger for products. Indexes name + cached shop name
         # (weight A), summary + tags (B), long/materials/variant (C), made_in (D).
         await conn.execute(text("""

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
+    openai_api_key: str = ""
+    embedding_model: str = "text-embedding-3-small"
     frontend_url: str = "http://localhost:5173"
 
     # Product images: saved under upload_dir, served at /uploads, URL stored in Product.image_url

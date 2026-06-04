@@ -6,9 +6,15 @@ from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text as sql_text, bindparam
 from db.models import Product, Shop, AgentPlan
 from agent.memory import save_preference
+from agent.embeddings import (
+    embed_texts,
+    rewrite_query,
+    reciprocal_rank_fusion,
+    vector_literal,
+)
 from agent.a2ui_schema import (
     RENDER_UI_TOOL_SCHEMA,
     collect_product_card_ids,
@@ -210,27 +216,116 @@ async def execute_tool(
         )
 
 
+_HYBRID_SQL = sql_text("""
+WITH lex AS (
+    SELECT id,
+           row_number() OVER (ORDER BY ts_rank(search_vector, q) DESC) AS rank
+    FROM products, websearch_to_tsquery('english', :q) q
+    WHERE search_vector @@ q OR name % :q
+    LIMIT 50
+),
+sem AS (
+    SELECT id,
+           row_number() OVER (ORDER BY embedding <=> CAST(:qvec AS vector)) AS rank
+    FROM products
+    WHERE embedding IS NOT NULL
+    ORDER BY embedding <=> CAST(:qvec AS vector)
+    LIMIT 50
+)
+SELECT 'lex' AS src, id, rank FROM lex
+UNION ALL
+SELECT 'sem' AS src, id, rank FROM sem
+""")
+
+_LEX_ONLY_SQL = sql_text("""
+SELECT id,
+       row_number() OVER (ORDER BY ts_rank(search_vector, q) DESC) AS rank
+FROM products, websearch_to_tsquery('english', :q) q
+WHERE search_vector @@ q OR name % :q
+LIMIT 50
+""")
+
+
 async def _search_products(params: dict, db: AsyncSession) -> dict:
     from sqlalchemy import func as sqlfunc
-    stmt = select(Product, Shop.name.label("shop_name")).join(Shop, Shop.id == Product.shop_id)
+    limit = min(int(params.get("limit", 10)), 20)
 
-    q = params.get("query")
-    if q:
-        from sqlalchemy import or_ as sql_or
-        ts_query = sqlfunc.websearch_to_tsquery("english", q)
-        stmt = stmt.where(
-            sql_or(
-                Product.search_vector.op("@@")(ts_query),
-                Product.name.op("%")(q),
-            )
-        )
-        stmt = stmt.order_by(
-            sqlfunc.ts_rank(Product.search_vector, ts_query).desc(),
-            sqlfunc.similarity(Product.name, q).desc(),
-        )
-    else:
-        stmt = stmt.order_by(Product.name)
+    q = (params.get("query") or "").strip()
 
+    # No query: keep the simple alphabetical browse path.
+    if not q:
+        stmt = (
+            select(Product, Shop.name.label("shop_name"))
+            .join(Shop, Shop.id == Product.shop_id)
+            .order_by(Product.name)
+        )
+        stmt = _apply_filters(stmt, params)
+        result = await db.execute(stmt.limit(limit))
+        return _format_results(result.all())
+
+    # Rung 4: 3 query variants (literal / synonyms / product-type).
+    variants = await rewrite_query(q)
+    if not variants:
+        variants = [q]
+
+    # Rung 2: embed variants. Empty list / all-None means no semantic branch.
+    vectors = await embed_texts(variants)
+
+    # Per-variant hybrid CTE → ranked id lists for RRF.
+    ranked_lists: list[list[int]] = []
+    for variant, vec in zip(variants, vectors):
+        if vec is not None:
+            rows = (await db.execute(
+                _HYBRID_SQL, {"q": variant, "qvec": vector_literal(vec)},
+            )).all()
+        else:
+            rows = [("lex", *r) for r in (await db.execute(
+                _LEX_ONLY_SQL, {"q": variant},
+            )).all()]
+        lex_ranked: list[tuple[int, int]] = []
+        sem_ranked: list[tuple[int, int]] = []
+        for row in rows:
+            src, pid, rank = row[0], int(row[1]), int(row[2])
+            if src == "sem":
+                sem_ranked.append((pid, rank))
+            else:
+                lex_ranked.append((pid, rank))
+        lex_ranked.sort(key=lambda x: x[1])
+        sem_ranked.sort(key=lambda x: x[1])
+        if lex_ranked:
+            ranked_lists.append([pid for pid, _ in lex_ranked])
+        if sem_ranked:
+            ranked_lists.append([pid for pid, _ in sem_ranked])
+
+    if not ranked_lists:
+        return {"count": 0, "products": []}
+
+    fused = reciprocal_rank_fusion(ranked_lists)
+    fused_ids = [pid for pid, _ in fused]
+
+    # Hydrate + apply filters. Pull more than `limit` so filters don't
+    # starve the result set; cap to the fused candidate pool.
+    hydrate_stmt = (
+        select(Product, Shop.name.label("shop_name"))
+        .join(Shop, Shop.id == Product.shop_id)
+        .where(Product.id.in_(fused_ids))
+    )
+    hydrate_stmt = _apply_filters(hydrate_stmt, params)
+    rows = (await db.execute(hydrate_stmt)).all()
+    by_id = {p.id: (p, sn) for p, sn in rows}
+
+    ordered = []
+    for pid in fused_ids:
+        hit = by_id.get(pid)
+        if hit is not None:
+            ordered.append(hit)
+            if len(ordered) >= limit:
+                break
+
+    return _format_results(ordered)
+
+
+def _apply_filters(stmt, params: dict):
     if params.get("shop_id"):
         stmt = stmt.where(Product.shop_id == params["shop_id"])
     if params.get("min_price") is not None:
@@ -239,12 +334,10 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
         stmt = stmt.where(Product.price <= Decimal(str(params["max_price"])))
     if params.get("in_stock_only"):
         stmt = stmt.where(Product.quantity > 0)
+    return stmt
 
-    limit = min(int(params.get("limit", 10)), 20)
-    stmt = stmt.limit(limit)
 
-    result = await db.execute(stmt)
-    rows = result.all()
+def _format_results(rows) -> dict:
     products = []
     for product, shop_name in rows:
         products.append({

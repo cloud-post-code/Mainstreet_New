@@ -14,6 +14,7 @@ from db.database import get_db
 from db.models import Shop, Product, User
 from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut, AdminProductsPage
 from auth import get_admin_user
+from agent.embeddings import build_canonical_text, embed_texts
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_CSV_BYTES = 10 * 1024 * 1024
@@ -69,6 +70,9 @@ async def import_csv(
     errors = []
 
     shop_cache: dict[str, Shop] = {}
+    # Defer embedding to a single batched call after the row loop.
+    # Collected as (product_obj_or_none, shop_name, name, description).
+    to_embed: list[tuple[Product, str, str, dict | None]] = []
 
     for i, row in enumerate(reader, start=2):  # row 1 = header
         try:
@@ -121,9 +125,10 @@ async def import_csv(
                 existing.quantity = quantity
                 existing.image_url = image_url
                 existing.description = description
+                to_embed.append((existing, shop.name, product_name, description))
                 rows_updated += 1
             else:
-                db.add(Product(
+                new_product = Product(
                     shop_id=shop.id,
                     name=product_name,
                     price=price,
@@ -131,11 +136,25 @@ async def import_csv(
                     image_url=image_url,
                     description=description,
                     shop_name_cached=shop.name,
-                ))
+                )
+                db.add(new_product)
+                to_embed.append((new_product, shop.name, product_name, description))
                 rows_added += 1
 
         except Exception as e:
             errors.append({"row": i, "error": str(e)})
+
+    # Batch-embed every touched row in one shot. Failures degrade to NULL
+    # (lexical-only retrieval still works for that product).
+    if to_embed:
+        canonical = [
+            build_canonical_text(name=name, shop_name=shop_name, description=desc)
+            for _, shop_name, name, desc in to_embed
+        ]
+        vectors = await embed_texts(canonical)
+        for (product, _, _, _), vec in zip(to_embed, vectors):
+            if vec is not None:
+                product.embedding = vec
 
     await db.commit()
     return ImportResult(rows_added=rows_added, rows_updated=rows_updated, errors=errors)

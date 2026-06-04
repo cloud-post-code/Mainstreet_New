@@ -4,6 +4,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, relationship
+from pgvector.sqlalchemy import Vector
 
 
 class Base(DeclarativeBase):
@@ -48,6 +49,7 @@ class Product(Base):
     image_url = Column(Text)
     description = Column(JSONB)
     search_vector = Column(TSVECTOR)
+    embedding = Column(Vector(1536), nullable=True)
     shop_name_cached = Column(String(200))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

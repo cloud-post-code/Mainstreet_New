@@ -27,6 +27,7 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 from db.database import get_db
 from db.models import Product, Shop, User
 from db.schemas import ProductOut
+from agent.embeddings import build_canonical_text, embed_text
 
 router = APIRouter(prefix="/api/admin/listing", tags=["admin", "listing"])
 
@@ -140,6 +141,12 @@ async def approve_listing(
         description=body.description or {},
         shop_name_cached=shop.name,
     )
+    canonical = build_canonical_text(
+        name=name, shop_name=shop.name, description=body.description or {},
+    )
+    vec = await embed_text(canonical)
+    if vec is not None:
+        product.embedding = vec
     db.add(product)
     await db.commit()
     await db.refresh(product)
