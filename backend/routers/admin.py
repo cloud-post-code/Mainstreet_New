@@ -392,3 +392,41 @@ async def delete_product(product_id: int, db: AsyncSession = Depends(get_db), _:
     await db.commit()
 
 
+@router.post("/create-vector-index", status_code=200)
+async def create_vector_index(
+    concurrently: bool = False,
+    _: User = Depends(get_admin_user),
+):
+    """Create the HNSW index on products.embedding.
+
+    This should be run once after deploying. The index build needs more
+    shared memory than is available during normal app startup on Railway's
+    managed Postgres.
+
+    Use concurrently=true to avoid locking the products table during the build.
+    """
+    from sqlalchemy import text
+    from db.database import engine
+
+    stmt = (
+        "CREATE INDEX {concurrently} IF NOT EXISTS ix_products_embedding_hnsw "
+        "ON products USING hnsw (embedding vector_cosine_ops)"
+    ).format(concurrently="CONCURRENTLY" if concurrently else "")
+
+    # CREATE INDEX CONCURRENTLY cannot run inside a transaction block, so we
+    # use a raw engine connection (matching scripts/create_vector_index.py)
+    # rather than the session-based get_db dependency.
+    async with engine.connect() as conn:
+        if concurrently:
+            conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.execute(text(stmt))
+        if not concurrently:
+            await conn.commit()
+
+    return {
+        "status": "success",
+        "message": "HNSW index created or already exists",
+        "concurrently": concurrently,
+    }
+
+
