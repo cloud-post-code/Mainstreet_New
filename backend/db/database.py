@@ -26,6 +26,11 @@ async def create_tables():
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        # create_all only creates missing tables — ADD COLUMN by hand for
+        # existing deployments. Safe to re-run thanks to IF NOT EXISTS.
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1536)"
+        ))
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_products_embedding_hnsw "
             "ON products USING hnsw (embedding vector_cosine_ops)"
