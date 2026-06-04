@@ -7,7 +7,7 @@ import LiveReasoning from './LiveReasoning'
 import { useMason } from '../mason/MasonContext'
 import styles from './MasonDrawer.module.css'
 
-type TabKey = 'now' | 'notes' | 'preferences' | 'saved' | 'recent'
+type TabKey = 'notes' | 'preferences' | 'saved' | 'history'
 
 interface PlanStep { step: number; description: string; done: boolean }
 
@@ -27,16 +27,15 @@ interface MasonDrawerProps {
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'now', label: 'Now' },
   { key: 'notes', label: 'Notes' },
   { key: 'preferences', label: 'Prefs' },
   { key: 'saved', label: 'Saved' },
-  { key: 'recent', label: 'Tasks' },
+  { key: 'history', label: 'History' },
 ]
 
 export default function MasonDrawer(props: MasonDrawerProps) {
   const { isOpen, closeDrawer, agentState } = useMason()
-  const [tab, setTab] = useState<TabKey>('now')
+  const [tab, setTab] = useState<TabKey>('notes')
   const [correction, setCorrection] = useState('')
   const [notes, setNotes] = useState<string[]>([
     'Lives nearby and prefers shops within walking distance.',
@@ -111,6 +110,45 @@ export default function MasonDrawer(props: MasonDrawerProps) {
           <button className={styles.closeBtn} onClick={closeDrawer} aria-label="Close">×</button>
         </div>
 
+        <section className={styles.nowBanner} aria-label="What Mason is doing now">
+          <div className={styles.nowHeader}>
+            <span className={styles.sectionLabel}>Now</span>
+            <span className={`${styles.liveDot} ${props.streaming ? styles.liveDotOn : ''}`} aria-hidden="true" />
+          </div>
+          {props.plan.length === 0 && latestAgentEvents.length === 0 ? (
+            <p className={styles.nowEmpty}>
+              {props.streaming ? "Mason is just getting started…" : "Mason is idle. Ask him something to get going."}
+            </p>
+          ) : (
+            <>
+              {props.plan.length > 0 && (
+                <div className={styles.planBlock}>
+                  <PlanDropdown steps={props.plan} />
+                </div>
+              )}
+              <LiveReasoning events={latestAgentEvents} streaming={props.streaming} />
+            </>
+          )}
+
+          <form className={styles.correctForm} onSubmit={submitCorrection}>
+            <label className={styles.sectionLabel}>Steer Mason</label>
+            <textarea
+              className={styles.correctInput}
+              placeholder="e.g. Actually I meant shoes for trail running, not road."
+              value={correction}
+              onChange={e => setCorrection(e.target.value)}
+              rows={2}
+            />
+            <button
+              type="submit"
+              className={styles.correctSubmit}
+              disabled={!correction.trim() || props.streaming}
+            >
+              Send correction
+            </button>
+          </form>
+        </section>
+
         <nav className={styles.tabs} role="tablist">
           {TABS.map(t => (
             <button
@@ -126,43 +164,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
         </nav>
 
         <div className={styles.body}>
-          {tab === 'now' && (
-            <div className={styles.section}>
-              {props.plan.length === 0 && latestAgentEvents.length === 0 ? (
-                <p className={styles.empty}>
-                  {props.streaming ? "Mason is just getting started…" : "Nothing on Mason's desk right now. Ask him something to get going."}
-                </p>
-              ) : (
-                <>
-                  {props.plan.length > 0 && (
-                    <div className={styles.planBlock}>
-                      <PlanDropdown steps={props.plan} />
-                    </div>
-                  )}
-                  <LiveReasoning events={latestAgentEvents} streaming={props.streaming} />
-                </>
-              )}
-
-              <form className={styles.correctForm} onSubmit={submitCorrection}>
-                <label className={styles.sectionLabel}>Steer Mason</label>
-                <textarea
-                  className={styles.correctInput}
-                  placeholder="e.g. Actually I meant shoes for trail running, not road."
-                  value={correction}
-                  onChange={e => setCorrection(e.target.value)}
-                  rows={2}
-                />
-                <button
-                  type="submit"
-                  className={styles.correctSubmit}
-                  disabled={!correction.trim() || props.streaming}
-                >
-                  Send correction
-                </button>
-              </form>
-            </div>
-          )}
-
           {tab === 'notes' && (
             <div className={styles.section}>
               <p className={styles.helpText}>What Mason knows about you. Saved locally for now.</p>
@@ -216,7 +217,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
             </div>
           )}
 
-          {tab === 'recent' && (
+          {tab === 'history' && (
             <div className={styles.section}>
               <button
                 className={styles.newTaskBtn}

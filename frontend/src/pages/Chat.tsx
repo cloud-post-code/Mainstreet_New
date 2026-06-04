@@ -10,26 +10,6 @@ import { useMason, AgentState } from '../mason/MasonContext'
 import { useCart } from '../cart/CartContext'
 import styles from './Chat.module.css'
 
-const MASON_AVATARS = [
-  '/mason/mason-1.png',
-  '/mason/mason-2.png',
-  '/mason/mason-3.png',
-  '/mason/mason-4.png',
-  '/mason/mason-5.png',
-  '/mason/mason-6.png',
-  '/mason/mason-7.png',
-  '/mason/mason-8.png',
-  '/mason/mason-9.png',
-  '/mason/mason-10.png',
-]
-
-// Stable per-message hash so the chosen Mason image doesn't change on re-render.
-function pickMason(id: string): string {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
-  return MASON_AVATARS[Math.abs(h) % MASON_AVATARS.length]
-}
-
 const FALLBACK_SUGGESTIONS = [
   "Find running shoes under $100 at local shops",
   "Which neighborhood stores sell electronics?",
@@ -399,50 +379,25 @@ export default function Chat() {
                 </button>
               </div>
             )}
-            {messages.map((msg, idx) => {
-              const isLastAgent = idx === lastAgentIdx
-              const showThinkBubble = isLastAgent && streaming && (agentState === 'thinking' || agentState === 'tool')
-              const showChatBubble = isLastAgent && streaming && agentState === 'replying'
-              return (
-                <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                  {msg.from === 'agent' && (
-                    <div className={styles.avatarWrap}>
-                      <button
-                        type="button"
-                        className={styles.avatar}
-                        onClick={mason.openDrawer}
-                        aria-label="Open Mason"
-                      >
-                        <img src={pickMason(msg.id)} alt="" />
-                      </button>
-                      {showThinkBubble && (
-                        <span className={`${styles.bubbleTip} ${styles.thinkBubble}`} aria-hidden="true">
-                          {agentState === 'tool' ? '📓' : <><span /><span /><span /></>}
-                        </span>
-                      )}
-                      {showChatBubble && (
-                        <span className={`${styles.bubbleTip} ${styles.chatBubble}`} aria-hidden="true">💬</span>
-                      )}
-                    </div>
+            {messages.map((msg, idx) => (
+              <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
+                <div className={styles.bubble}>
+                  {msg.from === 'user' ? (
+                    <p className={styles.userText}>{msg.text}</p>
+                  ) : (
+                    <AgentErrorBoundary>
+                      <AgentMessage
+                        events={msg.events ?? []}
+                        streaming={streaming && idx === lastAgentIdx}
+                        onAnswer={handleAnswer}
+                        onIntent={handleIntent}
+                      />
+                    </AgentErrorBoundary>
                   )}
-                  <div className={styles.bubble}>
-                    {msg.from === 'user' ? (
-                      <p className={styles.userText}>{msg.text}</p>
-                    ) : (
-                      <AgentErrorBoundary>
-                        <AgentMessage
-                          events={msg.events ?? []}
-                          streaming={streaming && idx === lastAgentIdx}
-                          onAnswer={handleAnswer}
-                          onIntent={handleIntent}
-                        />
-                      </AgentErrorBoundary>
-                    )}
-                  </div>
-                  {msg.from === 'user' && <div className={styles.avatar}>👤</div>}
                 </div>
-              )
-            })}
+                {msg.from === 'user' && <div className={styles.userAvatar}>👤</div>}
+              </div>
+            ))}
             <div ref={bottomRef} />
           </div>
         )}

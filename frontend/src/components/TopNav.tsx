@@ -48,7 +48,6 @@ export default function TopNav() {
         >
           Home
         </Link>
-        <MasonChip />
         <Link
           to="/inbox"
           className={`${styles.link} ${isActive('/inbox') ? styles.active : ''}`}
@@ -79,6 +78,7 @@ export default function TopNav() {
             <span className={styles.badge}>{cart.itemCount}</span>
           )}
         </button>
+        <MasonChip />
       </div>
     </nav>
   )

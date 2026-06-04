@@ -10,10 +10,7 @@ export default function MasonChip() {
       onClick={openDrawer}
       aria-label="Open Mason"
     >
-      <span className={styles.avatar}>
-        <img src="/mason/mason-1.png" alt="" />
-        <span className={`${styles.dot} ${styles[`dot_${agentState}`]}`} />
-      </span>
+      <span className={`${styles.dot} ${styles[`dot_${agentState}`]}`} aria-hidden="true" />
       <span className={styles.name}>Mason</span>
     </button>
   )

@@ -1,7 +1,5 @@
 import React from 'react'
 import { StreamEvent } from '../hooks/useAgentStream'
-import PlanDropdown from './PlanDropdown'
-import LiveReasoning from './LiveReasoning'
 import Renderer from '../a2ui/Renderer'
 import { A2uiTree } from '../a2ui/types'
 import AgentErrorBoundary from './AgentErrorBoundary'
@@ -14,7 +12,7 @@ interface Props {
   onIntent?: (intent: string, payload?: unknown) => void
 }
 
-function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
+function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
   const rendered: React.ReactNode[] = []
   const textBlocks: string[] = []
 
@@ -26,29 +24,11 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
     }
   }
 
-  // Plan: render the latest one as a dropdown at the top
-  const planEvents = events.filter(e => e.type === 'plan_update')
-  const latestPlan = planEvents.length
-    ? (planEvents[planEvents.length - 1] as Extract<StreamEvent, { type: 'plan_update' }>).steps
-    : []
-  if (latestPlan.length) {
-    rendered.push(<PlanDropdown key="plan" steps={latestPlan} />)
-  }
-
   // Latest ui_tree replaces any earlier one (full-replacement model for MVP)
   const uiTreeEvents = events.filter((e): e is Extract<StreamEvent, { type: 'ui_tree' }> => e.type === 'ui_tree')
   const latestTree: A2uiTree | null = uiTreeEvents.length
     ? { root: uiTreeEvents[uiTreeEvents.length - 1].root, components: uiTreeEvents[uiTreeEvents.length - 1].components }
     : null
-
-  // Live reasoning surface — collapsed by default, summarizes thinking + tool_call
-  // events. Shows while streaming and also stays around after for inspection.
-  const hasReasoningEvents = events.some(e => e.type === 'thinking' || (e.type === 'tool_call' && e.tool !== 'render_ui'))
-  if (hasReasoningEvents || streaming) {
-    rendered.push(
-      <LiveReasoning key="live-reasoning" events={events} streaming={Boolean(streaming)} />
-    )
-  }
 
   // Handle intents — special-case answer_choice to wire into existing question flow
   const intentHandler = (intent: string, payload?: unknown) => {
