@@ -48,12 +48,19 @@ class Product(Base):
     image_url = Column(Text)
     description = Column(JSONB)
     search_vector = Column(TSVECTOR)
+    shop_name_cached = Column(String(200))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     shop = relationship("Shop", back_populates="products")
 
     __table_args__ = (
         Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
+        Index(
+            "ix_products_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
     )
 
 

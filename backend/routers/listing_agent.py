@@ -138,6 +138,7 @@ async def approve_listing(
         quantity=quantity,
         image_url=body.image_url,
         description=body.description or {},
+        shop_name_cached=shop.name,
     )
     db.add(product)
     await db.commit()

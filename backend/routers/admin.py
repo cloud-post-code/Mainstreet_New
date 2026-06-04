@@ -130,6 +130,7 @@ async def import_csv(
                     quantity=quantity,
                     image_url=image_url,
                     description=description,
+                    shop_name_cached=shop.name,
                 ))
                 rows_added += 1
 

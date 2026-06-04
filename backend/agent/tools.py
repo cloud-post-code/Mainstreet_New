@@ -216,9 +216,18 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
 
     q = params.get("query")
     if q:
-        ts_query = sqlfunc.plainto_tsquery("english", q)
-        stmt = stmt.where(Product.search_vector.op("@@")(ts_query))
-        stmt = stmt.order_by(sqlfunc.ts_rank(Product.search_vector, ts_query).desc())
+        from sqlalchemy import or_ as sql_or
+        ts_query = sqlfunc.websearch_to_tsquery("english", q)
+        stmt = stmt.where(
+            sql_or(
+                Product.search_vector.op("@@")(ts_query),
+                Product.name.op("%")(q),
+            )
+        )
+        stmt = stmt.order_by(
+            sqlfunc.ts_rank(Product.search_vector, ts_query).desc(),
+            sqlfunc.similarity(Product.name, q).desc(),
+        )
     else:
         stmt = stmt.order_by(Product.name)
 

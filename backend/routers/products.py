@@ -70,14 +70,14 @@ def _apply_product_filters(
     tags: list[str] | None = None,
 ):
     if q:
-        ts_query = func.plainto_tsquery("english", q)
-        like = f"%{q}%"
-        # Match products whose tsvector matches OR whose shop name matches.
+        ts_query = func.websearch_to_tsquery("english", q)
+        # Tsvector covers product name, cached shop name, summary, tags,
+        # long, materials, variant, made_in. Trigram on name catches typos
+        # and partial matches that stem to nothing useful.
         stmt = stmt.where(
             or_(
                 Product.search_vector.op("@@")(ts_query),
-                Shop.name.ilike(like),
-                Product.name.ilike(like),
+                Product.name.op("%")(q),
             )
         )
     if shop_id is not None:
@@ -125,8 +125,11 @@ async def discover_products(
         tags=[t.strip() for t in (tags or "").split(",") if t.strip()],
     )
     if q:
-        ts_query = func.plainto_tsquery("english", q)
-        stmt = stmt.order_by(func.ts_rank(Product.search_vector, ts_query).desc())
+        ts_query = func.websearch_to_tsquery("english", q)
+        stmt = stmt.order_by(
+            func.ts_rank(Product.search_vector, ts_query).desc(),
+            func.similarity(Product.name, q).desc(),
+        )
     else:
         stmt = stmt.order_by(Product.id)
     stmt = stmt.limit(limit).offset(offset)
