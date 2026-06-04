@@ -7,14 +7,17 @@ import { A2uiTree } from '../a2ui/types'
 import AgentErrorBoundary from './AgentErrorBoundary'
 import styles from './AgentMessage.module.css'
 
+export type AgentMessageVariant = 'full' | 'chat' | 'stage'
+
 interface Props {
   events: StreamEvent[]
   streaming?: boolean
+  variant?: AgentMessageVariant
   onAnswer: (answer: string, questionCardId: string) => void
   onIntent?: (intent: string, payload?: unknown) => void
 }
 
-function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
+function AgentMessageImpl({ events, streaming, variant = 'full', onAnswer, onIntent }: Props) {
   const rendered: React.ReactNode[] = []
   const textBlocks: string[] = []
 
@@ -26,12 +29,15 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
     }
   }
 
+  const showChat = variant === 'full' || variant === 'chat'
+  const showStage = variant === 'full' || variant === 'stage'
+
   // Plan: render the latest one as a dropdown at the top
   const planEvents = events.filter(e => e.type === 'plan_update')
   const latestPlan = planEvents.length
     ? (planEvents[planEvents.length - 1] as Extract<StreamEvent, { type: 'plan_update' }>).steps
     : []
-  if (latestPlan.length) {
+  if (showChat && latestPlan.length) {
     rendered.push(<PlanDropdown key="plan" steps={latestPlan} />)
   }
 
@@ -44,7 +50,7 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
   // Live reasoning surface — collapsed by default, summarizes thinking + tool_call
   // events. Shows while streaming and also stays around after for inspection.
   const hasReasoningEvents = events.some(e => e.type === 'thinking' || (e.type === 'tool_call' && e.tool !== 'render_ui'))
-  if (hasReasoningEvents || streaming) {
+  if (showChat && (hasReasoningEvents || streaming)) {
     rendered.push(
       <LiveReasoning key="live-reasoning" events={events} streaming={Boolean(streaming)} />
     )
@@ -63,15 +69,17 @@ function AgentMessageImpl({ events, streaming, onAnswer, onIntent }: Props) {
   }
 
   // Stream incremental text from `text` events into a paragraph above the tree.
-  events.forEach(event => {
-    if (event.type === 'text') {
-      textBlocks.push(event.content)
-    }
-  })
-  flushText('final')
+  if (showChat) {
+    events.forEach(event => {
+      if (event.type === 'text') {
+        textBlocks.push(event.content)
+      }
+    })
+    flushText('final')
+  }
 
   // Render the A2UI tree last (it's the main visual payload)
-  if (latestTree) {
+  if (showStage && latestTree) {
     rendered.push(
       <div key="ui-tree" className={styles.uiTreeWrapper}>
         <AgentErrorBoundary>
