@@ -45,7 +45,7 @@ export default function TopNav() {
           to="/"
           className={`${styles.link} ${location.pathname === '/' ? styles.active : ''}`}
         >
-          Chat
+          Mason
         </Link>
         <Link
           to="/inbox"

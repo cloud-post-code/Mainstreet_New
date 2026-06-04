@@ -392,7 +392,7 @@ export default function Chat() {
     <div className={styles.layout}>
       {/* Sidebar */}
       <aside className={styles.sidebar}>
-        <button className={styles.newChat} onClick={newSession}>+ New chat</button>
+        <button className={styles.newChat} onClick={newSession}>+ New task</button>
 
         <div className={styles.recentDivider}>
           <span>Recent</span>
