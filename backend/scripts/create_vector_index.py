@@ -22,13 +22,17 @@ from db.database import engine
 async def main(concurrently: bool) -> None:
     stmt = (
         "CREATE INDEX {concurrently} IF NOT EXISTS ix_products_embedding_hnsw "
-        "ON products USING hnsw (embedding vector_cosine_ops)"
+        "ON products USING hnsw (embedding vector_cosine_ops) "
+        "WITH (m = 8, ef_construction = 32)"
     ).format(concurrently="CONCURRENTLY" if concurrently else "")
 
     # CREATE INDEX CONCURRENTLY cannot run inside a transaction block.
     async with engine.connect() as conn:
         if concurrently:
             conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        # Keep the build inside Railway Postgres's small /dev/shm.
+        await conn.execute(text("SET maintenance_work_mem = '64MB'"))
+        await conn.execute(text("SET max_parallel_maintenance_workers = 0"))
         await conn.execute(text(stmt))
         if not concurrently:
             await conn.commit()
