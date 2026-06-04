@@ -222,6 +222,34 @@ def validate_render_ui(payload: Any) -> list[str]:
     return errors
 
 
+def enrich_render_ui_payload(payload: dict, quantities: dict[int, int]) -> dict:
+    """Fill product_card quantity from the database so the UI shows correct stock."""
+    if not quantities:
+        return payload
+    components = []
+    for comp in payload.get("components") or []:
+        if not isinstance(comp, dict) or comp.get("type") != "product_card":
+            components.append(comp)
+            continue
+        props = dict(comp.get("props") or {})
+        pid = props.get("product_id")
+        if isinstance(pid, int) and pid in quantities:
+            props["quantity"] = quantities[pid]
+        components.append({**comp, "props": props})
+    return {**payload, "components": components}
+
+
+def collect_product_card_ids(payload: dict) -> list[int]:
+    ids: list[int] = []
+    for comp in payload.get("components") or []:
+        if not isinstance(comp, dict) or comp.get("type") != "product_card":
+            continue
+        pid = (comp.get("props") or {}).get("product_id")
+        if isinstance(pid, int):
+            ids.append(pid)
+    return ids
+
+
 RENDER_UI_TOOL_SCHEMA: dict = {
     "name": "render_ui",
     "description": (

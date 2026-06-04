@@ -272,10 +272,11 @@ async def _run_agent_turn_inner(
             )
 
             if event_hint == "ui_tree":
+                payload = result if isinstance(result, dict) else block.input
                 yield _event({
                     "type": "ui_tree",
-                    "root": block.input.get("root"),
-                    "components": block.input.get("components", []),
+                    "root": payload.get("root"),
+                    "components": payload.get("components", []),
                     "tool_use_id": block.id,
                 })
             elif event_hint == "plan_update":
@@ -283,10 +284,15 @@ async def _run_agent_turn_inner(
             else:
                 yield _event({"type": "tool_result", "tool": block.name, "result": result})
 
+            tool_result_content = (
+                {"rendered": True}
+                if event_hint == "ui_tree"
+                else result
+            )
             tool_result_block = {
                 "type": "tool_result",
                 "tool_use_id": block.id,
-                "content": json.dumps(result),
+                "content": json.dumps(tool_result_content),
             }
             tool_results.append(tool_result_block)
             accumulated_tool_results.append(tool_result_block)

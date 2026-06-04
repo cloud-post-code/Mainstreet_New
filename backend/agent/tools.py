@@ -9,8 +9,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from db.models import Product, Shop, AgentPlan
 from agent.memory import save_preference
-from agent.a2ui_schema import RENDER_UI_TOOL_SCHEMA, validate_render_ui
+from agent.a2ui_schema import (
+    RENDER_UI_TOOL_SCHEMA,
+    collect_product_card_ids,
+    enrich_render_ui_payload,
+    validate_render_ui,
+)
 from routers import cart as cart_service
+
+
+async def _product_quantities_for_render_ui(payload: dict, db: AsyncSession) -> dict[int, int]:
+    ids = collect_product_card_ids(payload)
+    if not ids:
+        return {}
+    result = await db.execute(
+        select(Product.id, Product.quantity).where(Product.id.in_(ids))
+    )
+    return {row.id: row.quantity for row in result.all()}
 
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 
@@ -158,7 +173,9 @@ async def execute_tool(
                     },
                     None,
                 )
-            return {"rendered": True}, "ui_tree"
+            quantities = await _product_quantities_for_render_ui(tool_input, db)
+            enriched = enrich_render_ui_payload(tool_input, quantities)
+            return enriched, "ui_tree"
         if tool_name == "generate_plan":
             return await _generate_plan(tool_input, session_id, db), "plan_update"
         if tool_name == "save_preference":

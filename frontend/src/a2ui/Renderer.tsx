@@ -67,8 +67,12 @@ function Node({ tree, id, onIntent }: NodeProps): ReactNode {
 
   const Comp = COMPONENTS[node.type]
   if (!Comp) return <div style={{ color: '#c0392b' }}>Unknown type: {node.type}</div>
+  const compProps =
+    node.type === 'product_card'
+      ? { ...p, showAddToCart: (p.showAddToCart as boolean | undefined) ?? true }
+      : p
   return (
-    <Comp {...p} _a2uiId={id} onIntent={onIntent}>
+    <Comp {...compProps} _a2uiId={id} onIntent={onIntent}>
       {children}
     </Comp>
   )

@@ -477,7 +477,7 @@ export default function Chat() {
       <main className={styles.main}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🧱</div>
+            <div className={styles.emptyIcon}><img src="/brick-mascot.png" alt="Brick mascot" /></div>
             <h2>
               {user
                 ? `Welcome back, ${user.display_name ?? user.email?.split('@')[0] ?? 'friend'} — anything I can help you find today?`
@@ -534,7 +534,7 @@ export default function Chat() {
               }
               return messages.map((msg, idx) => (
                 <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                  {msg.from === 'agent' && <div className={styles.avatar}>🧱</div>}
+                  {msg.from === 'agent' && <div className={styles.avatar}><img src="/brick-mascot.png" alt="" /></div>}
                   <div className={styles.bubble}>
                     {msg.from === 'user' ? (
                       <p className={styles.userText}>{msg.text}</p>

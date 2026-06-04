@@ -21,7 +21,12 @@ interface Props {
 }
 
 export default function ProductCard(props: Props) {
-  const inStock = (props.quantity ?? 0) > 0
+  const qty =
+    props.quantity === undefined || props.quantity === null
+      ? null
+      : Number(props.quantity)
+  const inStock = qty === null || !Number.isFinite(qty) ? true : qty > 0
+  const showAddToCart = props.showAddToCart ?? false
   const clickable = Boolean(props.onIntent)
   const cart = useCart()
   const { token } = useAuth()
@@ -77,11 +82,13 @@ export default function ProductCard(props: Props) {
         )}
         <div className={styles.productFooter}>
           <span className={`${styles.price} ${isGrid ? styles.priceGrid : ''}`}>${Number(props.price).toFixed(2)}</span>
-          <span className={`${styles.stock} ${inStock ? styles.inStock : styles.outOfStock}`}>
-            {inStock ? `${props.quantity} in stock` : 'Out of stock'}
-          </span>
+          {qty !== null && Number.isFinite(qty) && (
+            <span className={`${styles.stock} ${inStock ? styles.inStock : styles.outOfStock}`}>
+              {inStock ? `${qty} in stock` : 'Out of stock'}
+            </span>
+          )}
         </div>
-        {props.showAddToCart && (
+        {showAddToCart && (
           <>
             <button
               type="button"
