@@ -17,6 +17,37 @@ async def list_shops_public(db: AsyncSession = Depends(get_db)):
     return [{"id": row.id, "name": row.name} for row in result.all()]
 
 
+@router.get("/public/full")
+async def list_shops_public_full(db: AsyncSession = Depends(get_db)):
+    """Unauthenticated list of shops with details + product counts for the
+    public Discover "Shop by shop" view."""
+    stmt = (
+        select(
+            Shop.id,
+            Shop.name,
+            Shop.logo_url,
+            Shop.description,
+            Shop.website_url,
+            func.count(Product.id).label("product_count"),
+        )
+        .outerjoin(Product, Product.shop_id == Shop.id)
+        .group_by(Shop.id)
+        .order_by(Shop.name)
+    )
+    result = await db.execute(stmt)
+    return [
+        {
+            "id": row.id,
+            "name": row.name,
+            "logo_url": row.logo_url,
+            "description": row.description,
+            "website_url": row.website_url,
+            "product_count": row.product_count,
+        }
+        for row in result.all()
+    ]
+
+
 @router.get("", response_model=list[ShopOut])
 async def list_shops(
     q: str = Query(default=None),

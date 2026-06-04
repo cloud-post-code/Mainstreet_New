@@ -2,17 +2,26 @@
 """
 Scrape Boston General Store collections — defaults to Shop All (~2,100+ products).
 
-Output CSV columns: shop_name, product_name, product_url, price, quantity, image_url, description_json
+Output CSV columns: shop_name, product_handle, base_product_name, product_name,
+product_url, variant_id, variant_count, variant_index, option_names, option_values,
+price, quantity, image_url, description_json
 
 shop_name comes from "Made by:" on the product page (falls back to vendor).
 Each variant is its own row. quantity is always 1.
 product_url is the public product page on bostongeneralstore.com, including ?variant= when applicable.
+Rows sharing product_handle / base_product_name are variants of the same parent product.
+option_names / option_values list Shopify option dimensions (e.g. Color, Size).
+image_url resolves the variant-specific image via image_id / variant_ids when available.
+
+By default writes to a *_variants.csv file so the legacy CSV is not overwritten.
+Use --output to choose a different path, or --overwrite to write the legacy filename.
 
 Usage:
   python3 scrape_boston_general_store_assorted_goods.py
   python3 scrape_boston_general_store_assorted_goods.py --no-review-html   # faster, fewer requests
   python3 scrape_boston_general_store_assorted_goods.py --no-crawl-html-pages
   python3 scrape_boston_general_store_assorted_goods.py --collection assorted-goods
+  python3 scrape_boston_general_store_assorted_goods.py --overwrite   # replace legacy shop_all CSV
 """
 
 from __future__ import annotations
@@ -35,7 +44,9 @@ SHOP_ALL_SLUG = "shop-all"
 SHOP_ALL_URL = "https://www.bostongeneralstore.com/collections/shop-all"
 COLLECTION_SLUG = SHOP_ALL_SLUG
 COLLECTION_URL = SHOP_ALL_URL
-OUTPUT_CSV = Path(__file__).resolve().parent / "boston_general_store_shop_all.csv"
+OUTPUT_CSV = Path(__file__).resolve().parent / "boston_general_store_shop_all_variants.csv"
+LEGACY_OUTPUT_SUFFIX = ".csv"
+VARIANTS_OUTPUT_SUFFIX = "_variants.csv"
 MAX_COLLECTION_HTML_PAGES = 90
 PRODUCT_DELAY_SEC = 1.5
 COLLECTION_DELAY_SEC = 2.5
@@ -51,8 +62,15 @@ PRODUCT_URL_BASE = "https://www.bostongeneralstore.com/products"
 
 FIELDNAMES = [
     "shop_name",
+    "product_handle",
+    "base_product_name",
     "product_name",
     "product_url",
+    "variant_id",
+    "variant_count",
+    "variant_index",
+    "option_names",
+    "option_values",
     "price",
     "quantity",
     "image_url",
@@ -240,14 +258,70 @@ def collect_handles_from_html() -> list[str]:
     return ordered
 
 
-def variant_image(variant: dict, product: dict) -> str:
+def default_output_path(slug: str, *, use_legacy: bool = False) -> Path:
+    """Default CSV path; *_variants.csv avoids overwriting the legacy scrape."""
+    scripts_dir = Path(__file__).resolve().parent
+    safe_slug = slug.replace("/", "_")
+    if slug == SHOP_ALL_SLUG:
+        base = "boston_general_store_shop_all"
+    else:
+        base = f"boston_general_store_{safe_slug}"
+    suffix = LEGACY_OUTPUT_SUFFIX if use_legacy else VARIANTS_OUTPUT_SUFFIX
+    return scripts_dir / f"{base}{suffix}"
+
+
+def build_image_lookup(product: dict) -> tuple[dict[int, str], dict[int, str]]:
+    """Map Shopify image_id and variant_id to image src URLs."""
+    by_image_id: dict[int, str] = {}
+    by_variant_id: dict[int, str] = {}
+    for image in product.get("images") or []:
+        src = image.get("src") or ""
+        if not src:
+            continue
+        image_id = image.get("id")
+        if image_id is not None:
+            by_image_id[int(image_id)] = src
+        for variant_id in image.get("variant_ids") or []:
+            by_variant_id[int(variant_id)] = src
+    return by_image_id, by_variant_id
+
+
+def variant_image(
+    variant: dict,
+    product: dict,
+    by_image_id: dict[int, str],
+    by_variant_id: dict[int, str],
+) -> str:
     featured = variant.get("featured_image") or {}
     src = featured.get("src")
     if src:
         return src
+
+    variant_id = variant.get("id")
+    if variant_id is not None and int(variant_id) in by_variant_id:
+        return by_variant_id[int(variant_id)]
+
+    image_id = variant.get("image_id")
+    if image_id is not None and int(image_id) in by_image_id:
+        return by_image_id[int(image_id)]
+
     if product.get("images"):
         return product["images"][0].get("src", "")
     return ""
+
+
+def extract_option_fields(product: dict, variant: dict) -> tuple[str, str]:
+    """Return (option_names, option_values) like 'Color / Size' and 'Honey / Large'."""
+    names: list[str] = []
+    values: list[str] = []
+    for index, option in enumerate(product.get("options") or [], start=1):
+        name = (option.get("name") or "").strip()
+        value = (variant.get(f"option{index}") or "").strip()
+        if not name or not value or value == "Default Title":
+            continue
+        names.append(name)
+        values.append(value)
+    return " / ".join(names), " / ".join(values)
 
 
 def build_product_name(title: str, variant_title: str) -> str:
@@ -323,14 +397,25 @@ def scrape_product(handle: str) -> list[dict]:
     if not variants:
         return []
 
+    by_image_id, by_variant_id = build_image_lookup(product)
+    base_title = product.get("title") or ""
+    variant_count = len(variants)
+
     rows: list[dict] = []
-    for variant in variants:
+    for variant_index, variant in enumerate(variants, start=1):
         variant_title = variant.get("title") or ""
+        option_names, option_values = extract_option_fields(product, variant)
         description_json: dict[str, str] = {}
         if desc_text:
             description_json["description"] = desc_text
         if variant_title and variant_title != "Default Title":
             description_json["variant"] = variant_title
+        if option_names:
+            description_json["option_names"] = option_names
+        if option_values:
+            description_json["option_values"] = option_values
+        if variant_count > 1:
+            description_json["variant_group"] = f"{variant_index} of {variant_count}"
         if made_in:
             description_json["made_in"] = made_in
         if further_reading:
@@ -356,11 +441,18 @@ def scrape_product(handle: str) -> list[dict]:
         rows.append(
             {
                 "shop_name": shop_name,
-                "product_name": build_product_name(product["title"], variant_title),
+                "product_handle": handle,
+                "base_product_name": base_title,
+                "product_name": build_product_name(base_title, variant_title),
                 "product_url": product_page_url(handle, variant_id),
+                "variant_id": str(variant_id) if variant_id is not None else "",
+                "variant_count": str(variant_count),
+                "variant_index": str(variant_index),
+                "option_names": option_names,
+                "option_values": option_values,
                 "price": price,
                 "quantity": "1",
-                "image_url": variant_image(variant, product),
+                "image_url": variant_image(variant, product, by_image_id, by_variant_id),
                 "description_json": json.dumps(description_json, ensure_ascii=False),
             }
         )
@@ -383,7 +475,12 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=None,
-        help="Output CSV path (default: scripts/boston_general_store_<collection>.csv)",
+        help="Output CSV path (default: scripts/boston_general_store_<collection>_variants.csv)",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Write legacy CSV filename (e.g. boston_general_store_shop_all.csv) instead of *_variants.csv",
     )
     parser.add_argument(
         "--max-pages",
@@ -436,6 +533,7 @@ def configure_collection(
     collection_delay: float,
     crawl_html_pages: bool | None,
     fetch_review_html: bool,
+    use_legacy_output: bool = False,
 ) -> None:
     global COLLECTION_SLUG, COLLECTION_URL, OUTPUT_CSV, MAX_COLLECTION_HTML_PAGES
     global PRODUCT_DELAY_SEC, COLLECTION_DELAY_SEC, CRAWL_HTML_PAGES, FETCH_REVIEW_HTML
@@ -443,12 +541,8 @@ def configure_collection(
     COLLECTION_URL = f"https://www.bostongeneralstore.com/collections/{COLLECTION_SLUG}"
     if output:
         OUTPUT_CSV = output
-    elif COLLECTION_SLUG == SHOP_ALL_SLUG:
-        OUTPUT_CSV = Path(__file__).resolve().parent / "boston_general_store_shop_all.csv"
     else:
-        OUTPUT_CSV = (
-            Path(__file__).resolve().parent / f"boston_general_store_{COLLECTION_SLUG.replace('/', '_')}.csv"
-        )
+        OUTPUT_CSV = default_output_path(COLLECTION_SLUG, use_legacy=use_legacy_output)
     MAX_COLLECTION_HTML_PAGES = max_pages
     PRODUCT_DELAY_SEC = max(0.5, product_delay)
     COLLECTION_DELAY_SEC = max(1.0, collection_delay)
@@ -496,6 +590,8 @@ def load_existing_rows() -> list[dict]:
         rows = list(csv.DictReader(f))
     for row in rows:
         row.setdefault("product_url", "")
+        for field in FIELDNAMES:
+            row.setdefault(field, "")
     return rows
 
 
@@ -537,6 +633,7 @@ def main() -> None:
         args.collection_delay,
         args.crawl_html_pages,
         not args.no_review_html,
+        use_legacy_output=args.overwrite,
     )
     print(f"Collection: {COLLECTION_URL}")
     print(f"Output: {OUTPUT_CSV}")

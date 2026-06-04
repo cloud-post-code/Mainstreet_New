@@ -11,11 +11,31 @@ import styles from './Chat.module.css'
 
 type AuthMode = 'none' | 'login' | 'register'
 
+const MASON_AVATARS = [
+  '/mason/mason-1.png',
+  '/mason/mason-2.png',
+  '/mason/mason-3.png',
+  '/mason/mason-4.png',
+  '/mason/mason-5.png',
+  '/mason/mason-6.png',
+  '/mason/mason-7.png',
+  '/mason/mason-8.png',
+  '/mason/mason-9.png',
+  '/mason/mason-10.png',
+]
+
+// Stable per-message hash so the chosen Mason image doesn't change on re-render.
+function pickMason(id: string): string {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  return MASON_AVATARS[Math.abs(h) % MASON_AVATARS.length]
+}
+
 const FALLBACK_SUGGESTIONS = [
-  "Find me running shoes under $100",
-  "What shops sell electronics?",
-  "I need a gift for a home cook",
-  "Show me in-stock yoga gear",
+  "Find running shoes under $100 at local shops",
+  "Which neighborhood stores sell electronics?",
+  "I need a gift for a home cook nearby",
+  "Show in-stock yoga gear from local shops",
 ]
 
 type Turn = {
@@ -534,7 +554,7 @@ export default function Chat() {
               }
               return messages.map((msg, idx) => (
                 <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                  {msg.from === 'agent' && <div className={styles.avatar}><img src="/brick-mascot.png" alt="" /></div>}
+                  {msg.from === 'agent' && <div className={styles.avatar}><img src={pickMason(msg.id)} alt="" /></div>}
                   <div className={styles.bubble}>
                     {msg.from === 'user' ? (
                       <p className={styles.userText}>{msg.text}</p>

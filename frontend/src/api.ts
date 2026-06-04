@@ -182,6 +182,16 @@ export const api = {
   getPublicShops: () =>
     request<Array<{ id: number; name: string }>>('/api/shops/public'),
 
+  getPublicShopsFull: () =>
+    request<Array<{
+      id: number
+      name: string
+      logo_url: string | null
+      description: string | null
+      website_url: string | null
+      product_count: number
+    }>>('/api/shops/public/full'),
+
   getProductTags: () => request<string[]>('/api/products/tags'),
 
   getCart: (token: string) => request<CartView>('/api/cart', {}, token),

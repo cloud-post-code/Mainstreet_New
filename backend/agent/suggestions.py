@@ -22,10 +22,10 @@ from agent.memory import save_preference
 logger = logging.getLogger(__name__)
 
 FALLBACK_SUGGESTIONS = [
-    "Find me running shoes under $100",
-    "What shops sell electronics?",
-    "I need a gift for a home cook",
-    "Show me in-stock yoga gear",
+    "Find running shoes under $100 at local shops",
+    "Which neighborhood stores sell electronics?",
+    "I need a gift for a home cook nearby",
+    "Show in-stock yoga gear from local shops",
 ]
 
 CACHE_KEY = "suggested_prompts"
@@ -117,8 +117,9 @@ def _generate_with_claude(signals: str) -> list[str]:
         "prompts (e.g., \"Build a gift basket under $75 for a coffee lover\", "
         "\"Compare two espresso machines for a small kitchen\").\n\n"
         "Vary categories — never repeat the same theme twice. Tailor strongly to the "
-        "signals provided; if signals are sparse, choose broadly appealing everyday "
-        "shopping prompts and still keep the simple/complex mix.\n\n"
+        "signals provided; if signals are sparse, choose locally focused everyday "
+        "shopping prompts (neighborhood shops, nearby stores, Main Street catalog) "
+        "and still keep the simple/complex mix.\n\n"
         "Return STRICT JSON only, no prose, in this exact shape: "
         '{"suggestions": ["...", "...", "...", "..."]}'
     )

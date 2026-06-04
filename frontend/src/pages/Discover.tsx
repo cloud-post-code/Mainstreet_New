@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, Product } from '../api'
 import ProductCard from '../components/ProductCard'
+import ShopCard from '../components/ShopCard'
 import styles from './Discover.module.css'
+
+type ShopFull = {
+  id: number
+  name: string
+  logo_url: string | null
+  description: string | null
+  website_url: string | null
+  product_count: number
+}
+
+type BrowseMode = 'product' | 'shop'
 
 const PAGE_SIZE = 24
 
@@ -49,6 +61,10 @@ export default function Discover() {
   const [sessionTags, setSessionTags] = useState<string[]>([])
   const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [browseMode, setBrowseMode] = useState<BrowseMode>('product')
+  const [allShops, setAllShops] = useState<ShopFull[]>([])
+  const [shopsLoading, setShopsLoading] = useState(false)
+  const [shopsError, setShopsError] = useState<string | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
@@ -86,6 +102,31 @@ export default function Discover() {
     })
     return () => { cancelled = true }
   }, [])
+
+  // Lazily fetch full shop list the first time the user switches to "Shop by shop".
+  useEffect(() => {
+    if (browseMode !== 'shop' || allShops.length > 0 || shopsLoading) return
+    let cancelled = false
+    setShopsLoading(true)
+    setShopsError(null)
+    api.getPublicShopsFull()
+      .then(rows => { if (!cancelled) setAllShops(rows) })
+      .catch(err => {
+        if (cancelled) return
+        setShopsError(err instanceof Error ? err.message : 'Failed to load shops')
+      })
+      .finally(() => { if (!cancelled) setShopsLoading(false) })
+    return () => { cancelled = true }
+  }, [browseMode, allShops.length, shopsLoading])
+
+  const filteredShops = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return allShops
+    return allShops.filter(s =>
+      s.name.toLowerCase().includes(q)
+      || (s.description ?? '').toLowerCase().includes(q),
+    )
+  }, [allShops, search])
 
   const selectedPrice = useMemo(
     () => PRICE_BUCKETS.find(p => p.id === selectedPriceId) ?? null,
@@ -193,30 +234,58 @@ export default function Discover() {
       <header className={styles.header}>
         <h1 className={styles.title}>Window Display</h1>
         <p className={styles.tagline}>A fresh look at every shop on Main Street.</p>
+        <div className={styles.modeToggle} role="tablist" aria-label="Browse mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={browseMode === 'product'}
+            className={`${styles.modeBtn} ${browseMode === 'product' ? styles.modeBtnActive : ''}`}
+            onClick={() => setBrowseMode('product')}
+          >
+            Shop by product
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={browseMode === 'shop'}
+            className={`${styles.modeBtn} ${browseMode === 'shop' ? styles.modeBtnActive : ''}`}
+            onClick={() => setBrowseMode('shop')}
+          >
+            Shop by shop
+          </button>
+        </div>
       </header>
 
       <div className={styles.filterBar}>
         <input
           className={styles.search}
           type="search"
-          placeholder="Search by product, shop, or description…"
+          placeholder={browseMode === 'shop'
+            ? 'Search shops by name or description…'
+            : 'Search by product, shop, or description…'}
           value={searchInput}
           onChange={e => setSearchInput(e.target.value)}
-          aria-label="Search products"
+          aria-label={browseMode === 'shop' ? 'Search shops' : 'Search products'}
         />
-        <button
-          type="button"
-          className={styles.filterToggle}
-          onClick={() => setShowFilters(s => !s)}
-        >
-          Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-        </button>
+        {browseMode === 'product' && (
+          <button
+            type="button"
+            className={styles.filterToggle}
+            onClick={() => setShowFilters(s => !s)}
+          >
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </button>
+        )}
         <span className={styles.count}>
-          {total != null ? `${total} result${total === 1 ? '' : 's'}` : ''}
+          {browseMode === 'product'
+            ? (total != null ? `${total} result${total === 1 ? '' : 's'}` : '')
+            : (allShops.length > 0
+              ? `${filteredShops.length} shop${filteredShops.length === 1 ? '' : 's'}`
+              : '')}
         </span>
       </div>
 
-      {showFilters && (
+      {browseMode === 'product' && showFilters && (
         <div className={styles.filtersPanel}>
           <div className={styles.filterGroup}>
             <div className={styles.filterLabel}>Price</div>
@@ -286,38 +355,80 @@ export default function Discover() {
       )}
 
       <main className={styles.content}>
-        {error && <div className={styles.error}>{error}</div>}
+        {browseMode === 'product' ? (
+          <>
+            {error && <div className={styles.error}>{error}</div>}
 
-        {products.length === 0 && !loading ? (
-          <div className={styles.empty}>No products match your filters.</div>
+            {products.length === 0 && !loading ? (
+              <div className={styles.empty}>No products match your filters.</div>
+            ) : (
+              <div className={styles.grid}>
+                {products.map(p => (
+                  <ProductCard
+                    key={p.id}
+                    product_id={p.id}
+                    name={p.name}
+                    price={Number(p.price)}
+                    quantity={p.quantity}
+                    image_url={p.image_url ?? undefined}
+                    shop_name={p.shop_name ?? ''}
+                    shop_id={p.shop_id}
+                    description_summary={descSummary(p.description)}
+                    tags={descTags(p.description)}
+                    variant="grid"
+                    showAddToCart
+                  />
+                ))}
+                {loading && Array.from({ length: 3 }).map((_, i) => (
+                  <div key={`sk-${i}`} className={styles.skeleton} />
+                ))}
+              </div>
+            )}
+
+            <div ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
+
+            {exhausted && products.length > 0 && (
+              <div className={styles.endOfList}>No more results.</div>
+            )}
+          </>
         ) : (
-          <div className={styles.grid}>
-            {products.map(p => (
-              <ProductCard
-                key={p.id}
-                product_id={p.id}
-                name={p.name}
-                price={Number(p.price)}
-                quantity={p.quantity}
-                image_url={p.image_url ?? undefined}
-                shop_name={p.shop_name ?? ''}
-                shop_id={p.shop_id}
-                description_summary={descSummary(p.description)}
-                tags={descTags(p.description)}
-                variant="grid"
-                showAddToCart
-              />
-            ))}
-            {loading && Array.from({ length: 3 }).map((_, i) => (
-              <div key={`sk-${i}`} className={styles.skeleton} />
-            ))}
-          </div>
-        )}
+          <>
+            {shopsError && <div className={styles.error}>{shopsError}</div>}
 
-        <div ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
-
-        {exhausted && products.length > 0 && (
-          <div className={styles.endOfList}>No more results.</div>
+            {shopsLoading && allShops.length === 0 ? (
+              <div className={styles.grid}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={`sk-shop-${i}`} className={styles.skeleton} />
+                ))}
+              </div>
+            ) : filteredShops.length === 0 ? (
+              <div className={styles.empty}>No shops match your search.</div>
+            ) : (
+              <div className={styles.grid}>
+                {filteredShops.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={styles.shopTile}
+                    onClick={() => {
+                      setShopIds([s.id])
+                      setBrowseMode('product')
+                    }}
+                    aria-label={`Browse products from ${s.name}`}
+                  >
+                    <ShopCard
+                      shop_id={s.id}
+                      name={s.name}
+                      logo_url={s.logo_url ?? undefined}
+                      description={s.description ?? undefined}
+                      website_url={s.website_url ?? undefined}
+                      product_count={s.product_count}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
