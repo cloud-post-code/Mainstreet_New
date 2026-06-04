@@ -31,10 +31,11 @@ async def create_tables():
         await conn.execute(text(
             "ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1536)"
         ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_products_embedding_hnsw "
-            "ON products USING hnsw (embedding vector_cosine_ops)"
-        ))
+        # NOTE: the HNSW index on products.embedding is intentionally NOT created
+        # here. Building it requires more shared memory than Railway's managed
+        # Postgres provides by default (we hit DiskFullError resizing the shm
+        # segment). Semantic search works without it (seq scan), so create the
+        # index once out-of-band via scripts/create_vector_index.py.
         # Create tsvector trigger for products. Indexes name + cached shop name
         # (weight A), summary + tags (B), long/materials/variant (C), made_in (D).
         await conn.execute(text("""
