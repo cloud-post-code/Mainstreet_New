@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, FormEvent, KeyboardEvent, MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useAgentStream } from '../hooks/useAgentStream'
+import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
 import AgentErrorBoundary from '../components/AgentErrorBoundary'
-import InboxPanel from '../components/InboxPanel'
+import MasonDrawer from '../components/MasonDrawer'
+import { useMason, AgentState } from '../mason/MasonContext'
 import { useCart } from '../cart/CartContext'
 import styles from './Chat.module.css'
-
-type AuthMode = 'none' | 'login' | 'register'
 
 const MASON_AVATARS = [
   '/mason/mason-1.png',
@@ -46,9 +45,6 @@ type Turn = {
   created_at: string
 }
 
-// Converts the backend's raw turn rows into the Message shape the chat
-// renders. Pulled out of the component so both initial load and the
-// "load older" pagination path can share it.
 function parseTurns(turns: Turn[]): import('../hooks/useAgentStream').Message[] {
   const msgs: import('../hooks/useAgentStream').Message[] = []
   for (const t of turns) {
@@ -100,9 +96,22 @@ function parseTurns(turns: Turn[]): import('../hooks/useAgentStream').Message[] 
   return msgs
 }
 
+// Derive Mason's visible state from the last event of the latest agent message.
+function deriveAgentState(events: StreamEvent[], streaming: boolean): AgentState {
+  if (!streaming) return 'idle'
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]
+    if (e.type === 'thinking') return 'thinking'
+    if (e.type === 'tool_call' || e.type === 'tool_result') return 'tool'
+    if (e.type === 'text' || e.type === 'ui_tree') return 'replying'
+  }
+  return 'thinking'
+}
+
 export default function Chat() {
-  const { token, user, login, logout } = useAuth()
+  const { token, user } = useAuth()
   const navigate = useNavigate()
+  const mason = useMason()
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [input, setInput] = useState('')
@@ -110,44 +119,48 @@ export default function Chat() {
   const [historyCursor, setHistoryCursor] = useState<string | null>(null)
   const [historyHasMore, setHistoryHasMore] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [inboxOpen, setInboxOpen] = useState(false)
-  const [inboxUnread, setInboxUnread] = useState(0)
-  const [authMode, setAuthMode] = useState<AuthMode>('none')
-  const [authEmail, setAuthEmail] = useState('')
-  const [authPassword, setAuthPassword] = useState('')
-  const [authName, setAuthName] = useState('')
-  const [authError, setAuthError] = useState('')
-  const [authLoading, setAuthLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<string[] | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  // Token used to discard stale in-flight `selectSession` fetches when the
-  // user switches conversations rapidly. Without this, a slow request for
-  // session A can resolve after the user has already moved to session B and
-  // overwrite B's messages with A's history.
   const selectTokenRef = useRef(0)
-  // Set by "load older" to skip the next bottom-snap so the user stays at
-  // the point in history they were reading.
   const skipNextScrollRef = useRef(false)
 
   const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
   const cart = useCart()
   const prevStreamingRef = useRef(streaming)
   useEffect(() => {
-    // When a turn finishes, the agent may have mutated the cart — refresh.
     if (prevStreamingRef.current && !streaming) {
       cart.refresh()
     }
     prevStreamingRef.current = streaming
   }, [streaming, cart])
-  // Memoize so the array reference is stable across renders that don't touch
-  // either source list. Otherwise every keystroke or stream chunk would
-  // re-fire the scroll effect below and rebuild downstream memos.
+
   const messages = useMemo(
     () => [...loadedMessages, ...liveMessages],
     [loadedMessages, liveMessages]
   )
 
-  // Load sessions for authenticated users
+  // Find the last agent message + index for streaming state and avatar bubbles.
+  const lastAgentIdx = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].from === 'agent') return i
+    }
+    return -1
+  }, [messages])
+
+  const latestAgentEvents = useMemo(() => {
+    if (lastAgentIdx === -1) return []
+    return messages[lastAgentIdx].events ?? []
+  }, [messages, lastAgentIdx])
+
+  // Sync derived agent state up to MasonContext so TopNav's chip can show it.
+  const agentState = useMemo(
+    () => deriveAgentState(latestAgentEvents, streaming),
+    [latestAgentEvents, streaming]
+  )
+  useEffect(() => {
+    mason.setAgentState(agentState)
+  }, [agentState, mason])
+
   useEffect(() => {
     if (!token) return
     api.getSessions(token).then(s => {
@@ -156,20 +169,12 @@ export default function Chat() {
     })
   }, [token])
 
-  // Create a guest session on first load if not authenticated
   useEffect(() => {
-    if (token) return // authenticated users handled above
+    if (token) return
     if (activeSessionId) return
     api.createGuestSession().then(s => setActiveSessionId(s.id))
   }, [token, activeSessionId])
 
-  // Fetch inbox unread count for authenticated users
-  useEffect(() => {
-    if (!token) return
-    api.getInbox(token).then(msgs => setInboxUnread(msgs.filter(m => !m.read).length))
-  }, [token])
-
-  // Fetch personalized welcome suggestions. Silent failure → keep fallback.
   useEffect(() => {
     if (!token) { setSuggestions(null); return }
     let cancelled = false
@@ -179,10 +184,6 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [token])
 
-  // Smooth-scroll only when content grows during the active session. On a
-  // session switch the message count usually jumps from N to M in one render —
-  // a smooth scroll across hundreds of pixels feels like a hang, so jump
-  // instantly in that case.
   const prevSessionRef = useRef<number | null>(null)
   useEffect(() => {
     const switched = prevSessionRef.current !== activeSessionId
@@ -227,8 +228,6 @@ export default function Chat() {
       setHistoryHasMore(res.has_more)
       setHistoryCursor(res.next_cursor)
     } catch (e) {
-      // Surface so we can diagnose "old chat won't load" — was previously
-      // swallowed which made auth/404/parse failures look like an empty chat.
       console.error('[selectSession] failed to load turns for', id, e)
     }
   }
@@ -244,10 +243,6 @@ export default function Chat() {
       })
       if (myToken !== selectTokenRef.current) return
       const older = parseTurns(res.turns)
-      // Prepend older messages; preserve existing scroll position by not
-      // touching the scroll ref here (the bottom-anchor effect only fires
-      // on length changes, but we want users reading older context to stay
-      // put — see the scroll-skip logic below).
       skipNextScrollRef.current = true
       setLoadedMessages(prev => [...older, ...prev])
       setHistoryHasMore(res.has_more)
@@ -287,9 +282,6 @@ export default function Chat() {
     sendMessage(answer, questionCardId)
   }, [sendMessage])
 
-  // Keep a ref to the latest `messages` so handleIntent (which we memoize
-  // below) doesn't need to depend on it. Without this, every new stream
-  // chunk would change handleIntent's identity and bust AgentMessage's memo.
   const messagesRef = useRef(messages)
   messagesRef.current = messages
 
@@ -336,37 +328,6 @@ export default function Chat() {
     }
   }, [sendMessage])
 
-  function openAuth(mode: 'login' | 'register') {
-    setAuthMode(mode)
-    setAuthError('')
-    setAuthEmail('')
-    setAuthPassword('')
-    setAuthName('')
-  }
-
-  async function handleAuth(e: FormEvent) {
-    e.preventDefault()
-    setAuthError('')
-    setAuthLoading(true)
-    try {
-      const data = authMode === 'login'
-        ? await api.login(authEmail, authPassword)
-        : await api.register(authEmail, authPassword, authName || undefined)
-      login(data.access_token, data.user)
-      setAuthMode('none')
-      // Load sessions for the newly logged-in user
-      const s = await api.getSessions(data.access_token)
-      setSessions(s)
-      if (s.length) {
-        await selectSession(s[0].id)
-      }
-    } catch (err: unknown) {
-      setAuthError((err as Error).message)
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
   async function handleDeleteSession(e: MouseEvent, id: number) {
     e.stopPropagation()
     if (!token || !confirm('Delete this conversation?')) return
@@ -379,121 +340,13 @@ export default function Chat() {
     }
   }
 
-  function handleLogout() {
-    logout()
-    setSessions([])
-    setActiveSessionId(null)
-    reset()
-    // Create a fresh guest session
-    api.createGuestSession().then(s => setActiveSessionId(s.id))
+  function handleCorrect(text: string) {
+    if (streaming) return
+    sendMessage(`Correction from you: ${text}`)
   }
 
   return (
     <div className={styles.layout}>
-      {/* Sidebar */}
-      <aside className={styles.sidebar}>
-        <button className={styles.newChat} onClick={newSession}>+ New task</button>
-
-        <div className={styles.recentDivider}>
-          <span>Recent</span>
-        </div>
-
-        {/* Session list — only shown when logged in */}
-        {token && (
-          <div className={styles.sessionList}>
-            {sessions.map(s => (
-              <button
-                key={s.id}
-                className={`${styles.sessionItem} ${s.id === activeSessionId ? styles.active : ''}`}
-                onClick={() => selectSession(s.id)}
-              >
-                <span className={styles.sessionTitle}>{s.title}</span>
-                <div className={styles.sessionMeta}>
-                  <span className={styles.sessionDate}>{new Date(s.updated_at).toLocaleDateString()}</span>
-                  <button
-                    className={styles.deleteSessionBtn}
-                    onClick={e => handleDeleteSession(e, s.id)}
-                    title="Delete conversation"
-                  >×</button>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Guest notice — shown when not logged in */}
-        {!token && authMode === 'none' && (
-          <div className={styles.guestNotice}>
-            <p>Sign in to save your shopping history and preferences.</p>
-            <div className={styles.guestButtons}>
-              <button className={styles.signInBtn} onClick={() => openAuth('login')}>Sign in</button>
-              <button className={styles.registerBtn} onClick={() => openAuth('register')}>Register</button>
-            </div>
-          </div>
-        )}
-
-        {/* Inline auth form */}
-        {!token && authMode !== 'none' && (
-          <div className={styles.authPanel}>
-            <div className={styles.authPanelHeader}>
-              <span>{authMode === 'login' ? 'Sign in' : 'Create account'}</span>
-              <button className={styles.authClose} onClick={() => setAuthMode('none')}>✕</button>
-            </div>
-            <form onSubmit={handleAuth} className={styles.authForm}>
-              {authMode === 'register' && (
-                <input
-                  className={styles.authInput}
-                  type="text"
-                  placeholder="Display name (optional)"
-                  value={authName}
-                  onChange={e => setAuthName(e.target.value)}
-                />
-              )}
-              <input
-                className={styles.authInput}
-                type="email"
-                placeholder="Email"
-                value={authEmail}
-                onChange={e => setAuthEmail(e.target.value)}
-                required
-                autoFocus
-              />
-              <input
-                className={styles.authInput}
-                type="password"
-                placeholder="Password"
-                value={authPassword}
-                onChange={e => setAuthPassword(e.target.value)}
-                required
-              />
-              {authError && <p className={styles.authError}>{authError}</p>}
-              <button className={styles.authSubmit} type="submit" disabled={authLoading}>
-                {authLoading ? '…' : authMode === 'login' ? 'Sign in' : 'Register'}
-              </button>
-            </form>
-            <p className={styles.authSwitch}>
-              {authMode === 'login' ? (
-                <>No account? <button onClick={() => openAuth('register')}>Register</button></>
-              ) : (
-                <>Have an account? <button onClick={() => openAuth('login')}>Sign in</button></>
-              )}
-            </p>
-          </div>
-        )}
-
-        <div className={styles.sidebarFooter}>
-          {user ? (
-            <>
-              <span className={styles.userName}>{user.display_name ?? user.email}</span>
-              <button className={styles.logoutBtn} onClick={handleLogout}>Sign out</button>
-            </>
-          ) : (
-            <span className={styles.guestLabel}>Browsing as guest</span>
-          )}
-        </div>
-      </aside>
-
-      {/* Main */}
       <main className={styles.main}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
@@ -505,7 +358,7 @@ export default function Chat() {
             </h2>
             {!token && (
               <p className={styles.guestHint}>
-                <button onClick={() => openAuth('login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.
+                <button onClick={() => navigate('/login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.
               </p>
             )}
             <div className={styles.suggestions}>
@@ -546,15 +399,32 @@ export default function Chat() {
                 </button>
               </div>
             )}
-            {(() => {
-              // Find the index of the last agent message — only that one shows live streaming state.
-              let lastAgentIdx = -1
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (messages[i].from === 'agent') { lastAgentIdx = i; break }
-              }
-              return messages.map((msg, idx) => (
+            {messages.map((msg, idx) => {
+              const isLastAgent = idx === lastAgentIdx
+              const showThinkBubble = isLastAgent && streaming && (agentState === 'thinking' || agentState === 'tool')
+              const showChatBubble = isLastAgent && streaming && agentState === 'replying'
+              return (
                 <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                  {msg.from === 'agent' && <div className={styles.avatar}><img src={pickMason(msg.id)} alt="" /></div>}
+                  {msg.from === 'agent' && (
+                    <div className={styles.avatarWrap}>
+                      <button
+                        type="button"
+                        className={styles.avatar}
+                        onClick={mason.openDrawer}
+                        aria-label="Open Mason"
+                      >
+                        <img src={pickMason(msg.id)} alt="" />
+                      </button>
+                      {showThinkBubble && (
+                        <span className={`${styles.bubbleTip} ${styles.thinkBubble}`} aria-hidden="true">
+                          {agentState === 'tool' ? '📓' : <><span /><span /><span /></>}
+                        </span>
+                      )}
+                      {showChatBubble && (
+                        <span className={`${styles.bubbleTip} ${styles.chatBubble}`} aria-hidden="true">💬</span>
+                      )}
+                    </div>
+                  )}
                   <div className={styles.bubble}>
                     {msg.from === 'user' ? (
                       <p className={styles.userText}>{msg.text}</p>
@@ -571,8 +441,8 @@ export default function Chat() {
                   </div>
                   {msg.from === 'user' && <div className={styles.avatar}>👤</div>}
                 </div>
-              ))
-            })()}
+              )
+            })}
             <div ref={bottomRef} />
           </div>
         )}
@@ -583,7 +453,7 @@ export default function Chat() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask your personal shopper…"
+            placeholder="Ask Mason…"
             rows={1}
             disabled={streaming}
           />
@@ -595,22 +465,20 @@ export default function Chat() {
         </form>
       </main>
 
-      {inboxOpen && token && (
-        <InboxPanel
-          token={token}
-          onClose={() => setInboxOpen(false)}
-          onOpenSession={async (sessionId) => {
-            await selectSession(sessionId)
-            setInboxUnread(prev => Math.max(0, prev - 1))
-            // Refresh the session list if the inbox surfaced a session we
-            // didn't have locally (e.g., a new push notification).
-            const knownLocally = sessions.some(s => s.id === sessionId)
-            if (!knownLocally) {
-              api.getSessions(token).then(setSessions).catch(() => {})
-            }
-          }}
-        />
-      )}
+      <MasonDrawer
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={selectSession}
+        onNewSession={newSession}
+        onDeleteSession={handleDeleteSession}
+        plan={plan}
+        messages={messages}
+        streaming={streaming}
+        onCorrect={handleCorrect}
+        user={user}
+        token={token}
+        onSignIn={() => navigate('/login')}
+      />
     </div>
   )
 }

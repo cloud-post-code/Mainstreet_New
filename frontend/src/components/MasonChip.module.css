@@ -1,0 +1,57 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(241, 233, 216, 0.12);
+  border: 1px solid rgba(241, 233, 216, 0.3);
+  color: var(--ms-cream, #f1e9d8);
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.chip:hover {
+  background: rgba(241, 233, 216, 0.22);
+}
+
+.avatar {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #fff;
+  flex-shrink: 0;
+  border: 1px solid rgba(241, 233, 216, 0.5);
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ms-primary, #015237);
+  background: #9aa39a;
+}
+.dot_idle { background: #7aa57e; }
+.dot_thinking { background: #f0c04a; animation: chipPulse 1.2s ease-in-out infinite; }
+.dot_tool { background: #be6e46; animation: chipPulse 1.2s ease-in-out infinite; }
+.dot_replying { background: #6ec1a3; animation: chipPulse 1.2s ease-in-out infinite; }
+@keyframes chipPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.7; }
+}
+
+.name {
+  font-weight: 600;
+}

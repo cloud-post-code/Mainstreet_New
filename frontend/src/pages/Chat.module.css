@@ -1,308 +1,9 @@
 .layout {
   display: flex;
-  flex-direction: row-reverse;
+  flex-direction: column;
   height: calc(100vh - 64px);
   overflow: hidden;
-}
-
-/* ── Sidebar ── */
-.sidebar {
-  width: 260px;
-  min-width: 260px;
-  background: var(--ms-primary);
-  color: white;
-  display: flex;
-  flex-direction: column;
-  padding: 1rem;
-  gap: 0.75rem;
-}
-
-.sidebarHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255,255,255,0.15);
-}
-.brand {
-  font-family: var(--font-heading);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: rgba(255,255,255,0.12);
-  color: white;
-  padding: 0.3rem 0.85rem;
-  border-radius: 3px;
-  outline: 1.5px solid rgba(255,255,255,0.3);
-  outline-offset: 2px;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  font-family: var(--font-heading);
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-.brand:hover {
-  background: rgba(255,255,255,0.18);
-}
-.sidebarHeaderActions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.adminBtn {
-  font-size: 0.75rem;
-  padding: 0.3rem 0.6rem;
-  background: var(--ms-terra);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  transition: opacity 0.15s;
-}
-.adminBtn:hover { opacity: 0.85; }
-
-.inboxBtn {
-  position: relative;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.65);
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s, background 0.15s;
-}
-.inboxBtn:hover { color: white; background: rgba(255, 255, 255, 0.1); }
-
-.inboxBadge {
-  position: absolute;
-  top: -3px;
-  right: -4px;
-  background: var(--ms-terra);
-  color: white;
-  font-size: 0.6rem;
-  font-weight: 700;
-  font-family: var(--font-body);
-  min-width: 15px;
-  height: 15px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 3px;
-  line-height: 1;
-}
-
-.newChat {
-  padding: 0.65rem 1rem;
-  background: var(--ms-sage);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.newChat:hover { opacity: 0.85; }
-
-.recentDivider {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.5rem;
-  font-family: var(--font-heading);
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-}
-.recentDivider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.sessionList {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sessionItem {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  border: none;
-  background: none;
-  color: rgba(255,255,255,0.7);
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  transition: background 0.1s;
-}
-.sessionItem:hover { background: rgba(255,255,255,0.1); }
-.sessionItem.active { background: rgba(255,255,255,0.15); color: white; }
-.sessionTitle { font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; font-family: var(--font-body); }
-.sessionMeta { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 0.1rem; }
-.sessionDate { font-size: 0.7rem; color: rgba(255,255,255,0.4); }
-.deleteSessionBtn {
-  opacity: 0;
-  background: none;
-  border: none;
-  color: var(--ms-terra, #be6e46);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0 2px;
-  transition: opacity 0.15s;
-}
-.sessionItem:hover .deleteSessionBtn { opacity: 1; }
-.deleteSessionBtn:hover { color: #e05a30; }
-
-.sidebarFooter {
-  border-top: 1px solid rgba(255,255,255,0.15);
-  padding-top: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.userName { font-size: 0.8rem; color: rgba(255,255,255,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
-.logoutBtn { font-size: 0.75rem; color: rgba(255,255,255,0.5); background: none; border: none; cursor: pointer; font-family: var(--font-body); }
-.logoutBtn:hover { color: white; }
-.guestLabel { font-size: 0.78rem; color: rgba(255,255,255,0.4); }
-
-/* ── Guest notice ── */
-.guestNotice {
-  background: rgba(0,0,0,0.2);
-  border-radius: 10px;
-  padding: 0.85rem;
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.65);
-  line-height: 1.5;
-  font-family: var(--font-body);
-}
-.guestButtons {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-.signInBtn {
-  flex: 1;
-  padding: 0.45rem 0;
-  background: var(--ms-terra);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.signInBtn:hover { opacity: 0.85; }
-.registerBtn {
-  flex: 1;
-  padding: 0.45rem 0;
-  background: transparent;
-  color: rgba(255,255,255,0.65);
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.registerBtn:hover { color: white; border-color: rgba(255,255,255,0.5); }
-
-/* ── Inline auth panel ── */
-.authPanel {
-  background: rgba(0,0,0,0.2);
-  border-radius: 10px;
-  padding: 0.85rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-.authPanelHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: white;
-  font-family: var(--font-heading);
-}
-.authClose {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.5);
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 0;
-}
-.authClose:hover { color: white; }
-.authForm {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-.authInput {
-  padding: 0.5rem 0.65rem;
-  background: rgba(0,0,0,0.25);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 6px;
-  color: white;
-  font-size: 0.82rem;
-  font-family: var(--font-body);
-  outline: none;
-  transition: border-color 0.15s;
-}
-.authInput:focus { border-color: var(--ms-sage); }
-.authInput::placeholder { color: rgba(255,255,255,0.3); }
-.authError { font-size: 0.78rem; color: #fc8181; margin: 0; }
-.authSubmit {
-  padding: 0.5rem;
-  background: var(--ms-terra);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  font-family: var(--font-body);
-  cursor: pointer;
-  margin-top: 0.1rem;
-  transition: opacity 0.15s;
-}
-.authSubmit:disabled { opacity: 0.5; cursor: not-allowed; }
-.authSubmit:not(:disabled):hover { opacity: 0.85; }
-.authSwitch {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.45);
-  text-align: center;
-  margin: 0;
-}
-.authSwitch button {
-  background: none;
-  border: none;
-  color: var(--ms-sage);
-  cursor: pointer;
-  font-size: 0.78rem;
-  padding: 0;
-  text-decoration: underline;
-  font-family: var(--font-body);
+  background: var(--ms-cream);
 }
 
 /* ── Main ── */
@@ -312,6 +13,9 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--ms-cream);
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
 }
 
 /* ── Empty state ── */
@@ -410,6 +114,11 @@
 .userRow { flex-direction: row-reverse; }
 .agentRow { flex-direction: row; }
 
+.avatarWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .avatar {
   width: 34px;
   height: 34px;
@@ -422,12 +131,65 @@
   font-size: 1rem;
   flex-shrink: 0;
   overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.avatar:hover {
+  transform: scale(1.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.bubbleTip {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(15, 24, 5, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+  animation: bubbleIn 0.2s ease;
+}
+@keyframes bubbleIn {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.thinkBubble span {
+  width: 4px;
+  height: 4px;
+  background: var(--ms-primary, #015237);
+  border-radius: 50%;
+  display: inline-block;
+  animation: tinyBounce 1.1s ease-in-out infinite;
+}
+.thinkBubble span:nth-child(2) { animation-delay: 0.15s; }
+.thinkBubble span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tinyBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
+.chatBubble {
+  background: var(--ms-sage, #7a9e7e);
+  color: #fff;
+  border-color: transparent;
 }
 
 .bubble {

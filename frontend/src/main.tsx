@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { CartProvider } from './cart/CartContext'
+import { MasonProvider } from './mason/MasonContext'
 import AppLayout from './components/AppLayout'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <BrowserRouter>
         <CartProvider>
+          <MasonProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -38,6 +40,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             </Route>
           </Routes>
+          </MasonProvider>
         </CartProvider>
       </BrowserRouter>
     </AuthProvider>
