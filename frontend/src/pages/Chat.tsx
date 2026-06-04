@@ -100,29 +100,6 @@ function parseTurns(turns: Turn[]): import('../hooks/useAgentStream').Message[] 
   return msgs
 }
 
-/** Latest agent turn that includes a rendered UI tree — powers the discovery center. */
-function latestStageMessage(
-  messages: import('../hooks/useAgentStream').Message[]
-): import('../hooks/useAgentStream').Message | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m.from !== 'agent') continue
-    if ((m.events ?? []).some(e => e.type === 'ui_tree')) return m
-  }
-  return null
-}
-
-/** True when the agent turn has chat-only content worth showing in the sidebar. */
-function hasChatContent(msg: import('../hooks/useAgentStream').Message): boolean {
-  if (msg.from === 'user') return Boolean(msg.text?.trim())
-  return (msg.events ?? []).some(e =>
-    e.type === 'text'
-    || e.type === 'plan_update'
-    || e.type === 'thinking'
-    || (e.type === 'tool_call' && e.tool !== 'render_ui')
-  )
-}
-
 export default function Chat() {
   const { token, user, login, logout } = useAuth()
   const navigate = useNavigate()
@@ -359,11 +336,6 @@ export default function Chat() {
     }
   }, [sendMessage])
 
-  const stageMessage = useMemo(() => latestStageMessage(messages), [messages])
-  const stageIsStreaming = Boolean(
-    streaming && stageMessage && messages[messages.length - 1]?.id === stageMessage.id
-  )
-
   function openAuth(mode: 'login' | 'register') {
     setAuthMode(mode)
     setAuthError('')
@@ -521,79 +493,45 @@ export default function Chat() {
         </div>
       </aside>
 
-      {/* Discovery center — products and interactive UI take the main stage */}
-      <section className={styles.discovery}>
-        <header className={styles.discoveryHeader}>
-          <h1 className={styles.discoveryTitle}>Discover</h1>
-          {stageMessage && (
-            <span className={styles.discoveryHint}>Mason&apos;s latest picks</span>
-          )}
-        </header>
-
-        <div className={styles.discoveryBody}>
-          {!stageMessage ? (
-            <div className={styles.empty}>
-              <div className={styles.emptyIcon}><img src="/brick-mascot.png" alt="Brick mascot" /></div>
-              <h2>
-                {user
-                  ? `Welcome back, ${user.display_name ?? user.email?.split('@')[0] ?? 'friend'} — what are we shopping for?`
-                  : 'Your local shops, one conversation away'}
-              </h2>
-              {!token && (
-                <p className={styles.guestHint}>
-                  <button onClick={() => openAuth('login')} className={styles.inlineLink}>Sign in</button> to save preferences and history.
-                </p>
-              )}
-              <div className={styles.suggestions}>
-                {(suggestions ?? FALLBACK_SUGGESTIONS).map(s => (
-                  <button
-                    key={s}
-                    className={styles.suggestion}
-                    disabled={streaming}
-                    onClick={async () => {
-                      if (streaming) return
-                      if (!activeSessionId) {
-                        const sess = token
-                          ? await api.createSession(token)
-                          : await api.createGuestSession()
-                        if (token) setSessions(prev => [sess, ...prev])
-                        setActiveSessionId(sess.id)
-                        setTimeout(() => sendMessage(s), 50)
-                        return
-                      }
-                      sendMessage(s)
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className={styles.stage}>
-              <AgentErrorBoundary>
-                <AgentMessage
-                  events={stageMessage.events ?? []}
-                  streaming={stageIsStreaming}
-                  variant="stage"
-                  onAnswer={handleAnswer}
-                  onIntent={handleIntent}
-                />
-              </AgentErrorBoundary>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Right chat panel — conversation context, inverted from ChatGPT */}
-      <aside className={styles.chatPanel}>
-        <header className={styles.chatPanelHeader}>
-          <span className={styles.chatPanelTitle}>Chat with Mason</span>
-        </header>
-
+      {/* Main */}
+      <main className={styles.main}>
         {messages.length === 0 ? (
-          <div className={styles.chatEmpty}>
-            <p>Ask Mason anything — picks show up in the center.</p>
+          <div className={styles.empty}>
+            <div className={styles.emptyIcon}><img src="/brick-mascot.png" alt="Brick mascot" /></div>
+            <h2>
+              {user
+                ? `Welcome back, ${user.display_name ?? user.email?.split('@')[0] ?? 'friend'} — anything I can help you find today?`
+                : 'Experience your local shopping assistant today'}
+            </h2>
+            {!token && (
+              <p className={styles.guestHint}>
+                <button onClick={() => openAuth('login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.
+              </p>
+            )}
+            <div className={styles.suggestions}>
+              {(suggestions ?? FALLBACK_SUGGESTIONS).map(s => (
+                <button
+                  key={s}
+                  className={styles.suggestion}
+                  disabled={streaming}
+                  onClick={async () => {
+                    if (streaming) return
+                    if (!activeSessionId) {
+                      const sess = token
+                        ? await api.createSession(token)
+                        : await api.createGuestSession()
+                      if (token) setSessions(prev => [sess, ...prev])
+                      setActiveSessionId(sess.id)
+                      setTimeout(() => sendMessage(s), 50)
+                      return
+                    }
+                    sendMessage(s)
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <div className={styles.messages}>
@@ -604,39 +542,36 @@ export default function Chat() {
                   onClick={loadOlderMessages}
                   disabled={historyLoading}
                 >
-                  {historyLoading ? 'Loading…' : 'Load older'}
+                  {historyLoading ? 'Loading…' : 'Load older messages'}
                 </button>
               </div>
             )}
             {(() => {
+              // Find the index of the last agent message — only that one shows live streaming state.
               let lastAgentIdx = -1
               for (let i = messages.length - 1; i >= 0; i--) {
                 if (messages[i].from === 'agent') { lastAgentIdx = i; break }
               }
-              return messages.map((msg, idx) => {
-                if (msg.from === 'agent' && !hasChatContent(msg)) return null
-                return (
-                  <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
-                    {msg.from === 'agent' && <div className={styles.avatar}><img src={pickMason(msg.id)} alt="" /></div>}
-                    <div className={styles.bubble}>
-                      {msg.from === 'user' ? (
-                        <p className={styles.userText}>{msg.text}</p>
-                      ) : (
-                        <AgentErrorBoundary>
-                          <AgentMessage
-                            events={msg.events ?? []}
-                            streaming={streaming && idx === lastAgentIdx}
-                            variant="chat"
-                            onAnswer={handleAnswer}
-                            onIntent={handleIntent}
-                          />
-                        </AgentErrorBoundary>
-                      )}
-                    </div>
-                    {msg.from === 'user' && <div className={styles.avatar}>👤</div>}
+              return messages.map((msg, idx) => (
+                <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
+                  {msg.from === 'agent' && <div className={styles.avatar}><img src={pickMason(msg.id)} alt="" /></div>}
+                  <div className={styles.bubble}>
+                    {msg.from === 'user' ? (
+                      <p className={styles.userText}>{msg.text}</p>
+                    ) : (
+                      <AgentErrorBoundary>
+                        <AgentMessage
+                          events={msg.events ?? []}
+                          streaming={streaming && idx === lastAgentIdx}
+                          onAnswer={handleAnswer}
+                          onIntent={handleIntent}
+                        />
+                      </AgentErrorBoundary>
+                    )}
                   </div>
-                )
-              })
+                  {msg.from === 'user' && <div className={styles.avatar}>👤</div>}
+                </div>
+              ))
             })()}
             <div ref={bottomRef} />
           </div>
@@ -658,7 +593,7 @@ export default function Chat() {
             </svg>
           </button>
         </form>
-      </aside>
+      </main>
 
       {inboxOpen && token && (
         <InboxPanel
