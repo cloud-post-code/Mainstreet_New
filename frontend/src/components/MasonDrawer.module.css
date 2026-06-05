@@ -1,5 +1,5 @@
 .backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: rgba(15, 24, 5, 0.45);
   z-index: 100;
@@ -8,11 +8,11 @@
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 .panel {
-  position: fixed;
+  position: absolute;
   top: 0;
   right: 0;
-  height: 100vh;
-  width: min(420px, 100vw);
+  height: 100%;
+  width: min(420px, 100%);
   background: var(--ms-cream, #f1e9d8);
   color: var(--ms-dark, #0f1805);
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.2);

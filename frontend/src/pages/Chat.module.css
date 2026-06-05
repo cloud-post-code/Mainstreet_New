@@ -4,6 +4,7 @@
   height: calc(100vh - 64px);
   overflow: hidden;
   background: var(--ms-cream);
+  position: relative;
 }
 
 /* ── Main ── */
@@ -31,6 +32,11 @@
 }
 .emptyIcon { font-size: 3.5rem; }
 .emptyIcon img { width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
+.emptyIcon > button {
+  width: 112px;
+  height: 112px;
+  border-width: 3px;
+}
 .empty h2 {
   font-family: var(--font-heading);
   font-size: 1.5rem;

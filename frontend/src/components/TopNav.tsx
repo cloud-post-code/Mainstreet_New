@@ -2,7 +2,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../cart/CartContext'
 import MainStLogo from './MainStLogo'
-import MasonChip from './MasonChip'
 import styles from './TopNav.module.css'
 
 export default function TopNav() {
@@ -48,7 +47,6 @@ export default function TopNav() {
         >
           Home
         </Link>
-        <MasonChip />
         <Link
           to="/inbox"
           className={`${styles.link} ${isActive('/inbox') ? styles.active : ''}`}

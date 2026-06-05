@@ -1,5 +1,4 @@
 import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
@@ -92,7 +91,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     setNotes(prev => prev.filter((_, i) => i !== idx))
   }
 
-  return createPortal(
+  return (
     <>
       <div className={styles.backdrop} onClick={closeDrawer} aria-hidden="true" />
       <aside className={styles.panel} role="dialog" aria-label="Mason">
@@ -100,7 +99,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
           <div className={styles.headerIdent}>
             <div className={styles.avatar}>
               <img src="/mason/mason-1.png" alt="" />
-              <span className={`${styles.statusDot} ${styles[`status_${agentState}`]}`} />
             </div>
             <div className={styles.headerText}>
               <span className={styles.headerName}>Mason</span>
@@ -268,7 +266,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
           )}
         </div>
       </aside>
-    </>,
-    document.body,
+    </>
   )
 }

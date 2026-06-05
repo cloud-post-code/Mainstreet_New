@@ -6,6 +6,7 @@ import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
 import AgentErrorBoundary from '../components/AgentErrorBoundary'
 import MasonDrawer from '../components/MasonDrawer'
+import MasonChip from '../components/MasonChip'
 import { useMason, AgentState } from '../mason/MasonContext'
 import { useCart } from '../cart/CartContext'
 import styles from './Chat.module.css'
@@ -330,7 +331,7 @@ export default function Chat() {
       <main className={styles.main}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
-            <div className={styles.emptyIcon}><img src="/brick-mascot.png" alt="Brick mascot" /></div>
+            <div className={styles.emptyIcon}><MasonChip /></div>
             <h2>
               {user
                 ? `Welcome back, ${user.display_name ?? user.email?.split('@')[0] ?? 'friend'} — anything I can help you find today?`
