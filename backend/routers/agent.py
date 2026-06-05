@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from db.database import get_db
+from db.database import get_db, AsyncSessionLocal
 from db.models import AgentSession, AgentPlan, User
 from db.schemas import SessionOut, TurnIn, PlanOut
 from auth import get_current_user, get_optional_user
@@ -199,31 +199,38 @@ async def agent_turn(
 
     user_id = current_user.id if current_user else None
     session_id = body.session_id
+    message = body.message
+    question_card_id = body.question_card_id
 
     async def stream():
         import json as _json
-        try:
-            async for chunk in run_agent_turn(
-                user_message=body.message,
-                session_id=session_id,
-                user_id=user_id,
-                question_card_id=body.question_card_id,
-                db=db,
-            ):
-                yield chunk
-        except Exception:
-            logger.exception("agent_turn stream crashed for session %s", session_id)
-            yield _json.dumps({
-                "type": "error",
-                "error": "Agent failed. Please retry.",
-            }) + "\n"
-        finally:
+        # The request-scoped `db` session is closed when this generator starts
+        # streaming, so the streaming turn needs its own session with a
+        # lifetime tied to the generator. Without this, the connection leaks
+        # back into the pool in a broken state and exhausts it.
+        async with AsyncSessionLocal() as stream_db:
             try:
-                await db.execute(
-                    update(AgentSession).where(AgentSession.id == session_id).values(processing=False)
-                )
-                await db.commit()
+                async for chunk in run_agent_turn(
+                    user_message=message,
+                    session_id=session_id,
+                    user_id=user_id,
+                    question_card_id=question_card_id,
+                    db=stream_db,
+                ):
+                    yield chunk
             except Exception:
-                logger.exception("Failed to clear processing flag for session %s", session_id)
+                logger.exception("agent_turn stream crashed for session %s", session_id)
+                yield _json.dumps({
+                    "type": "error",
+                    "error": "Agent failed. Please retry.",
+                }) + "\n"
+            finally:
+                try:
+                    await stream_db.execute(
+                        update(AgentSession).where(AgentSession.id == session_id).values(processing=False)
+                    )
+                    await stream_db.commit()
+                except Exception:
+                    logger.exception("Failed to clear processing flag for session %s", session_id)
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
