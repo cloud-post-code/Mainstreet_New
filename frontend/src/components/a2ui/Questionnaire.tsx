@@ -26,6 +26,7 @@ interface Props {
 }
 
 export default function Questionnaire({
+  questionnaire_id,
   current_step,
   steps,
   title,
@@ -33,7 +34,15 @@ export default function Questionnaire({
   answered,
 }: Props) {
   const safeSteps = Array.isArray(steps) ? steps : []
-  const stepIndex = Math.max(0, Math.min(current_step ?? 0, safeSteps.length))
+  const initialStep = Math.max(0, Math.min(current_step ?? 0, safeSteps.length))
+
+  // Advance steps locally so Mason isn't called between questions. We only
+  // emit a single answer_choice once every step is answered.
+  const [localStep, setLocalStep] = useState(initialStep)
+  const [collected, setCollected] = useState<Record<string, string>>({})
+  const [submitted, setSubmitted] = useState(false)
+
+  const stepIndex = Math.min(localStep, safeSteps.length)
   const active = safeSteps[stepIndex]
 
   const [selectedMulti, setSelectedMulti] = useState<string[]>([])
@@ -49,17 +58,34 @@ export default function Questionnaire({
     setSingleChoice(null)
   }, [stepIndex, active?.step_id])
 
-  function submit(answer: string) {
-    if (!active || answered) return
+  function recordAndAdvance(answer: string) {
+    if (!active || submitted || answered) return
     const trimmed = answer.trim()
     if (!trimmed) return
-    onIntent?.('answer_choice', { question_id: active.step_id, choice: trimmed })
+
+    const nextCollected = { ...collected, [active.step_id]: trimmed }
+    setCollected(nextCollected)
+
+    const nextIndex = stepIndex + 1
+    if (nextIndex >= safeSteps.length) {
+      // All steps answered — send bundled answers to Mason in one shot.
+      const bundle = safeSteps
+        .map(s => `${s.question} ${nextCollected[s.step_id] ?? ''}`.trim())
+        .join('\n')
+      setSubmitted(true)
+      onIntent?.('answer_choice', {
+        question_id: questionnaire_id,
+        choice: bundle,
+      })
+    } else {
+      setLocalStep(nextIndex)
+    }
   }
 
   function pickSingle(choice: string) {
     if (singleChoice) return
     setSingleChoice(choice)
-    submit(choice)
+    recordAndAdvance(choice)
   }
 
   function toggleMulti(opt: string) {
@@ -72,10 +98,10 @@ export default function Questionnaire({
     const parts = [...selectedMulti]
     const other = otherText.trim()
     if (other) parts.push(`Other: ${other}`)
-    submit(parts.join(', '))
+    recordAndAdvance(parts.join(', '))
   }
 
-  const disabled = Boolean(answered)
+  const disabled = Boolean(answered) || submitted
 
   return (
     <div className={styles.questionnaireCard}>
@@ -175,13 +201,13 @@ export default function Questionnaire({
                     value={textValue}
                     onChange={e => setTextValue(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter' && textValue.trim()) submit(textValue.trim())
+                      if (e.key === 'Enter' && textValue.trim()) recordAndAdvance(textValue.trim())
                     }}
                     disabled={disabled}
                   />
                   <button
                     className={styles.questionnaireContinue}
-                    onClick={() => textValue.trim() && submit(textValue.trim())}
+                    onClick={() => textValue.trim() && recordAndAdvance(textValue.trim())}
                     disabled={disabled || !textValue.trim()}
                   >
                     Send
