@@ -330,6 +330,18 @@ export default function Chat() {
       <main className={styles.main}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
+            <div className={styles.brickColumn} aria-hidden="true" data-side="left">
+              <img src="/brick-mascot.png" alt="" />
+              <img src="/brick-mascot.png" alt="" />
+              <img src="/brick-mascot.png" alt="" />
+              <img src="/brick-mascot.png" alt="" />
+            </div>
+            <div className={styles.brickColumn} aria-hidden="true" data-side="right">
+              <img src="/brick-mascot.png" alt="" />
+              <img src="/brick-mascot.png" alt="" />
+              <img src="/brick-mascot.png" alt="" />
+              <img src="/brick-mascot.png" alt="" />
+            </div>
             <div className={styles.emptyIcon}><MasonChip /></div>
             <h2>
               {user

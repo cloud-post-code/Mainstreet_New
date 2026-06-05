@@ -27,10 +27,10 @@ interface MasonDrawerProps {
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'notes', label: 'Notes' },
+  { key: 'history', label: 'History' },
   { key: 'preferences', label: 'Prefs' },
   { key: 'saved', label: 'Saved' },
-  { key: 'history', label: 'History' },
+  { key: 'notes', label: 'Notes' },
 ]
 
 export default function MasonDrawer(props: MasonDrawerProps) {

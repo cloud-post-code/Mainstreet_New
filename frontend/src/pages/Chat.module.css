@@ -63,6 +63,39 @@
   gap: 0.75rem;
   padding: 2rem;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative brick columns flanking the welcome panel. Hidden on narrow
+   screens; on wider screens they fill the empty gutters and scale with
+   viewport. */
+.brickColumn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  padding: 2rem 0;
+  pointer-events: none;
+  opacity: 0.55;
+  width: clamp(80px, 12vw, 160px);
+}
+.brickColumn[data-side="left"] { left: 0; }
+.brickColumn[data-side="right"] { right: 0; }
+.brickColumn img {
+  width: clamp(48px, 7vw, 110px);
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+@media (min-width: 900px) {
+  .brickColumn { display: flex; }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .brickColumn img:nth-child(n+4) { display: none; }
 }
 .emptyIcon { font-size: 3.5rem; }
 .emptyIcon img { width: 96px; height: 96px; object-fit: contain; display: block; margin: 0 auto; }
