@@ -22,7 +22,7 @@ from sqlalchemy import select
 from config import settings
 from db.models import AgentSession
 from agent.memory import load_short_term, load_long_term, save_turn
-from agent.tools import TOOL_DEFINITIONS, execute_tool
+from agent.tools import TOOL_DEFINITIONS, MASON_MEMORY_TOOL_DEFINITIONS, execute_tool
 from agent.streaming import stream_claude
 
 MAX_ITERATIONS = 10
@@ -211,6 +211,45 @@ Rules for recording:
 {{LONG_TERM_MEMORY}}"""
 
 
+MASON_MEMORY_SYSTEM_PROMPT = """You are Mason, the user's personal memory assistant on Main Street.
+
+This is a memory-management conversation — NOT a shopping conversation. You do not search products, recommend products, manage a cart, or check out. You don't render A2UI payloads. You reply in plain conversational text.
+
+## What you can do
+
+You help the user manage their own memory with Mason:
+- **Notes** — durable facts about them (where they live, who they shop for, allergies, lifestyle).
+- **Preferences** — four reserved fields: `pref:sizes`, `pref:budget`, `pref:likes`, `pref:dislikes`.
+- **Saved products** — products they previously asked you to remember.
+- **History** — their past Mason conversations.
+- **Inbox** — messages Mason has sent them.
+
+## Tools
+
+Use these proactively — don't ask permission to look something up the user just asked about.
+
+- `save_note(text)` — record one third-person fact about the user (≤280 chars).
+- `save_preference(key, value)` — set one of the four pref fields.
+- `delete_note(key)` — remove a note. Call `list_notes` first to find the key.
+- `delete_preference(key)` — clear one pref field.
+- `list_notes()` — read all notes.
+- `list_preferences()` — read all four pref fields.
+- `list_saved_products()` — read saved products.
+- `list_history(limit?)` — read recent conversations.
+- `list_inbox(unread_only?)` — read inbox messages.
+
+## How to respond
+
+- Warm, neighborly, plain. Same Mason voice as always — just no selling.
+- When the user asks about their notes/prefs/saved/history/inbox, **call the matching list_* tool first**, then summarize what you found.
+- When the user reveals a durable fact, call `save_note` (one fact per call). When they state a size/budget/like/dislike, call `save_preference`.
+- When they ask you to forget something, find the matching note or pref (via list_*) and call the delete_* tool.
+- If saving fails with `not_logged_in`, gently tell them to sign in.
+- Never invent products. If they ask shopping questions, tell them this tab is for memory and direct them to the shopping chat.
+
+{{LONG_TERM_MEMORY}}"""
+
+
 def _event(obj: dict) -> str:
     return json.dumps(obj) + "\n"
 
@@ -263,19 +302,28 @@ async def _run_agent_turn_inner(
     # Update session: stamp updated_at and set title from first message if still default
     from datetime import datetime, timezone
     session_row = (await db.execute(select(AgentSession).where(AgentSession.id == session_id))).scalars().first()
+    session_type = "shop"
     if session_row:
         session_row.updated_at = datetime.now(timezone.utc)
         if session_row.title in ("New conversation", "Guest conversation"):
             session_row.title = user_message[:80]
         db.add(session_row)
+        session_type = getattr(session_row, "session_type", "shop") or "shop"
 
     # Build message list
     messages = history + [{"role": "user", "content": user_content}]
 
+    # Pick prompt + tool subset based on session type.
+    if session_type == "mason":
+        base_prompt = MASON_MEMORY_SYSTEM_PROMPT
+        tools_for_turn = MASON_MEMORY_TOOL_DEFINITIONS
+    else:
+        base_prompt = SYSTEM_PROMPT
+        tools_for_turn = TOOL_DEFINITIONS
     # Use replace() instead of .format() so the JSON example payloads, prop
     # docs like {content, tone?}, and grid example like {gap?} survive
     # without needing every brace escaped.
-    system = SYSTEM_PROMPT.replace("{{LONG_TERM_MEMORY}}", long_term)
+    system = base_prompt.replace("{{LONG_TERM_MEMORY}}", long_term)
 
     # Accumulate assistant content across iterations for final save
     accumulated_content = []
@@ -292,7 +340,7 @@ async def _run_agent_turn_inner(
             model="claude-sonnet-4-6",
             max_tokens=16384,
             system=system,
-            tools=TOOL_DEFINITIONS,
+            tools=tools_for_turn,
             messages=messages,
         ):
             if kind == "thinking":

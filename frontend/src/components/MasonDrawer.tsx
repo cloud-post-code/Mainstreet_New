@@ -72,7 +72,12 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     setNewNote('')
   }
 
-  if (!isOpen) return <ReopenButton />
+  if (!isOpen) return (
+    <ReopenButton
+      onNewSession={props.onNewSession}
+      onOpenHistory={() => setTab('history')}
+    />
+  )
 
   const panelClass = [
     styles.panel,
@@ -332,17 +337,49 @@ export default function MasonDrawer(props: MasonDrawerProps) {
   )
 }
 
-function ReopenButton() {
+function ReopenButton({
+  onNewSession,
+  onOpenHistory,
+}: {
+  onNewSession: () => void
+  onOpenHistory: () => void
+}) {
   const { openDrawer } = useMason()
   return (
-    <button
-      type="button"
-      className={styles.reopenBtn}
-      onClick={openDrawer}
-      aria-label="Open Mason panel"
-      title="Open Mason"
-    >
-      <img src="/mason/mason-1.png" alt="" />
-    </button>
+    <div className={styles.reopenStack}>
+      <button
+        type="button"
+        className={styles.reopenBtn}
+        onClick={openDrawer}
+        aria-label="Open Mason panel"
+        title="Open Mason"
+      >
+        <img src="/mason/mason-1.png" alt="" />
+      </button>
+      <button
+        type="button"
+        className={styles.reopenAction}
+        onClick={onNewSession}
+        aria-label="Start a new task"
+        title="New task"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.reopenAction}
+        onClick={() => { onOpenHistory(); openDrawer() }}
+        aria-label="Open history"
+        title="History"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </svg>
+      </button>
+    </div>
   )
 }

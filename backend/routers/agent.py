@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from db.database import get_db, AsyncSessionLocal
 from db.models import AgentSession, AgentPlan, User
-from db.schemas import SessionOut, TurnIn, PlanOut
+from db.schemas import SessionOut, SessionCreate, TurnIn, PlanOut
 from auth import get_current_user, get_optional_user
 from agent.loop import run_agent_turn
 from agent.suggestions import get_suggestions
@@ -26,24 +26,32 @@ async def welcome_suggestions(
 
 @router.get("/sessions", response_model=list[SessionOut])
 async def list_sessions(
+    session_type: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
+    stmt = (
         select(AgentSession)
         .where(AgentSession.user_id == current_user.id)
         .order_by(AgentSession.updated_at.desc())
         .limit(50)
     )
+    if session_type in ("shop", "mason"):
+        stmt = stmt.where(AgentSession.session_type == session_type)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 
 @router.post("/sessions", response_model=SessionOut, status_code=201)
 async def create_session(
+    body: SessionCreate | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = AgentSession(user_id=current_user.id)
+    session_type = "shop"
+    if body and body.session_type in ("shop", "mason"):
+        session_type = body.session_type
+    session = AgentSession(user_id=current_user.id, session_type=session_type)
     db.add(session)
     await db.commit()
     await db.refresh(session)

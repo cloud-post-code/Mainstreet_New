@@ -41,7 +41,7 @@ export interface Token { access_token: string; user: User }
 export interface Shop { id: number; name: string; logo_url: string | null; description: string | null; website_url: string | null; product_count: number | null }
 export interface Product { id: number; shop_id: number; shop_name: string | null; name: string; price: string; quantity: number; image_url: string | null; description: Record<string, unknown> | null }
 export interface AdminProductsPage { items: Product[]; total: number; limit: number; offset: number }
-export interface Session { id: number; title: string; created_at: string; updated_at: string }
+export interface Session { id: number; title: string; session_type?: string; created_at: string; updated_at: string }
 export interface InboxMessage { id: number; user_id: number; session_id: number | null; title: string; preview: string; body: string; read: boolean; created_at: string }
 export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
@@ -105,14 +105,19 @@ export const api = {
   login: (email: string, password: string) =>
     request<Token>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-  getSessions: (token: string) =>
-    request<Session[]>('/api/agent/sessions', {}, token),
+  getSessions: (token: string, sessionType?: 'shop' | 'mason') => {
+    const qs = sessionType ? `?session_type=${sessionType}` : ''
+    return request<Session[]>(`/api/agent/sessions${qs}`, {}, token)
+  },
 
   getSuggestions: (token: string) =>
     request<{ suggestions: string[] }>('/api/agent/suggestions', {}, token),
 
-  createSession: (token: string) =>
-    request<Session>('/api/agent/sessions', { method: 'POST' }, token),
+  createSession: (token: string, sessionType?: 'shop' | 'mason') =>
+    request<Session>('/api/agent/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ session_type: sessionType ?? 'shop' }),
+    }, token),
 
   createGuestSession: () =>
     request<Session>('/api/agent/guest-session', { method: 'POST' }),

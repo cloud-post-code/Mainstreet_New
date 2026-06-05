@@ -48,10 +48,10 @@ export default function TopNav() {
           Home
         </Link>
         <Link
-          to="/inbox"
-          className={`${styles.link} ${isActive('/inbox') ? styles.active : ''}`}
+          to="/mason"
+          className={`${styles.link} ${isActive('/mason') ? styles.active : ''}`}
         >
-          Inbox
+          Mason
         </Link>
         <Link
           to="/discover"

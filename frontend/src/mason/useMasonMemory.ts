@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, MasonNote, MasonPrefs, MasonSavedProduct } from '../api'
+import { api, InboxMessage, MasonNote, MasonPrefs, MasonSavedProduct } from '../api'
 
 const EMPTY_PREFS: MasonPrefs = { sizes: '', budget: '', likes: '', dislikes: '' }
 
@@ -7,12 +7,14 @@ export interface MasonMemory {
   notes: MasonNote[]
   prefs: MasonPrefs
   savedProducts: MasonSavedProduct[]
+  inbox: InboxMessage[]
   loading: boolean
   addNote: (text: string) => Promise<void>
   removeNote: (key: string) => Promise<void>
   setPref: (field: keyof MasonPrefs, value: string) => void
   unsaveProduct: (productId: number) => Promise<void>
   refresh: () => Promise<void>
+  refreshInbox: () => Promise<void>
 }
 
 // One hook that owns the three Mason memory resources. Gated on token —
@@ -22,27 +24,39 @@ export function useMasonMemory(token: string | null): MasonMemory {
   const [notes, setNotes] = useState<MasonNote[]>([])
   const [prefs, setPrefs] = useState<MasonPrefs>(EMPTY_PREFS)
   const [savedProducts, setSavedProducts] = useState<MasonSavedProduct[]>([])
+  const [inbox, setInbox] = useState<InboxMessage[]>([])
   const [loading, setLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!token) {
-      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([])
+      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([]); setInbox([])
       return
     }
     setLoading(true)
     try {
-      const [n, p, s] = await Promise.all([
+      const [n, p, s, i] = await Promise.all([
         api.getMasonNotes(token),
         api.getMasonPrefs(token),
         api.getMasonSavedProducts(token),
+        api.getInbox(token).catch(() => [] as InboxMessage[]),
       ])
-      setNotes(n); setPrefs(p); setSavedProducts(s)
+      setNotes(n); setPrefs(p); setSavedProducts(s); setInbox(i)
     } catch (e) {
       // 401 is handled globally by api.request; swallow other errors so the
       // panel doesn't break the chat experience.
       console.error('[useMasonMemory] refresh failed', e)
     } finally {
       setLoading(false)
+    }
+  }, [token])
+
+  const refreshInbox = useCallback(async () => {
+    if (!token) { setInbox([]); return }
+    try {
+      const i = await api.getInbox(token)
+      setInbox(i)
+    } catch (e) {
+      console.error('[useMasonMemory] inbox refresh failed', e)
     }
   }, [token])
 
@@ -93,5 +107,5 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setSavedProducts(prev => prev.filter(p => p.product_id !== productId))
   }, [token])
 
-  return { notes, prefs, savedProducts, loading, addNote, removeNote, setPref, unsaveProduct, refresh }
+  return { notes, prefs, savedProducts, inbox, loading, addNote, removeNote, setPref, unsaveProduct, refresh, refreshInbox }
 }

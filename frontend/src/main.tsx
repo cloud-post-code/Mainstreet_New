@@ -10,7 +10,7 @@ import Register from './pages/Register'
 import Chat from './pages/Chat'
 import Admin from './pages/Admin'
 import Discover from './pages/Discover'
-import Inbox from './pages/Inbox'
+import Mason from './pages/Mason'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
@@ -36,7 +36,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route element={<AppLayout />}>
               <Route path="/" element={<Chat />} />
               <Route path="/discover" element={<Discover />} />
-              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/mason" element={<Mason />} />
+              <Route path="/inbox" element={<Navigate to="/mason" replace />} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             </Route>
           </Routes>

@@ -8,7 +8,17 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text as sql_text, bindparam
 from db.models import Product, Shop, AgentPlan
-from agent.memory import save_preference, add_note as memory_add_note, save_product as memory_save_product
+from agent.memory import (
+    save_preference,
+    add_note as memory_add_note,
+    save_product as memory_save_product,
+    delete_note as memory_delete_note,
+    list_notes as memory_list_notes,
+    get_prefs as memory_get_prefs,
+    set_prefs as memory_set_prefs,
+    list_saved_products as memory_list_saved,
+)
+from db.models import AgentSession, InboxMessage
 from agent.embeddings import (
     embed_texts,
     rewrite_query,
@@ -189,6 +199,85 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+# ── Mason memory-mode tool schemas ──────────────────────────────────────────
+# Used on the /mason page chat. No shopping tools (no product search, cart,
+# checkout, render_ui). Mason can read and write memory directly.
+
+_SAVE_NOTE_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_note")
+_SAVE_PREF_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_preference")
+
+MASON_MEMORY_TOOL_DEFINITIONS = [
+    _SAVE_NOTE_DEF,
+    _SAVE_PREF_DEF,
+    {
+        "name": "delete_note",
+        "description": (
+            "Remove a note from the user's notes by its key. Use list_notes first "
+            "to find the key. The key looks like 'note:<uuid>'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+                "key": {"type": "string", "description": "The note key to remove."},
+            },
+        },
+    },
+    {
+        "name": "delete_preference",
+        "description": (
+            "Clear one of the four reserved preference fields. Use when the user "
+            "asks you to forget a stated preference."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "enum": ["pref:sizes", "pref:budget", "pref:likes", "pref:dislikes"],
+                },
+            },
+        },
+    },
+    {
+        "name": "list_notes",
+        "description": "Return all of the user's notes (key + text + created_at), newest first.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_preferences",
+        "description": "Return the four reserved preference fields (sizes, budget, likes, dislikes).",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_saved_products",
+        "description": "Return the user's saved products (id, name, price, shop, saved_at).",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_history",
+        "description": "Return the user's recent conversation sessions (id, title, updated_at). Default limit 10.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max sessions to return (default 10, max 50)"},
+            },
+        },
+    },
+    {
+        "name": "list_inbox",
+        "description": "Return inbox messages for the user (id, title, preview, read, created_at).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "unread_only": {"type": "boolean", "description": "If true, return only unread messages."},
+            },
+        },
+    },
+]
+
+
 # ── Tool execution ─────────────────────────────────────────────────────────
 
 async def execute_tool(
@@ -259,6 +348,70 @@ async def execute_tool(
             return await cart_service.remove_item(int(tool_input["product_id"]), user_id, session_id, db), None
         if tool_name == "checkout":
             return await cart_service.checkout(user_id, session_id, db), None
+        if tool_name == "delete_note":
+            if user_id is None:
+                return {"deleted": False, "reason": "not_logged_in"}, None
+            ok = await memory_delete_note(user_id, str(tool_input.get("key") or ""), db)
+            return {"deleted": ok, "key": tool_input.get("key")}, None
+        if tool_name == "delete_preference":
+            if user_id is None:
+                return {"deleted": False, "reason": "not_logged_in"}, None
+            key = str(tool_input.get("key") or "")
+            valid = {"pref:sizes", "pref:budget", "pref:likes", "pref:dislikes"}
+            if key not in valid:
+                return {"deleted": False, "reason": "invalid_key"}, None
+            field = key.split(":", 1)[1]
+            await memory_set_prefs(user_id, {field: ""}, db)
+            return {"deleted": True, "key": key}, None
+        if tool_name == "list_notes":
+            if user_id is None:
+                return {"notes": [], "reason": "not_logged_in"}, None
+            return {"notes": await memory_list_notes(user_id, db)}, None
+        if tool_name == "list_preferences":
+            if user_id is None:
+                return {"prefs": {}, "reason": "not_logged_in"}, None
+            return {"prefs": await memory_get_prefs(user_id, db)}, None
+        if tool_name == "list_saved_products":
+            if user_id is None:
+                return {"saved_products": [], "reason": "not_logged_in"}, None
+            return {"saved_products": await memory_list_saved(user_id, db)}, None
+        if tool_name == "list_history":
+            if user_id is None:
+                return {"sessions": [], "reason": "not_logged_in"}, None
+            limit = min(int(tool_input.get("limit") or 10), 50)
+            rows = (await db.execute(
+                select(AgentSession)
+                .where(AgentSession.user_id == user_id)
+                .order_by(AgentSession.updated_at.desc())
+                .limit(limit)
+            )).scalars().all()
+            return {"sessions": [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "session_type": getattr(r, "session_type", "shop"),
+                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                }
+                for r in rows
+            ]}, None
+        if tool_name == "list_inbox":
+            if user_id is None:
+                return {"messages": [], "reason": "not_logged_in"}, None
+            stmt = select(InboxMessage).where(InboxMessage.user_id == user_id)
+            if tool_input.get("unread_only"):
+                stmt = stmt.where(InboxMessage.read.is_(False))
+            stmt = stmt.order_by(InboxMessage.created_at.desc()).limit(50)
+            rows = (await db.execute(stmt)).scalars().all()
+            return {"messages": [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "preview": r.preview,
+                    "read": r.read,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]}, None
         return {"error": f"Unknown tool: {tool_name}"}, None
     except Exception as e:
         logger.exception("Tool %s failed with input %s", tool_name, tool_input)

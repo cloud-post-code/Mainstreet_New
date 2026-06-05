@@ -97,10 +97,15 @@ class ProductSearchParams(BaseModel):
 class SessionOut(BaseModel):
     id: int
     title: str
+    session_type: str = "shop"
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SessionCreate(BaseModel):
+    session_type: Optional[str] = "shop"
 
 
 class TurnIn(BaseModel):

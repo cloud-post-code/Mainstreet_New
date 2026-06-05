@@ -349,16 +349,22 @@ export default function Chat() {
                   disabled={streaming}
                   onClick={async () => {
                     if (streaming) return
-                    if (!activeSessionId) {
-                      const sess = token
-                        ? await api.createSession(token)
-                        : await api.createGuestSession()
-                      if (token) setSessions(prev => [sess, ...prev])
-                      setActiveSessionId(sess.id)
-                      setTimeout(() => sendMessage(s), 50)
-                      return
-                    }
-                    sendMessage(s)
+                    // Welcome chips always start a fresh conversation. The
+                    // empty-state view can render while activeSessionId still
+                    // points at a prior session (auto-attached on login or
+                    // left over after reset), and reusing that id would bleed
+                    // earlier turns into Claude's context via load_short_term.
+                    const sess = token
+                      ? await api.createSession(token)
+                      : await api.createGuestSession()
+                    if (token) setSessions(prev => [sess, ...prev])
+                    ++selectTokenRef.current
+                    setActiveSessionId(sess.id)
+                    setLoadedMessages([])
+                    setHistoryCursor(null)
+                    setHistoryHasMore(false)
+                    reset()
+                    setTimeout(() => sendMessage(s), 50)
                   }}
                 >
                   {s}

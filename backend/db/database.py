@@ -39,6 +39,9 @@ async def create_tables():
         await conn.execute(text(
             "ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1536)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS session_type varchar(20) NOT NULL DEFAULT 'shop'"
+        ))
         # NOTE: the HNSW index on products.embedding is intentionally NOT created
         # here. Building it requires more shared memory than Railway's managed
         # Postgres provides by default (we hit DiskFullError resizing the shm
