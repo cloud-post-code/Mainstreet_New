@@ -1,10 +1,37 @@
 .layout {
+  /* ── Global brick pattern controls (single source of truth) ──
+     Every brick on the page derives from these variables — never
+     redeclare them in a child rule. */
+  --brick-w: clamp(120px, 12vw, 180px);
+  --brick-h: calc(var(--brick-w) * 0.28);
+  --mortar: 2px;
+
   display: flex;
   flex-direction: row;
   height: calc(100vh - 64px);
   overflow: hidden;
-  background-color: var(--ms-cream);
   position: relative;
+
+  /* One global brick wall for the entire layout. The SVG tile is exactly
+     two bricks wide × two rows tall; row 2 is offset by 50% of brick width
+     so tiling produces a continuous running-bond pattern. Anchored to
+     top-left so the grid never drifts on resize. */
+  background-color: var(--ms-cream);
+  background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100' shape-rendering='crispEdges'>\
+<rect width='200' height='100' fill='%23ece2cb'/>\
+<g fill='%23e2d4b3'>\
+<rect x='1' y='1' width='98' height='48'/>\
+<rect x='101' y='1' width='98' height='48'/>\
+<rect x='-49' y='51' width='98' height='48'/>\
+<rect x='51' y='51' width='98' height='48'/>\
+<rect x='151' y='51' width='98' height='48'/>\
+</g>\
+</svg>");
+  background-size: calc(var(--brick-w) * 2) calc(var(--brick-h) * 2);
+  background-position: 0 0;
+  background-repeat: repeat;
+  background-attachment: local;
 }
 
 
@@ -17,44 +44,7 @@
   min-width: 0;
   position: relative;
   z-index: 1;
-
-  /* ── Brick pattern controls ──
-     Tweak these to retune the wall without touching the SVG. */
-  --brick-w: clamp(48px, 6vw, 88px);
-  --brick-h: clamp(20px, 2.4vw, 34px);
-
-  background-color: var(--ms-cream);
-  background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='200' height='80' viewBox='0 0 200 80' preserveAspectRatio='xMidYMid slice'>\
-<defs>\
-<filter id='n' x='0' y='0' width='100%25' height='100%25'>\
-<feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' seed='4'/>\
-<feColorMatrix values='0 0 0 0 0.94  0 0 0 0 0.91  0 0 0 0 0.85  0 0 0 0.18 0'/>\
-<feComposite in2='SourceGraphic' operator='in'/>\
-</filter>\
-</defs>\
-<rect width='200' height='80' fill='%23f1e9d8'/>\
-<g shape-rendering='crispEdges'>\
-<rect x='0'   y='0'  width='100' height='40' fill='%23e9dec4'/>\
-<rect x='100' y='0'  width='100' height='40' fill='%23ece2cb'/>\
-<rect x='-50' y='40' width='100' height='40' fill='%23ebe0c7'/>\
-<rect x='50'  y='40' width='100' height='40' fill='%23e6dbc0'/>\
-<rect x='150' y='40' width='100' height='40' fill='%23eee5d0'/>\
-</g>\
-<g filter='url(%23n)'>\
-<rect width='200' height='80'/>\
-</g>\
-<g fill='none' stroke='rgba(120,96,64,0.32)' stroke-linecap='round'>\
-<path d='M0 40.4 Q50 39.6 100 40.5 T200 40.2' stroke-width='1.6'/>\
-<path d='M0 0.3 Q50 -0.4 100 0.5 T200 0.2' stroke-width='1.4'/>\
-<path d='M0 79.7 Q50 80.4 100 79.6 T200 80.3' stroke-width='1.4'/>\
-<path d='M100 0 Q99.4 20 100.6 40' stroke-width='1.5'/>\
-<path d='M50 40 Q50.6 60 49.4 80' stroke-width='1.5'/>\
-<path d='M150 40 Q150.4 60 149.6 80' stroke-width='1.5'/>\
-</g>\
-</svg>");
-  background-size: calc(var(--brick-w) * 2) calc(var(--brick-h) * 2);
-  background-repeat: repeat;
+  background: transparent;
 }
 
 /* ── Mason header (always above chat) ── */
