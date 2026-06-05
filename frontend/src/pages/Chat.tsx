@@ -8,6 +8,7 @@ import AgentErrorBoundary from '../components/AgentErrorBoundary'
 import MasonDrawer from '../components/MasonDrawer'
 import MasonChip from '../components/MasonChip'
 import ProductModal, { ProductModalData } from '../components/ProductModal'
+import BrickWallCanvas from '../components/BrickWallCanvas'
 import { useMason, AgentState } from '../mason/MasonContext'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import { useCart } from '../cart/CartContext'
@@ -370,6 +371,7 @@ export default function Chat() {
 
   return (
     <div className={styles.layout}>
+      <BrickWallCanvas className={styles.brickCanvas} />
       <main className={styles.main}>
         {messages.length === 0 ? (
           <div className={styles.empty}>
