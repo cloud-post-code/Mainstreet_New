@@ -12,10 +12,10 @@ import { useCart } from '../cart/CartContext'
 import styles from './Chat.module.css'
 
 const FALLBACK_SUGGESTIONS = [
-  "Find running shoes under $100 at local shops",
-  "Which neighborhood stores sell electronics?",
-  "I need a gift for a home cook nearby",
-  "Show in-stock yoga gear from local shops",
+  "Create Gift Basket",
+  "Find Eco Home Goods",
+  "Find Local Snacks",
+  "Create a local spa day package",
 ]
 
 type Turn = {
@@ -329,6 +329,23 @@ export default function Chat() {
   return (
     <div className={styles.layout}>
       <main className={styles.main}>
+        <div className={styles.masonHeader}>
+          <div className={styles.masonHeaderAvatar}>
+            <img src="/mason/mason-1.png" alt="" />
+          </div>
+          <div className={styles.masonHeaderText}>
+            <span className={styles.masonHeaderName}>Mason</span>
+            <span className={styles.masonHeaderStatus}>
+              {streaming
+                ? agentState === 'tool'
+                  ? 'looking'
+                  : agentState === 'replying'
+                    ? 'replying'
+                    : 'thinking'
+                : 'available'}
+            </span>
+          </div>
+        </div>
         {messages.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}><MasonChip /></div>
@@ -343,7 +360,7 @@ export default function Chat() {
               </p>
             )}
             <div className={styles.suggestions}>
-              {(suggestions ?? FALLBACK_SUGGESTIONS).map(s => (
+              {FALLBACK_SUGGESTIONS.map(s => (
                 <button
                   key={s}
                   className={styles.suggestion}

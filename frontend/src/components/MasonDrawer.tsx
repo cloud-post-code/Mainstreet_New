@@ -33,7 +33,18 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ]
 
 export default function MasonDrawer(props: MasonDrawerProps) {
-  const { closeDrawer, agentState } = useMason()
+  const { isOpen, isPopped, closeDrawer, agentState, togglePop } = useMason()
+
+  // Lock body scroll when popped-out (or open on mobile) so the overlay feels modal.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const lock = isOpen && (isPopped || window.matchMedia('(max-width: 768px)').matches)
+    if (lock) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [isOpen, isPopped])
   const [tab, setTab] = useState<TabKey>('notes')
   const [correction, setCorrection] = useState('')
   const [notes, setNotes] = useState<string[]>([
@@ -82,8 +93,17 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     setNotes(prev => prev.filter((_, i) => i !== idx))
   }
 
+  if (!isOpen) return null
+
+  const panelClass = [
+    styles.panel,
+    isPopped ? styles.panelPopped : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <aside className={styles.panel} aria-label="Mason">
+    <>
+      {isPopped && <div className={styles.backdrop} onClick={closeDrawer} aria-hidden="true" />}
+      <aside className={panelClass} aria-label="Mason">
         <div className={styles.header}>
           <div className={styles.headerIdent}>
             <div className={styles.avatar}>
@@ -93,6 +113,43 @@ export default function MasonDrawer(props: MasonDrawerProps) {
               <span className={styles.headerName}>Mason</span>
               <span className={styles.headerStatus}>{statusText}</span>
             </div>
+          </div>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={togglePop}
+              aria-label={isPopped ? 'Dock Mason panel' : 'Pop out Mason panel'}
+              title={isPopped ? 'Dock' : 'Pop out'}
+            >
+              {isPopped ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 4 4 4 4 9" />
+                  <polyline points="15 20 20 20 20 15" />
+                  <line x1="4" y1="4" x2="10" y2="10" />
+                  <line x1="20" y1="20" x2="14" y2="14" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              )}
+            </button>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={closeDrawer}
+              aria-label="Close Mason panel"
+              title="Close"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -253,6 +310,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
             <span className={styles.userName}>Browsing as guest</span>
           )}
         </div>
-    </aside>
+      </aside>
+    </>
   )
 }

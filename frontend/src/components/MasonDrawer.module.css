@@ -1,4 +1,14 @@
-.backdrop { display: none; }
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 24, 5, 0.45);
+  z-index: 90;
+  animation: fadeIn 0.18s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .panel {
   position: relative;
@@ -10,6 +20,52 @@
   border-left: 1px solid rgba(15, 24, 5, 0.1);
   display: flex;
   flex-direction: column;
+}
+
+/* Popped-out overlay (desktop): floats above, larger, centered-right. */
+.panelPopped {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  bottom: 24px;
+  width: min(560px, calc(100vw - 48px));
+  height: auto;
+  border-radius: 14px;
+  border-left: none;
+  box-shadow: 0 24px 60px rgba(15, 24, 5, 0.28);
+  overflow: hidden;
+  z-index: 100;
+  animation: popIn 0.18s ease-out;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Mobile: panel always behaves as a full-screen overlay when open. */
+@media (max-width: 768px) {
+  .panel {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    border-left: none;
+    z-index: 100;
+    animation: slideUp 0.22s ease-out;
+  }
+  .panelPopped {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .backdrop { display: none; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .header {
@@ -25,6 +81,30 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.iconBtn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(241, 233, 216, 0.25);
+  border-radius: 8px;
+  color: var(--ms-cream, #f1e9d8);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.iconBtn:hover {
+  background: rgba(241, 233, 216, 0.12);
+  border-color: rgba(241, 233, 216, 0.55);
 }
 
 .avatar {
