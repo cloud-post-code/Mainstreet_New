@@ -1,39 +1,11 @@
 .layout {
-  /* ── Global brick pattern controls (single source of truth) ──
-     Every brick on the page derives from these variables — never
-     redeclare them in a child rule. */
-  --brick-w: clamp(120px, 12vw, 180px);
-  --brick-h: calc(var(--brick-w) * 0.28);
-  --mortar: 2px;
-
   display: flex;
   flex-direction: row;
   height: calc(100vh - 64px);
   overflow: hidden;
+  background: var(--ms-cream);
   position: relative;
-
-  /* One global brick wall for the entire layout. The SVG tile is exactly
-     two bricks wide × two rows tall; row 2 is offset by 50% of brick width
-     so tiling produces a continuous running-bond pattern. Anchored to
-     top-left so the grid never drifts on resize. */
-  background-color: var(--ms-cream);
-  background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100' shape-rendering='crispEdges'>\
-<rect width='200' height='100' fill='%23ece2cb'/>\
-<g fill='%23e2d4b3'>\
-<rect x='1' y='1' width='98' height='48'/>\
-<rect x='101' y='1' width='98' height='48'/>\
-<rect x='-49' y='51' width='98' height='48'/>\
-<rect x='51' y='51' width='98' height='48'/>\
-<rect x='151' y='51' width='98' height='48'/>\
-</g>\
-</svg>");
-  background-size: calc(var(--brick-w) * 2) calc(var(--brick-h) * 2);
-  background-position: 0 0;
-  background-repeat: repeat;
-  background-attachment: local;
 }
-
 
 /* ── Main ── */
 .main {
@@ -41,10 +13,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--ms-cream);
   min-width: 0;
-  position: relative;
-  z-index: 1;
-  background: transparent;
 }
 
 /* ── Mason header (always above chat) ── */
