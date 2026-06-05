@@ -46,6 +46,19 @@ export interface InboxMessage { id: number; user_id: number; session_id: number 
 export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
 
+export interface MasonNote { key: string; text: string; created_at: string | null }
+export interface MasonPrefs { sizes: string; budget: string; likes: string; dislikes: string }
+export interface MasonSavedProduct {
+  product_id: number
+  name: string
+  price: number
+  quantity: number
+  image_url: string | null
+  shop_id: number
+  shop_name: string | null
+  saved_at: string | null
+}
+
 export interface CartItem {
   product_id: number
   name: string
@@ -236,6 +249,29 @@ export const api = {
     request<void>(`/api/admin/shops/${id}`, { method: 'DELETE' }, token),
   deleteProduct: (id: number, token: string) =>
     request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }, token),
+
+  getMasonNotes: (token: string) =>
+    request<MasonNote[]>('/api/mason/notes', {}, token),
+  addMasonNote: (text: string, token: string) =>
+    request<MasonNote>('/api/mason/notes', { method: 'POST', body: JSON.stringify({ text }) }, token),
+  deleteMasonNote: (key: string, token: string) =>
+    request<void>(`/api/mason/notes/${encodeURIComponent(key)}`, { method: 'DELETE' }, token),
+
+  getMasonPrefs: (token: string) =>
+    request<MasonPrefs>('/api/mason/prefs', {}, token),
+  updateMasonPrefs: (patch: Partial<MasonPrefs>, token: string) =>
+    request<MasonPrefs>('/api/mason/prefs', { method: 'PATCH', body: JSON.stringify(patch) }, token),
+
+  getMasonSavedProducts: (token: string) =>
+    request<MasonSavedProduct[]>('/api/mason/saved-products', {}, token),
+  saveMasonProduct: (product_id: number, token: string) =>
+    request<{ product_id: number; newly_saved: boolean }>(
+      '/api/mason/saved-products',
+      { method: 'POST', body: JSON.stringify({ product_id }) },
+      token,
+    ),
+  unsaveMasonProduct: (product_id: number, token: string) =>
+    request<void>(`/api/mason/saved-products/${product_id}`, { method: 'DELETE' }, token),
 
   getInbox: (token: string) =>
     request<InboxMessage[]>('/api/inbox', {}, token),

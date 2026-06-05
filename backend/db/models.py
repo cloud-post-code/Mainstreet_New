@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Boolean, Numeric, Text,
-    ForeignKey, DateTime, func, Index, CheckConstraint, text
+    ForeignKey, DateTime, func, Index, CheckConstraint, UniqueConstraint, text
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -137,6 +137,21 @@ class UserMemory(Base):
 
     __table_args__ = (
         Index("ix_user_memory_user_key", "user_id", "key", unique=True),
+    )
+
+
+class SavedProduct(Base):
+    __tablename__ = "saved_products"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    product = relationship("Product")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_saved_user_product"),
     )
 
 

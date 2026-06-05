@@ -8,6 +8,7 @@ import AgentErrorBoundary from '../components/AgentErrorBoundary'
 import MasonDrawer from '../components/MasonDrawer'
 import MasonChip from '../components/MasonChip'
 import { useMason, AgentState } from '../mason/MasonContext'
+import { useMasonMemory } from '../mason/useMasonMemory'
 import { useCart } from '../cart/CartContext'
 import styles from './Chat.module.css'
 
@@ -107,13 +108,16 @@ export default function Chat() {
 
   const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
   const cart = useCart()
+  const masonMemory = useMasonMemory(token)
   const prevStreamingRef = useRef(streaming)
   useEffect(() => {
     if (prevStreamingRef.current && !streaming) {
       cart.refresh()
+      // Pick up any save_note / save_preference / save_product that ran this turn.
+      masonMemory.refresh()
     }
     prevStreamingRef.current = streaming
-  }, [streaming, cart])
+  }, [streaming, cart, masonMemory])
 
   const messages = useMemo(
     () => [...loadedMessages, ...liveMessages],
@@ -321,11 +325,6 @@ export default function Chat() {
     }
   }
 
-  function handleCorrect(text: string) {
-    if (streaming) return
-    sendMessage(`Correction from you: ${text}`)
-  }
-
   return (
     <div className={styles.layout}>
       <main className={styles.main}>
@@ -448,10 +447,10 @@ export default function Chat() {
         plan={plan}
         messages={messages}
         streaming={streaming}
-        onCorrect={handleCorrect}
         user={user}
         token={token}
         onSignIn={() => navigate('/login')}
+        memory={masonMemory}
       />
     </div>
   )

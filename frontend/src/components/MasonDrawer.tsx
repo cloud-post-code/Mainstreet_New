@@ -1,9 +1,10 @@
-import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react'
+import { MouseEvent, useEffect, useMemo, useState } from 'react'
 import { Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
 import LiveReasoning from './LiveReasoning'
 import { useMason } from '../mason/MasonContext'
+import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
 
 type TabKey = 'notes' | 'preferences' | 'saved' | 'history'
@@ -19,10 +20,10 @@ interface MasonDrawerProps {
   plan: PlanStep[]
   messages: Message[]
   streaming: boolean
-  onCorrect: (text: string) => void
   user: { display_name: string | null; email: string } | null
   token: string | null
   onSignIn: () => void
+  memory: MasonMemory
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
@@ -34,6 +35,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 
 export default function MasonDrawer(props: MasonDrawerProps) {
   const { isOpen, isPopped, closeDrawer, agentState } = useMason()
+  const { memory } = props
 
   // Lock body scroll on mobile so the overlay feels modal.
   useEffect(() => {
@@ -46,18 +48,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     }
   }, [isOpen])
   const [tab, setTab] = useState<TabKey>('notes')
-  const [correction, setCorrection] = useState('')
-  const [notes, setNotes] = useState<string[]>([
-    'Lives nearby and prefers shops within walking distance.',
-    'Cares about supporting local businesses.',
-  ])
   const [newNote, setNewNote] = useState('')
-  const [prefs, setPrefs] = useState({
-    sizes: '',
-    budget: '',
-    likes: '',
-    dislikes: '',
-  })
 
   // Latest agent message's events drive the "Now" reasoning view.
   const latestAgentEvents = useMemo(() => {
@@ -74,23 +65,11 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     : agentState === 'replying' ? 'replying…'
     : 'available'
 
-  function submitCorrection(e: FormEvent) {
-    e.preventDefault()
-    const text = correction.trim()
-    if (!text) return
-    props.onCorrect(text)
-    setCorrection('')
-  }
-
-  function addNote() {
+  async function addNote() {
     const t = newNote.trim()
     if (!t) return
-    setNotes(prev => [...prev, t])
+    await memory.addNote(t)
     setNewNote('')
-  }
-
-  function removeNote(idx: number) {
-    setNotes(prev => prev.filter((_, i) => i !== idx))
   }
 
   if (!isOpen) return <ReopenButton />
@@ -99,6 +78,17 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     styles.panel,
     isPopped ? styles.panelPopped : '',
   ].filter(Boolean).join(' ')
+
+  const signedIn = !!props.token
+
+  function GuestNotice({ message }: { message: string }) {
+    return (
+      <div className={styles.guestNotice}>
+        <p>{message}</p>
+        <button className={styles.signInBtn} onClick={() => { props.onSignIn(); closeDrawer() }}>Sign in</button>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -149,24 +139,14 @@ export default function MasonDrawer(props: MasonDrawerProps) {
             </>
           )}
 
-          <form className={styles.correctForm} onSubmit={submitCorrection}>
-            <label className={styles.sectionLabel}>Steer Mason</label>
-            <textarea
-              className={styles.correctInput}
-              placeholder="e.g. Actually I meant shoes for trail running, not road."
-              value={correction}
-              onChange={e => setCorrection(e.target.value)}
-              rows={2}
-            />
-            <button
-              type="submit"
-              className={styles.correctSubmit}
-              disabled={!correction.trim() || props.streaming}
-            >
-              Send correction
-            </button>
-          </form>
         </section>
+
+        <div className={styles.newTaskRow}>
+          <button
+            className={styles.newTaskBtn}
+            onClick={() => { props.onNewSession(); closeDrawer() }}
+          >+ New task</button>
+        </div>
 
         <nav className={styles.tabs} role="tablist">
           {TABS.map(t => (
@@ -185,64 +165,128 @@ export default function MasonDrawer(props: MasonDrawerProps) {
         <div className={styles.body}>
           {tab === 'notes' && (
             <div className={styles.section}>
-              <p className={styles.helpText}>What Mason knows about you. Saved locally for now.</p>
-              <ul className={styles.notesList}>
-                {notes.map((n, i) => (
-                  <li key={i} className={styles.noteItem}>
-                    <span>{n}</span>
-                    <button className={styles.noteRemove} onClick={() => removeNote(i)} aria-label="Remove">×</button>
-                  </li>
-                ))}
-                {notes.length === 0 && <li className={styles.emptyRow}>No notes yet.</li>}
-              </ul>
-              <div className={styles.addRow}>
-                <input
-                  className={styles.addInput}
-                  placeholder="Add a note about yourself…"
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNote() } }}
-                />
-                <button className={styles.addBtn} onClick={addNote} disabled={!newNote.trim()}>Add</button>
-              </div>
+              {!signedIn ? (
+                <GuestNotice message="Sign in so Mason can remember notes about you between visits." />
+              ) : (
+                <>
+                  <p className={styles.helpText}>
+                    What Mason knows about you. Mason adds notes automatically when he learns something durable; you can edit them here.
+                  </p>
+                  <ul className={styles.notesList}>
+                    {memory.notes.map(n => (
+                      <li key={n.key} className={styles.noteItem}>
+                        <span>
+                          {n.text}
+                          {n.created_at && (
+                            <span className={styles.noteMeta}>{new Date(n.created_at).toLocaleDateString()}</span>
+                          )}
+                        </span>
+                        <button
+                          className={styles.noteRemove}
+                          onClick={() => memory.removeNote(n.key)}
+                          aria-label="Remove"
+                        >×</button>
+                      </li>
+                    ))}
+                    {memory.notes.length === 0 && (
+                      <li className={styles.emptyRow}>No notes yet. Mason will start adding them as you chat.</li>
+                    )}
+                  </ul>
+                  <div className={styles.addRow}>
+                    <input
+                      className={styles.addInput}
+                      placeholder="Add a note about yourself…"
+                      value={newNote}
+                      onChange={e => setNewNote(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNote() } }}
+                    />
+                    <button className={styles.addBtn} onClick={addNote} disabled={!newNote.trim()}>Add</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {tab === 'preferences' && (
             <div className={styles.section}>
-              <p className={styles.helpText}>Defaults Mason uses when shopping for you. Saved locally for now.</p>
-              <label className={styles.prefField}>
-                <span>Sizes</span>
-                <input value={prefs.sizes} onChange={e => setPrefs(p => ({ ...p, sizes: e.target.value }))} placeholder="e.g. M top, 32 waist, 10.5 shoe" />
-              </label>
-              <label className={styles.prefField}>
-                <span>Budget</span>
-                <input value={prefs.budget} onChange={e => setPrefs(p => ({ ...p, budget: e.target.value }))} placeholder="e.g. up to $150" />
-              </label>
-              <label className={styles.prefField}>
-                <span>Likes</span>
-                <input value={prefs.likes} onChange={e => setPrefs(p => ({ ...p, likes: e.target.value }))} placeholder="brands, styles, materials" />
-              </label>
-              <label className={styles.prefField}>
-                <span>Dislikes</span>
-                <input value={prefs.dislikes} onChange={e => setPrefs(p => ({ ...p, dislikes: e.target.value }))} placeholder="things to avoid" />
-              </label>
+              {!signedIn ? (
+                <GuestNotice message="Sign in to save your shopping preferences so Mason can use them every time." />
+              ) : (
+                <>
+                  <p className={styles.helpText}>Defaults Mason uses when shopping for you. Saved automatically as you type.</p>
+                  <label className={styles.prefField}>
+                    <span>Sizes</span>
+                    <input
+                      value={memory.prefs.sizes}
+                      onChange={e => memory.setPref('sizes', e.target.value)}
+                      placeholder="e.g. M top, 32 waist, 10.5 shoe"
+                    />
+                  </label>
+                  <label className={styles.prefField}>
+                    <span>Budget</span>
+                    <input
+                      value={memory.prefs.budget}
+                      onChange={e => memory.setPref('budget', e.target.value)}
+                      placeholder="e.g. up to $150"
+                    />
+                  </label>
+                  <label className={styles.prefField}>
+                    <span>Likes</span>
+                    <input
+                      value={memory.prefs.likes}
+                      onChange={e => memory.setPref('likes', e.target.value)}
+                      placeholder="brands, styles, materials"
+                    />
+                  </label>
+                  <label className={styles.prefField}>
+                    <span>Dislikes</span>
+                    <input
+                      value={memory.prefs.dislikes}
+                      onChange={e => memory.setPref('dislikes', e.target.value)}
+                      placeholder="things to avoid"
+                    />
+                  </label>
+                </>
+              )}
             </div>
           )}
 
           {tab === 'saved' && (
             <div className={styles.section}>
-              <p className={styles.empty}>Saved items will live here once you start bookmarking products.</p>
+              {!signedIn ? (
+                <GuestNotice message="Sign in so Mason can save products you want to revisit." />
+              ) : memory.savedProducts.length === 0 ? (
+                <p className={styles.empty}>
+                  Saved products will land here. Tell Mason to "save this" or "keep this for later".
+                </p>
+              ) : (
+                <ul className={styles.savedList}>
+                  {memory.savedProducts.map(p => (
+                    <li key={p.product_id} className={styles.savedItem}>
+                      <div className={styles.savedThumb}>
+                        {p.image_url && <img src={p.image_url} alt="" />}
+                      </div>
+                      <div className={styles.savedBody}>
+                        <p className={styles.savedName}>{p.name}</p>
+                        <div className={styles.savedSub}>
+                          {(p.shop_name ?? 'Unknown shop')} · ${p.price.toFixed(2)}
+                        </div>
+                      </div>
+                      <button
+                        className={styles.savedRemove}
+                        onClick={() => memory.unsaveProduct(p.product_id)}
+                        title="Remove from Saved"
+                        aria-label="Remove from Saved"
+                      >×</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
           {tab === 'history' && (
             <div className={styles.section}>
-              <button
-                className={styles.newTaskBtn}
-                onClick={() => { props.onNewSession(); closeDrawer() }}
-              >+ New task</button>
-
               {props.token ? (
                 props.sessions.length === 0 ? (
                   <p className={styles.empty}>No past tasks yet.</p>
@@ -270,10 +314,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                   </ul>
                 )
               ) : (
-                <div className={styles.guestNotice}>
-                  <p>Sign in to save tasks, notes, and preferences so Mason remembers you next time.</p>
-                  <button className={styles.signInBtn} onClick={() => { props.onSignIn(); closeDrawer() }}>Sign in</button>
-                </div>
+                <GuestNotice message="Sign in to save tasks, notes, and preferences so Mason remembers you next time." />
               )}
             </div>
           )}

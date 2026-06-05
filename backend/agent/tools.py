@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text as sql_text, bindparam
 from db.models import Product, Shop, AgentPlan
-from agent.memory import save_preference
+from agent.memory import save_preference, add_note as memory_add_note, save_product as memory_save_product
 from agent.embeddings import (
     embed_texts,
     rewrite_query,
@@ -135,15 +135,55 @@ TOOL_DEFINITIONS = [
     {
         "name": "save_preference",
         "description": (
-            "Save a user preference or fact to long-term memory. "
-            "Use when the user mentions their size, budget, favorite brands, etc."
+            "Save a shopping preference for one of the four reserved keys so it shows up in the Prefs panel. "
+            "Use this when the user states a durable shopping preference: clothing/shoe sizes, budget caps, "
+            "brands or materials they love, or things they want to avoid. Prefer this over save_note for "
+            "the four canonical fields."
         ),
         "input_schema": {
             "type": "object",
             "required": ["key", "value"],
             "properties": {
-                "key": {"type": "string", "description": "Memory key, e.g. 'preferred_budget', 'shoe_size', 'favorite_brand'"},
-                "value": {"description": "The value to remember (string, number, or list)"},
+                "key": {
+                    "type": "string",
+                    "enum": ["pref:sizes", "pref:budget", "pref:likes", "pref:dislikes"],
+                    "description": "Which preference field to update.",
+                },
+                "value": {"type": "string", "description": "Short value to remember (a phrase or short sentence)."},
+            },
+        },
+    },
+    {
+        "name": "save_note",
+        "description": (
+            "Record a durable fact about the user as a Note so future conversations can use it. "
+            "Use when the user reveals a lasting fact about themselves — where they live, who they "
+            "shop for (kids, partner, pets), allergies, recurring needs, lifestyle, personality. "
+            "Write the note in third person (\"Lives in the South End\", \"Shops for a 5yo daughter\"). "
+            "Do NOT save: the current request, ephemeral context, or anything already in memory. "
+            "One note per fact; keep it under 280 characters."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+                "text": {"type": "string", "description": "A short third-person fact about the user."},
+            },
+        },
+    },
+    {
+        "name": "save_product",
+        "description": (
+            "Save a product to the user's Saved list so they can find it later. Use when the user "
+            "expresses lasting interest in a specific product (\"I love this\", \"save this for later\", "
+            "\"add this to my list\", \"keep this in mind\"). Resolve the product_id with search_products "
+            "first if they referenced it by name."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["product_id"],
+            "properties": {
+                "product_id": {"type": "integer", "description": "Product ID to save."},
             },
         },
     },
@@ -189,6 +229,22 @@ async def execute_tool(
                 return {"saved": False, "reason": "not_logged_in"}, None
             await save_preference(user_id, tool_input["key"], tool_input["value"], db)
             return {"saved": True, "key": tool_input["key"]}, None
+        if tool_name == "save_note":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            try:
+                note = await memory_add_note(user_id, str(tool_input.get("text") or ""), db)
+            except ValueError as ve:
+                return {"saved": False, "reason": str(ve)}, None
+            return {"saved": True, "key": note["key"], "text": note["text"]}, None
+        if tool_name == "save_product":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            try:
+                created = await memory_save_product(user_id, int(tool_input["product_id"]), db)
+            except ValueError as ve:
+                return {"saved": False, "reason": str(ve)}, None
+            return {"saved": True, "product_id": int(tool_input["product_id"]), "newly_saved": created}, None
         if tool_name == "add_to_cart":
             return await cart_service.add_item(
                 product_id=int(tool_input["product_id"]),

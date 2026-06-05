@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from config import settings
 from db.database import create_tables
 from agent.uploads import upload_root
-from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart
+from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart, mason_memory
 
 
 @asynccontextmanager
@@ -59,6 +59,7 @@ app.include_router(admin.router)
 app.include_router(inbox.router)
 app.include_router(listing_agent.router)
 app.include_router(cart.router)
+app.include_router(mason_memory.router)
 
 app.mount("/uploads", StaticFiles(directory=str(upload_root())), name="uploads")
 
