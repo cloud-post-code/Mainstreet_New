@@ -7,6 +7,7 @@ import AgentMessage from '../components/AgentMessage'
 import AgentErrorBoundary from '../components/AgentErrorBoundary'
 import MasonDrawer from '../components/MasonDrawer'
 import MasonChip from '../components/MasonChip'
+import ProductModal, { ProductModalData } from '../components/ProductModal'
 import { useMason, AgentState } from '../mason/MasonContext'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import { useCart } from '../cart/CartContext'
@@ -102,6 +103,7 @@ export default function Chat() {
   const [historyHasMore, setHistoryHasMore] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<string[] | null>(null)
+  const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const selectTokenRef = useRef(0)
   const skipNextScrollRef = useRef(false)
@@ -290,6 +292,38 @@ export default function Chat() {
     return []
   }
 
+  function findProductProps(productId: number): ProductModalData | null {
+    const messages = messagesRef.current
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.from !== 'agent') continue
+      const events = m.events ?? []
+      for (let j = events.length - 1; j >= 0; j--) {
+        const e = events[j]
+        if (e.type !== 'ui_tree') continue
+        const tree = e as Extract<import('../hooks/useAgentStream').StreamEvent, { type: 'ui_tree' }>
+        for (const c of tree.components) {
+          if (c.type !== 'product_card') continue
+          const p = c.props as Record<string, unknown>
+          if (p.product_id !== productId) continue
+          return {
+            product_id: productId,
+            name: typeof p.name === 'string' ? p.name : `Product ${productId}`,
+            price: typeof p.price === 'number' ? p.price : Number(p.price ?? 0),
+            quantity: typeof p.quantity === 'number' ? p.quantity : (p.quantity != null ? Number(p.quantity) : undefined),
+            image_url: typeof p.image_url === 'string' ? p.image_url : null,
+            shop_id: typeof p.shop_id === 'number' ? p.shop_id : undefined,
+            shop_name: typeof p.shop_name === 'string' ? p.shop_name : '',
+            description_summary: typeof p.description_summary === 'string' ? p.description_summary : undefined,
+            description_long: typeof p.description_long === 'string' ? p.description_long : undefined,
+            tags: Array.isArray(p.tags) ? (p.tags as unknown[]).filter((t): t is string => typeof t === 'string') : undefined,
+          }
+        }
+      }
+    }
+    return null
+  }
+
   const streamingRef = useRef(streaming)
   streamingRef.current = streaming
   const handleIntent = useCallback((intent: string, payload?: unknown) => {
@@ -297,8 +331,17 @@ export default function Chat() {
     const p: Record<string, unknown> =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
     if (intent === 'open_details') {
-      const name = p.name ?? (p.product_id != null ? `product ${p.product_id}` : 'this product')
-      sendMessage(`Show me more details for ${name}.`)
+      const pid = typeof p.product_id === 'number' ? p.product_id : null
+      if (pid != null) {
+        const found = findProductProps(pid)
+        const fallbackName = typeof p.name === 'string' ? p.name : `Product ${pid}`
+        setModalProduct(found ?? {
+          product_id: pid,
+          name: fallbackName,
+          price: 0,
+          shop_name: '',
+        })
+      }
     } else if (intent === 'compare') {
       const ids = latestProductIds()
       sendMessage(
@@ -458,6 +501,15 @@ export default function Chat() {
         onSignIn={() => navigate('/login')}
         memory={masonMemory}
       />
+
+      {modalProduct && (
+        <ProductModal
+          product={modalProduct}
+          memory={masonMemory}
+          onClose={() => setModalProduct(null)}
+          onChatAbout={(name) => sendMessage(`Tell me more about ${name}.`)}
+        />
+      )}
     </div>
   )
 }

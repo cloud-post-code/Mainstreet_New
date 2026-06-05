@@ -12,6 +12,7 @@ export interface MasonMemory {
   addNote: (text: string) => Promise<void>
   removeNote: (key: string) => Promise<void>
   setPref: (field: keyof MasonPrefs, value: string) => void
+  saveProduct: (product: MasonSavedProduct | { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => Promise<void>
   unsaveProduct: (productId: number) => Promise<void>
   refresh: () => Promise<void>
   refreshInbox: () => Promise<void>
@@ -101,11 +102,29 @@ export function useMasonMemory(token: string | null): MasonMemory {
     if (prefTimerRef.current != null) window.clearTimeout(prefTimerRef.current)
   }, [])
 
+  const saveProduct = useCallback(async (product: { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => {
+    if (!token) return
+    await api.saveMasonProduct(product.product_id, token)
+    setSavedProducts(prev => {
+      if (prev.some(p => p.product_id === product.product_id)) return prev
+      return [{
+        product_id: product.product_id,
+        name: product.name,
+        price: product.price,
+        quantity: product.quantity,
+        image_url: product.image_url,
+        shop_id: product.shop_id,
+        shop_name: product.shop_name,
+        saved_at: new Date().toISOString(),
+      }, ...prev]
+    })
+  }, [token])
+
   const unsaveProduct = useCallback(async (productId: number) => {
     if (!token) return
     await api.unsaveMasonProduct(productId, token)
     setSavedProducts(prev => prev.filter(p => p.product_id !== productId))
   }, [token])
 
-  return { notes, prefs, savedProducts, inbox, loading, addNote, removeNote, setPref, unsaveProduct, refresh, refreshInbox }
+  return { notes, prefs, savedProducts, inbox, loading, addNote, removeNote, setPref, saveProduct, unsaveProduct, refresh, refreshInbox }
 }
