@@ -1,11 +1,4 @@
 .layout {
-  /* ── Brick pattern controls ──
-     Tweak these to retune the wall without touching the SVG. */
-  --brick-w: clamp(48px, 6vw, 88px);
-  --brick-h: clamp(20px, 2.4vw, 34px);
-  --brick-base: 241, 233, 216;        /* warm cream rgb */
-  --brick-mortar: rgba(120, 96, 64, 0.28);
-
   display: flex;
   flex-direction: row;
   height: calc(100vh - 64px);
@@ -14,17 +7,23 @@
   position: relative;
 }
 
-/* Brick wall lives only in the side gutters beside the chat column,
-   never behind the chat or above it. */
-.layout::before,
-.layout::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: max(0px, calc((100% - 860px) / 2));
-  pointer-events: none;
-  z-index: 0;
+
+/* ── Main ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+
+  /* ── Brick pattern controls ──
+     Tweak these to retune the wall without touching the SVG. */
+  --brick-w: clamp(48px, 6vw, 88px);
+  --brick-h: clamp(20px, 2.4vw, 34px);
+
+  background-color: var(--ms-cream);
   background-image: url("data:image/svg+xml;utf8,\
 <svg xmlns='http://www.w3.org/2000/svg' width='200' height='80' viewBox='0 0 200 80' preserveAspectRatio='xMidYMid slice'>\
 <defs>\
@@ -56,19 +55,6 @@
 </svg>");
   background-size: calc(var(--brick-w) * 2) calc(var(--brick-h) * 2);
   background-repeat: repeat;
-}
-.layout::before { left: 0; }
-.layout::after  { right: 0; }
-.main { position: relative; z-index: 1; }
-
-/* ── Main ── */
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--ms-cream);
-  min-width: 0;
 }
 
 /* ── Mason header (always above chat) ── */
