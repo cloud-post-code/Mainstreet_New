@@ -8,9 +8,6 @@ interface MasonContextValue {
   openDrawer: () => void
   closeDrawer: () => void
   toggleDrawer: () => void
-  popOut: () => void
-  popIn: () => void
-  togglePop: () => void
   agentState: AgentState
   setAgentState: (s: AgentState) => void
 }
@@ -26,43 +23,30 @@ function getInitialOpen(): boolean {
 
 export function MasonProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState<boolean>(getInitialOpen)
-  const [isPopped, setIsPopped] = useState(false)
   const [agentState, setAgentState] = useState<AgentState>('idle')
 
-  // Keep default open-state aligned with viewport on resize transitions,
-  // but only when the user hasn't manually toggled within this breakpoint.
+  // On resize transitions, default to open on desktop and closed on mobile.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const mq = window.matchMedia(DESKTOP_QUERY)
-    const handler = (e: MediaQueryListEvent) => {
-      // When switching to mobile, collapse to closed + un-pop.
-      // When switching to desktop, open inline.
-      setIsOpen(e.matches)
-      setIsPopped(false)
-    }
+    const handler = (e: MediaQueryListEvent) => setIsOpen(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
 
   const openDrawer = useCallback(() => setIsOpen(true), [])
-  const closeDrawer = useCallback(() => { setIsOpen(false); setIsPopped(false) }, [])
+  const closeDrawer = useCallback(() => setIsOpen(false), [])
   const toggleDrawer = useCallback(() => setIsOpen(o => !o), [])
-  const popOut = useCallback(() => { setIsOpen(true); setIsPopped(true) }, [])
-  const popIn = useCallback(() => setIsPopped(false), [])
-  const togglePop = useCallback(() => setIsPopped(p => !p), [])
 
   const value = useMemo<MasonContextValue>(() => ({
     isOpen,
-    isPopped,
+    isPopped: true,
     openDrawer,
     closeDrawer,
     toggleDrawer,
-    popOut,
-    popIn,
-    togglePop,
     agentState,
     setAgentState,
-  }), [isOpen, isPopped, openDrawer, closeDrawer, toggleDrawer, popOut, popIn, togglePop, agentState])
+  }), [isOpen, openDrawer, closeDrawer, toggleDrawer, agentState])
 
   return <MasonContext.Provider value={value}>{children}</MasonContext.Provider>
 }

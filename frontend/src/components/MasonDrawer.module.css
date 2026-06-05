@@ -491,3 +491,32 @@
   background: #fff;
 }
 .userName {}
+
+.reopenBtn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--ms-cream, #f1e9d8);
+  background: var(--ms-primary, #015237);
+  box-shadow: 0 6px 18px rgba(15, 24, 5, 0.25);
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.reopenBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(15, 24, 5, 0.3);
+}
+.reopenBtn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

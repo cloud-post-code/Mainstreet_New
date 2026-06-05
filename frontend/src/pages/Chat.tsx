@@ -329,23 +329,6 @@ export default function Chat() {
   return (
     <div className={styles.layout}>
       <main className={styles.main}>
-        <div className={styles.masonHeader}>
-          <div className={styles.masonHeaderAvatar}>
-            <img src="/mason/mason-1.png" alt="" />
-          </div>
-          <div className={styles.masonHeaderText}>
-            <span className={styles.masonHeaderName}>Mason</span>
-            <span className={styles.masonHeaderStatus}>
-              {streaming
-                ? agentState === 'tool'
-                  ? 'looking'
-                  : agentState === 'replying'
-                    ? 'replying'
-                    : 'thinking'
-                : 'available'}
-            </span>
-          </div>
-        </div>
         {messages.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}><MasonChip /></div>
