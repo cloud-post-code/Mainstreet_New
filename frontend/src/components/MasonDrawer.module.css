@@ -22,20 +22,19 @@
   flex-direction: column;
 }
 
-/* Popped-out side panel (desktop): slides in from the right edge, full height. */
+/* Popped-out side panel (desktop): slides in from the right edge of main, sits below the app header. */
 .panelPopped {
-  position: fixed;
+  position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(420px, calc(100vw - 48px));
-  height: 100vh;
-  height: 100dvh;
+  width: min(420px, calc(100% - 48px));
+  height: 100%;
   border-radius: 0;
   border-left: 1px solid rgba(15, 24, 5, 0.12);
   box-shadow: -16px 0 40px rgba(15, 24, 5, 0.22);
   overflow: hidden;
-  z-index: 100;
+  z-index: 50;
   animation: slideInRight 0.22s ease-out;
 }
 @keyframes slideInRight {
@@ -493,9 +492,9 @@
 .userName {}
 
 .reopenBtn {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
+  position: absolute;
+  top: 16px;
+  right: 16px;
   width: 56px;
   height: 56px;
   border-radius: 50%;
