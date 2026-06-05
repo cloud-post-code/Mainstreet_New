@@ -42,7 +42,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     "plan": ("steps",),
 }
 
-VALID_GRID_LAYOUTS = {"recommendation", "comparison", "curated"}
+VALID_GRID_LAYOUTS = {"recommendation", "comparison", "curated", "hero", "trio", "showcase"}
 
 
 def validate_render_ui(payload: Any) -> list[str]:
@@ -94,6 +94,15 @@ def validate_render_ui(payload: Any) -> list[str]:
                     f"components[{cid}].props.layout '{layout}' invalid. "
                     f"Allowed: {sorted(VALID_GRID_LAYOUTS)}"
                 )
+            expected_child_counts = {"hero": 1, "trio": 3, "showcase": 6}
+            if layout in expected_child_counts:
+                child_ids = comp.get("children") or []
+                expected = expected_child_counts[layout]
+                if isinstance(child_ids, list) and len(child_ids) != expected:
+                    errors.append(
+                        f"components[{cid}].props.layout '{layout}' requires exactly "
+                        f"{expected} product_card child(ren); got {len(child_ids)}."
+                    )
         if ctype == "comparison_table":
             products = props.get("products")
             if not isinstance(products, list) or len(products) == 0:
@@ -291,7 +300,7 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "stack{}, text_block{content,tone?}, "
                                 "reasoning_block{summary}, "
                                 "product_card{product_id,name,price,shop_name,image_url?,quantity?,description_summary?,tags?,shop_id?}, "
-                                "product_grid{layout(recommendation|comparison|curated),title,subtitle?}, "
+                                "product_grid{layout(recommendation|comparison|curated|hero|trio|showcase),title,subtitle?}, "
                                 "comparison_table{products[{product_id,name,price,pros[],cons[],shop_name?,image_url?}],sort_by?}, "
                                 "multiple_choice{question_id,question,choices,hint?}, "
                                 "question_card{question_id,question,options?,hint?}, "

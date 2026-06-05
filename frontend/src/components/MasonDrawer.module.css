@@ -1,27 +1,16 @@
-.backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(15, 24, 5, 0.45);
-  z-index: 100;
-  animation: fade 0.15s ease;
-}
-@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.backdrop { display: none; }
 
 .panel {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
   height: 100%;
-  width: min(420px, 100%);
+  width: 380px;
   background: var(--ms-cream, #f1e9d8);
   color: var(--ms-dark, #0f1805);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.2);
-  z-index: 101;
+  border-left: 1px solid rgba(15, 24, 5, 0.1);
   display: flex;
   flex-direction: column;
-  animation: slideIn 0.22s ease;
 }
-@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
 .header {
   display: flex;

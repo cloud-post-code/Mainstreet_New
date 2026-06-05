@@ -16,7 +16,7 @@ interface Props {
   description_summary?: string
   tags?: string[]
   onIntent?: IntentHandler
-  variant?: 'default' | 'grid'
+  variant?: 'default' | 'grid' | 'hero' | 'compact'
   showAddToCart?: boolean
 }
 
@@ -34,7 +34,9 @@ export default function ProductCard(props: Props) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  const isGrid = props.variant === 'grid'
+  const isHero = props.variant === 'hero'
+  const isCompact = props.variant === 'compact'
+  const isGrid = props.variant === 'grid' || isHero
   const busy = status === 'loading'
   const added = status === 'success'
 
@@ -59,7 +61,7 @@ export default function ProductCard(props: Props) {
 
   return (
     <div
-      className={`${styles.productCard} ${isGrid ? styles.productCardGrid : ''}`}
+      className={`${styles.productCard} ${isGrid ? styles.productCardGrid : ''} ${isHero ? styles.productCardHero : ''} ${isCompact ? styles.productCardCompact : ''}`}
       style={clickable ? { cursor: 'pointer' } : undefined}
       onClick={clickable ? () => props.onIntent?.('open_details', { product_id: props.product_id, name: props.name }) : undefined}
     >

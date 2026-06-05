@@ -33,7 +33,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ]
 
 export default function MasonDrawer(props: MasonDrawerProps) {
-  const { isOpen, closeDrawer, agentState } = useMason()
+  const { closeDrawer, agentState } = useMason()
   const [tab, setTab] = useState<TabKey>('notes')
   const [correction, setCorrection] = useState('')
   const [notes, setNotes] = useState<string[]>([
@@ -48,13 +48,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     dislikes: '',
   })
 
-  useEffect(() => {
-    if (!isOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, closeDrawer])
-
   // Latest agent message's events drive the "Now" reasoning view.
   const latestAgentEvents = useMemo(() => {
     for (let i = props.messages.length - 1; i >= 0; i--) {
@@ -63,8 +56,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     }
     return []
   }, [props.messages])
-
-  if (!isOpen) return null
 
   const statusText =
     agentState === 'thinking' ? 'thinking…'
@@ -92,9 +83,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
   }
 
   return (
-    <>
-      <div className={styles.backdrop} onClick={closeDrawer} aria-hidden="true" />
-      <aside className={styles.panel} role="dialog" aria-label="Mason">
+    <aside className={styles.panel} aria-label="Mason">
         <div className={styles.header}>
           <div className={styles.headerIdent}>
             <div className={styles.avatar}>
@@ -105,7 +94,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
               <span className={styles.headerStatus}>{statusText}</span>
             </div>
           </div>
-          <button className={styles.closeBtn} onClick={closeDrawer} aria-label="Close">×</button>
         </div>
 
         <section className={styles.nowBanner} aria-label="What Mason is doing now">
@@ -265,7 +253,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
             <span className={styles.userName}>Browsing as guest</span>
           )}
         </div>
-      </aside>
-    </>
+    </aside>
   )
 }

@@ -1,6 +1,6 @@
 .layout {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: calc(100vh - 64px);
   overflow: hidden;
   background: var(--ms-cream);
@@ -14,9 +14,7 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--ms-cream);
-  width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
+  min-width: 0;
 }
 
 /* ── Empty state ── */
@@ -85,6 +83,9 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
 }
 
 .loadOlderWrap {
@@ -224,6 +225,10 @@
   background: var(--ms-secondary);
   border-top: 1px solid rgba(122,158,126,0.3);
   align-items: flex-end;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .textarea {

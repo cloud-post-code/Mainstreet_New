@@ -32,14 +32,17 @@ interface NodeProps {
   tree: Map<string, A2uiComponent>
   id: string
   onIntent: IntentHandler
+  parentLayout?: string
 }
 
-function Node({ tree, id, onIntent }: NodeProps): ReactNode {
+function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
   const node = tree.get(id)
   if (!node) return <div style={{ color: '#c0392b' }}>Missing component: {id}</div>
   const p = node.props as Record<string, unknown>
+  const childLayout =
+    node.type === 'product_grid' ? (p.layout as string | undefined) : undefined
   const children = (node.children ?? []).map(cid => (
-    <Node key={cid} tree={tree} id={cid} onIntent={onIntent} />
+    <Node key={cid} tree={tree} id={cid} onIntent={onIntent} parentLayout={childLayout} />
   ))
 
   // Inline trivial wrappers — they're a pure CSS shell, not worth a separate file.
@@ -52,9 +55,11 @@ function Node({ tree, id, onIntent }: NodeProps): ReactNode {
       )
     case 'text_block':
       return (
-        <p className={`${a2uiStyles.textBlock} ${p.tone === 'muted' ? a2uiStyles.textBlockMuted : ''}`}>
-          {p.content as string}
-        </p>
+        <div className={a2uiStyles.textBlockBubble}>
+          <p className={`${a2uiStyles.textBlock} ${p.tone === 'muted' ? a2uiStyles.textBlockMuted : ''}`}>
+            {p.content as string}
+          </p>
+        </div>
       )
     case 'reasoning_block':
       return (
@@ -67,9 +72,18 @@ function Node({ tree, id, onIntent }: NodeProps): ReactNode {
 
   const Comp = COMPONENTS[node.type]
   if (!Comp) return <div style={{ color: '#c0392b' }}>Unknown type: {node.type}</div>
+  const productCardVariant =
+    parentLayout === 'hero' ? 'hero'
+      : parentLayout === 'showcase' ? 'compact'
+        : parentLayout === 'trio' ? 'grid'
+          : (p.variant as string | undefined)
   const compProps =
     node.type === 'product_card'
-      ? { ...p, showAddToCart: (p.showAddToCart as boolean | undefined) ?? true }
+      ? {
+          ...p,
+          showAddToCart: (p.showAddToCart as boolean | undefined) ?? true,
+          variant: productCardVariant,
+        }
       : p
   return (
     <Comp {...compProps} _a2uiId={id} onIntent={onIntent}>
