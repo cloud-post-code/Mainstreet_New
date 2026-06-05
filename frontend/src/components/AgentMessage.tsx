@@ -19,7 +19,9 @@ function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
   function flushText(key: string) {
     if (textBlocks.length) {
       rendered.push(
-        <p key={key} className={styles.text}>{textBlocks.splice(0).join('')}</p>
+        <div key={key} className={styles.textBubble}>
+          <p className={styles.text}>{textBlocks.splice(0).join('')}</p>
+        </div>
       )
     }
   }

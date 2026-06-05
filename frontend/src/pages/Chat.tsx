@@ -382,6 +382,24 @@ export default function Chat() {
             )}
             {messages.map((msg, idx) => (
               <div key={msg.id} className={`${styles.row} ${msg.from === 'user' ? styles.userRow : styles.agentRow}`}>
+                {msg.from === 'agent' && (
+                  <div className={styles.agentAvatar}>
+                    <MasonChip />
+                    {streaming && idx === lastAgentIdx && (
+                      <button
+                        type="button"
+                        className={styles.thinkingBar}
+                        onClick={() => mason.openDrawer()}
+                        aria-label="Open Mason reasoning"
+                      >
+                        <span className={styles.thinkingDot} />
+                        <span className={styles.thinkingLabel}>
+                          {agentState === 'tool' ? 'Looking…' : agentState === 'replying' ? 'Replying…' : 'Thinking…'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className={styles.bubble}>
                   {msg.from === 'user' ? (
                     <p className={styles.userText}>{msg.text}</p>

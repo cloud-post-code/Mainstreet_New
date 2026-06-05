@@ -117,8 +117,8 @@
   gap: 0.75rem;
   align-items: flex-start;
 }
-.userRow { flex-direction: row-reverse; }
-.agentRow { flex-direction: row; }
+.userRow { flex-direction: row; justify-content: flex-end; }
+.agentRow { flex-direction: row; justify-content: flex-start; }
 
 .userAvatar {
   width: 34px;
@@ -132,11 +132,55 @@
   font-size: 1rem;
   flex-shrink: 0;
   overflow: hidden;
+  order: 2;
+  margin-top: 4px;
+}
+
+.agentAvatar {
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.thinkingBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--ms-secondary, #f1e9d8);
+  border: 1px solid rgba(1, 82, 55, 0.25);
+  border-radius: 999px;
+  color: var(--ms-primary, #015237);
+  font-size: 0.72rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.thinkingBar:hover {
+  background: #e7dcc4;
+  border-color: var(--ms-primary, #015237);
+}
+.thinkingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ms-primary, #015237);
+  animation: thinkingPulse 1.2s ease-in-out infinite;
+}
+.thinkingLabel { line-height: 1; }
+@keyframes thinkingPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
 }
 
 .bubble {
   max-width: 75%;
 }
+.userRow .bubble { order: 1; }
 
 .userText {
   background: var(--ms-primary);
