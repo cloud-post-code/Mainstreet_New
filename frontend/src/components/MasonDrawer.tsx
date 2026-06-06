@@ -48,7 +48,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
       return () => { document.body.style.overflow = prev }
     }
   }, [isOpen])
-  const [tab, setTab] = useState<TabKey>('notes')
+  const [tab, setTab] = useState<TabKey>('history')
   const [newNote, setNewNote] = useState('')
 
   // Latest agent message's events drive the "Now" reasoning view.

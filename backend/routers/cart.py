@@ -4,18 +4,31 @@ The agent tool dispatcher imports the bare functions (view, add_item, etc.)
 and expects them to return dicts — that's why we keep dict returns and only
 translate to HTTPException at the route boundary.
 """
-from uuid import uuid4
-
-from fastapi import APIRouter, Depends, HTTPException, status
+import stripe
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import get_current_user
+from config import settings
 from db.database import get_db
 from db.models import CartItem, Product, Shop, User
 
 router = APIRouter(prefix="/api/cart", tags=["cart"])
+
+if settings.stripe_secret_key:
+    stripe.api_key = settings.stripe_secret_key
+
+
+def _stripe_success_url() -> str:
+    base = settings.stripe_success_url or f"{settings.frontend_url.split(',')[0].strip()}/cart/success"
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}session_id={{CHECKOUT_SESSION_ID}}"
+
+
+def _stripe_cancel_url() -> str:
+    return settings.stripe_cancel_url or f"{settings.frontend_url.split(',')[0].strip()}/cart"
 
 
 # ── Core operations (also called from the agent tool dispatcher) ─────────────
@@ -168,11 +181,44 @@ async def checkout(user_id: int | None, session_id: int | None, db: AsyncSession
     if cart["item_count"] == 0:
         return {"checkout_url": None, "items_count": 0, "total": 0.0, "reason": "cart_empty"}
 
-    checkout_url = f"https://checkout.example.com/c/{uuid4()}"
-    await db.execute(delete(CartItem).where(_owner_filter(user_id, session_id)))
-    await db.flush()
+    if not settings.stripe_secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stripe is not configured on the server.",
+        )
+
+    line_items = []
+    for it in cart["items"]:
+        product_data: dict = {"name": it["name"]}
+        if it.get("image_url"):
+            product_data["images"] = [it["image_url"]]
+        line_items.append({
+            "price_data": {
+                "currency": "usd",
+                "unit_amount": int(round(float(it["price"]) * 100)),
+                "product_data": product_data,
+            },
+            "quantity": int(it["quantity"]),
+        })
+
+    try:
+        stripe_session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=line_items,
+            success_url=_stripe_success_url(),
+            cancel_url=_stripe_cancel_url(),
+            client_reference_id=str(user_id) if user_id is not None else None,
+            metadata={"user_id": str(user_id) if user_id is not None else ""},
+        )
+    except stripe.error.StripeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Stripe error: {e.user_message or str(e)}",
+        )
+
     return {
-        "checkout_url": checkout_url,
+        "checkout_url": stripe_session.url,
+        "session_id": stripe_session.id,
         "items_count": cart["item_count"],
         "total": cart["total"],
     }
@@ -279,3 +325,32 @@ async def http_checkout(
     result = await checkout(user_id=user.id, session_id=None, db=db)
     await db.commit()
     return result
+
+
+@router.post("/webhook")
+async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    if not settings.stripe_webhook_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stripe webhook secret is not configured.",
+        )
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, settings.stripe_webhook_secret)
+    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid webhook: {e}")
+
+    if event["type"] == "checkout.session.completed":
+        stripe_session = event["data"]["object"]
+        ref = stripe_session.get("client_reference_id")
+        if ref:
+            try:
+                user_id = int(ref)
+            except ValueError:
+                user_id = None
+            if user_id is not None:
+                await db.execute(delete(CartItem).where(_owner_filter(user_id, None)))
+                await db.commit()
+
+    return {"received": True}

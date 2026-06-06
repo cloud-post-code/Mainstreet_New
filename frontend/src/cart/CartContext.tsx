@@ -78,7 +78,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const checkout = useCallback(async () => {
     if (!token) return null
     const res = await api.checkoutCart(token)
-    setCart(EMPTY)
     return res.checkout_url
   }, [token])
 

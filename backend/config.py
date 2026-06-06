@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # Set on Railway to your backend public URL (e.g. https://your-api.up.railway.app)
     public_api_url: str = ""
 
+    # Stripe Checkout
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_success_url: str = ""
+    stripe_cancel_url: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
