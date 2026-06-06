@@ -10,12 +10,12 @@ import styles from './Mason.module.css'
 type TabKey = 'shipping' | 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'shipping', label: 'Shipping' },
+  { key: 'inbox', label: 'Inbox' },
   { key: 'history', label: 'History' },
   { key: 'notes', label: 'Notes' },
   { key: 'preferences', label: 'Prefs' },
   { key: 'saved', label: 'Saved' },
-  { key: 'inbox', label: 'Inbox' },
+  { key: 'shipping', label: 'Shipping' },
 ]
 
 export default function Mason() {
@@ -28,7 +28,7 @@ export default function Mason() {
 
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
-  const [tab, setTab] = useState<TabKey>('shipping')
+  const [tab, setTab] = useState<TabKey>('inbox')
   const [newNote, setNewNote] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
   const [masonSessionId, setMasonSessionId] = useState<number | null>(null)

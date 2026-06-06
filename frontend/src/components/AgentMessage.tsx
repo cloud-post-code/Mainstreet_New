@@ -18,9 +18,10 @@ function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
 
   function flushText(key: string) {
     if (textBlocks.length) {
+      const content = textBlocks.splice(0).join('')
       rendered.push(
         <div key={key} className={styles.textBubble}>
-          <p className={styles.text}>{textBlocks.splice(0).join('')}</p>
+          <p className={styles.text}>{renderInlineMarkdown(content)}</p>
         </div>
       )
     }
@@ -72,6 +73,34 @@ function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
 
 const AgentMessage = React.memo(AgentMessageImpl)
 export default AgentMessage
+
+// Lightweight inline markdown: **bold**, __bold__, *italic*, _italic_, `code`.
+// Intentionally minimal — block-level markdown is not supported.
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const tokens: React.ReactNode[] = []
+  const pattern = /\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|(?<![A-Za-z0-9])_([^_]+)_(?![A-Za-z0-9])|`([^`]+)`/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push(text.slice(lastIndex, match.index))
+    }
+    const [, bold1, bold2, ital1, ital2, code] = match
+    if (bold1 != null || bold2 != null) {
+      tokens.push(<strong key={`md-${key++}`}>{bold1 ?? bold2}</strong>)
+    } else if (ital1 != null || ital2 != null) {
+      tokens.push(<em key={`md-${key++}`}>{ital1 ?? ital2}</em>)
+    } else if (code != null) {
+      tokens.push(<code key={`md-${key++}`}>{code}</code>)
+    }
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < text.length) {
+    tokens.push(text.slice(lastIndex))
+  }
+  return tokens
+}
 
 function TreeWithQuestionCardAdapter({
   tree,

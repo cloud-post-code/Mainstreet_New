@@ -1,5 +1,5 @@
 .page {
-  max-width: 1100px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 1.5rem 2rem 3rem;
   background: var(--ms-cream);
@@ -225,9 +225,21 @@
 }
 .table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 0.875rem;
   font-family: var(--font-body);
+}
+.table th:first-child,
+.table td:first-child {
+  width: 64px;
+  white-space: nowrap;
+}
+.table th:last-child,
+.table td:last-child {
+  width: 90px;
+  white-space: nowrap;
+  text-align: right;
 }
 .table th {
   background: var(--ms-cream);

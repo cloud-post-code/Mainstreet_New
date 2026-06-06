@@ -151,6 +151,38 @@
   .grid { grid-template-columns: 1fr; gap: 16px; }
 }
 
+.customizeRail {
+  margin: 0 0 32px;
+  padding: 20px 22px 24px;
+  background: rgba(241, 233, 216, 0.45);
+  border: 1px solid rgba(122, 158, 126, 0.3);
+  border-radius: 14px;
+}
+.customizeTitle {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--ms-dark);
+  margin: 0 0 4px;
+}
+.customizeSubtitle {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 0 16px;
+}
+.customizeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+@media (max-width: 900px) {
+  .customizeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+}
+@media (max-width: 600px) {
+  .customizeGrid { grid-template-columns: 1fr; }
+}
+
 .skeleton {
   height: 360px;
   background: linear-gradient(90deg, #ece3d0 0%, #f3ecdb 50%, #ece3d0 100%);
@@ -309,4 +341,76 @@
   font-family: 'Lora', serif;
   font-size: 14px;
   color: var(--ms-dark, #0f1805);
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 24, 5, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.modalContent {
+  position: relative;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: transparent;
+  animation: popIn 0.18s ease-out;
+}
+
+.modalClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ms-dark, #0f1805);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.modalClose:hover {
+  background: #fff;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.cardClickable {
+  cursor: pointer;
+  outline: none;
+  border-radius: 12px;
+  transition: transform 0.12s ease;
+}
+
+.cardClickable:hover {
+  transform: translateY(-2px);
+}
+
+.cardClickable:focus-visible {
+  box-shadow: 0 0 0 3px var(--ms-primary, #015237);
 }

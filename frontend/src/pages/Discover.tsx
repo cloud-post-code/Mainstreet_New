@@ -65,8 +65,17 @@ export default function Discover() {
   const [allShops, setAllShops] = useState<ShopFull[]>([])
   const [shopsLoading, setShopsLoading] = useState(false)
   const [shopsError, setShopsError] = useState<string | null>(null)
+  const [modalProduct, setModalProduct] = useState<Product | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // Close modal on Escape.
+  useEffect(() => {
+    if (!modalProduct) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setModalProduct(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [modalProduct])
 
   // Debounce search input.
   const debounceRef = useRef<number | null>(null)
@@ -359,13 +368,59 @@ export default function Discover() {
           <>
             {error && <div className={styles.error}>{error}</div>}
 
+            {(() => {
+              const customizable = products.filter(p => (p.variants?.length ?? 0) > 1).slice(0, 3)
+              if (customizable.length === 0) return null
+              return (
+                <section className={styles.customizeRail}>
+                  <h2 className={styles.customizeTitle}>Customize it</h2>
+                  <p className={styles.customizeSubtitle}>Pick the size, color, and style that fits you.</p>
+                  <div className={styles.customizeGrid}>
+                    {customizable.map(p => (
+                      <ProductCard
+                        key={`opts-${p.id}`}
+                        product_id={p.id}
+                        name={p.name}
+                        price={Number(p.price_range?.min ?? 0)}
+                        quantity={p.variants.reduce((s, v) => s + (v.quantity ?? 0), 0)}
+                        image_url={p.image_url ?? undefined}
+                        shop_name={p.shop_name ?? ''}
+                        shop_id={p.shop_id}
+                        description_summary={descSummary(p.description)}
+                        layout="options"
+                        showAddToCart
+                        variants={p.variants.map(v => ({
+                          variant_id: v.id,
+                          option_names: v.option_names,
+                          option_values: v.option_values,
+                          variant_label: v.variant_label,
+                          price: Number(v.price),
+                          quantity: v.quantity,
+                          image_url: v.image_url,
+                        }))}
+                        default_variant_id={p.default_variant_id ?? undefined}
+                        display_mode="parent"
+                      />
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+
             {products.length === 0 && !loading ? (
               <div className={styles.empty}>No products match your filters.</div>
             ) : (
               <div className={styles.grid}>
                 {products.map(p => (
-                  <ProductCard
+                  <div
                     key={p.id}
+                    className={styles.cardClickable}
+                    onClick={() => setModalProduct(p)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct(p) } }}
+                  >
+                  <ProductCard
                     product_id={p.id}
                     name={p.name}
                     price={Number(p.price_range?.min ?? 0)}
@@ -389,6 +444,7 @@ export default function Discover() {
                     default_variant_id={p.default_variant_id ?? undefined}
                     display_mode="parent"
                   />
+                  </div>
                 ))}
                 {loading && Array.from({ length: 3 }).map((_, i) => (
                   <div key={`sk-${i}`} className={styles.skeleton} />
@@ -442,6 +498,51 @@ export default function Discover() {
           </>
         )}
       </main>
+
+      {modalProduct && (
+        <div
+          className={styles.modalBackdrop}
+          onClick={() => setModalProduct(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${modalProduct.name} details`}
+        >
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className={styles.modalClose}
+              onClick={() => setModalProduct(null)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <ProductCard
+              product_id={modalProduct.id}
+              name={modalProduct.name}
+              price={Number(modalProduct.price_range?.min ?? 0)}
+              quantity={modalProduct.variants.reduce((s, v) => s + (v.quantity ?? 0), 0)}
+              image_url={modalProduct.image_url ?? undefined}
+              shop_name={modalProduct.shop_name ?? ''}
+              shop_id={modalProduct.shop_id}
+              description_summary={descSummary(modalProduct.description)}
+              tags={descTags(modalProduct.description)}
+              layout="hero"
+              showAddToCart
+              variants={modalProduct.variants.map(v => ({
+                variant_id: v.id,
+                option_names: v.option_names,
+                option_values: v.option_values,
+                variant_label: v.variant_label,
+                price: Number(v.price),
+                quantity: v.quantity,
+                image_url: v.image_url,
+              }))}
+              default_variant_id={modalProduct.default_variant_id ?? undefined}
+              display_mode="parent"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

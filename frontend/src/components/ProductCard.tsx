@@ -26,15 +26,17 @@ interface Props {
   description_summary?: string
   tags?: string[]
   onIntent?: IntentHandler
-  layout?: 'default' | 'grid' | 'hero' | 'compact'
+  layout?: 'default' | 'grid' | 'hero' | 'compact' | 'options'
   showAddToCart?: boolean
   // Variant support — when the agent returns a parent product, it passes
-  // the full variant list plus a display mode. variant mode pins one
-  // variant card; parent mode renders a dropdown.
+  // the full variant list plus a display mode. variant mode preselects one
+  // variant; parent mode leaves the default selected.
   variants?: VariantOption[]
   display_mode?: 'parent' | 'variant'
   preselected_variant_id?: number
   default_variant_id?: number
+  // When true, hide the option chips and lock the displayed variant.
+  lockVariant?: boolean
 }
 
 export default function ProductCard(props: Props) {
@@ -69,13 +71,12 @@ export default function ProductCard(props: Props) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // display_mode='variant' = single pinned variant; suppress the dropdown
-  // even if multiple variants exist.
-  const showVariantPicker = hasVariants && props.display_mode !== 'variant'
+  const showOptions = hasVariants && !props.lockVariant
 
   const isHero = props.layout === 'hero'
   const isCompact = props.layout === 'compact'
-  const isGrid = props.layout === 'grid' || isHero
+  const isOptions = props.layout === 'options'
+  const isGrid = props.layout === 'grid' || isHero || isOptions
   const busy = status === 'loading'
   const added = status === 'success'
 
@@ -107,13 +108,81 @@ export default function ProductCard(props: Props) {
       ? v.option_values.join(' / ')
       : (v.variant_label ?? `Variant ${v.variant_id}`)
 
-  const optionLabel = (selected?.option_names && selected.option_names.length > 0)
-    ? selected.option_names.join(' / ')
-    : (variants[0]?.option_names?.join(' / ') ?? 'Options')
+  // Build ordered option axes: { Color: ["Blue","Black"], Size: ["S","M","L"] }
+  const optionAxes = useMemo(() => {
+    const axes: { name: string; values: string[] }[] = []
+    const seenAxis = new Map<string, Set<string>>()
+    for (const v of variants) {
+      const names = v.option_names ?? []
+      const values = v.option_values ?? []
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i]
+        const value = values[i]
+        if (!name || value == null) continue
+        if (!seenAxis.has(name)) {
+          seenAxis.set(name, new Set())
+          axes.push({ name, values: [] })
+        }
+        const set = seenAxis.get(name)!
+        if (!set.has(value)) {
+          set.add(value)
+          axes.find(a => a.name === name)!.values.push(value)
+        }
+      }
+    }
+    return axes
+  }, [variants])
+
+  const selectedValues: Record<string, string | undefined> = {}
+  if (selected) {
+    const names = selected.option_names ?? []
+    const values = selected.option_values ?? []
+    for (let i = 0; i < names.length; i++) selectedValues[names[i]] = values[i]
+  }
+
+  // Click a chip → find a variant matching all current selections (keeping
+  // other axes fixed when possible) and select it.
+  const pickValue = (axisName: string, value: string) => {
+    const target = { ...selectedValues, [axisName]: value }
+    // exact match first
+    let match = variants.find(v => {
+      const names = v.option_names ?? []
+      const values = v.option_values ?? []
+      return Object.entries(target).every(([n, val]) => {
+        const idx = names.indexOf(n)
+        return idx >= 0 && values[idx] === val
+      })
+    })
+    // fallback: any variant where this axis matches
+    if (!match) {
+      match = variants.find(v => {
+        const names = v.option_names ?? []
+        const values = v.option_values ?? []
+        const idx = names.indexOf(axisName)
+        return idx >= 0 && values[idx] === value
+      })
+    }
+    if (match) setSelectedId(match.variant_id)
+  }
+
+  // Is a chip value reachable given the other current selections?
+  const isReachable = (axisName: string, value: string): boolean => {
+    return variants.some(v => {
+      const names = v.option_names ?? []
+      const values = v.option_values ?? []
+      const idx = names.indexOf(axisName)
+      if (idx < 0 || values[idx] !== value) return false
+      return Object.entries(selectedValues).every(([n, val]) => {
+        if (n === axisName) return true
+        const i = names.indexOf(n)
+        return i < 0 || values[i] === val
+      })
+    })
+  }
 
   return (
     <div
-      className={`${styles.productCard} ${isGrid ? styles.productCardGrid : ''} ${isHero ? styles.productCardHero : ''} ${isCompact ? styles.productCardCompact : ''}`}
+      className={`${styles.productCard} ${isGrid ? styles.productCardGrid : ''} ${isHero ? styles.productCardHero : ''} ${isCompact ? styles.productCardCompact : ''} ${isOptions ? styles.productCardOptions : ''}`}
       style={clickable ? { cursor: 'pointer' } : undefined}
       onClick={clickable ? () => props.onIntent?.('open_details', { product_id: props.product_id, name: props.name }) : undefined}
     >
@@ -134,21 +203,51 @@ export default function ProductCard(props: Props) {
             {props.tags.slice(0, 4).map(t => <span key={t} className={styles.tag}>{t}</span>)}
           </div>
         )}
-        {showVariantPicker && (
-          <label className={styles.variantPicker} onClick={(e) => e.stopPropagation()}>
-            <span className={styles.variantLabel}>{optionLabel}</span>
-            <select
-              value={selectedId ?? ''}
-              onChange={(e) => setSelectedId(Number(e.target.value))}
-              className={styles.variantSelect}
-            >
-              {variants.map(v => (
-                <option key={v.variant_id} value={v.variant_id}>
-                  {variantLabel(v)}{v.quantity > 0 ? '' : ' — out of stock'}
-                </option>
-              ))}
-            </select>
-          </label>
+        {showOptions && optionAxes.length > 0 && (
+          <div className={styles.optionsBlock} onClick={(e) => e.stopPropagation()}>
+            {optionAxes.map(axis => (
+              <div key={axis.name} className={styles.optionGroup}>
+                <span className={styles.optionGroupLabel}>{axis.name}</span>
+                <div className={styles.optionChips}>
+                  {axis.values.map(val => {
+                    const active = selectedValues[axis.name] === val
+                    const reachable = isReachable(axis.name, val)
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        className={`${styles.optionChip} ${active ? styles.optionChipActive : ''} ${!reachable ? styles.optionChipDisabled : ''}`}
+                        onClick={() => pickValue(axis.name, val)}
+                        aria-pressed={active}
+                      >
+                        {val}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {showOptions && optionAxes.length === 0 && (
+          <div className={styles.optionsBlock} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.optionGroup}>
+              <span className={styles.optionGroupLabel}>Variant</span>
+              <div className={styles.optionChips}>
+                {variants.map(v => (
+                  <button
+                    key={v.variant_id}
+                    type="button"
+                    className={`${styles.optionChip} ${selectedId === v.variant_id ? styles.optionChipActive : ''} ${v.quantity <= 0 ? styles.optionChipDisabled : ''}`}
+                    onClick={() => setSelectedId(v.variant_id)}
+                    aria-pressed={selectedId === v.variant_id}
+                  >
+                    {variantLabel(v)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
         <div className={styles.productFooter}>
           <span className={`${styles.price} ${isGrid ? styles.priceGrid : ''}`}>${Number(displayPrice).toFixed(2)}</span>
