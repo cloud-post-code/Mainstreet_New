@@ -488,21 +488,33 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody>
-                {products.map(p => (
-                  <tr key={p.id}>
-                    <td>{p.id}</td>
-                    <td className={styles.productNameCell}>
-                      {p.image_url && <img src={p.image_url} alt="" className={styles.productThumb} />}
-                      {p.name}
-                    </td>
-                    <td>{p.shop_name}</td>
-                    <td>${Number(p.price).toFixed(2)}</td>
-                    <td>{p.quantity}</td>
-                    <td>
-                      <button className={styles.deleteBtn} onClick={() => handleDeleteProduct(p.id)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                {products.map(p => {
+                  const minPrice = p.price_range ? Number(p.price_range.min) : 0
+                  const maxPrice = p.price_range ? Number(p.price_range.max) : 0
+                  const totalQty = (p.variants ?? []).reduce((s, v) => s + (v.quantity ?? 0), 0)
+                  return (
+                    <tr key={p.id}>
+                      <td>{p.id}</td>
+                      <td className={styles.productNameCell}>
+                        {p.image_url && <img src={p.image_url} alt="" className={styles.productThumb} />}
+                        {p.name}
+                        {(p.variants?.length ?? 0) > 1 && (
+                          <span className={styles.tag} style={{ marginLeft: 8 }}>{p.variants.length} variants</span>
+                        )}
+                      </td>
+                      <td>{p.shop_name}</td>
+                      <td>
+                        {minPrice === maxPrice
+                          ? `$${minPrice.toFixed(2)}`
+                          : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}`}
+                      </td>
+                      <td>{totalQty}</td>
+                      <td>
+                        <button className={styles.deleteBtn} onClick={() => handleDeleteProduct(p.id)}>Delete</button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -44,9 +44,11 @@ async def _recent_session_titles(user_id: int, db: AsyncSession) -> list[str]:
 
 
 async def _cart_product_names(user_id: int, db: AsyncSession) -> list[str]:
+    from db.models import ProductVariant
     result = await db.execute(
         select(Product.name)
-        .join(CartItem, CartItem.product_id == Product.id)
+        .join(ProductVariant, ProductVariant.product_id == Product.id)
+        .join(CartItem, CartItem.variant_id == ProductVariant.id)
         .where(CartItem.user_id == user_id)
         .limit(10)
     )

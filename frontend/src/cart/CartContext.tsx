@@ -2,6 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, R
 import { api, CartView } from '../api'
 import { useAuth } from '../hooks/useAuth'
 
+interface AddItemArgs {
+  variantId?: number
+  productId?: number
+  quantity?: number
+}
+
 interface CartContextValue {
   items: CartView['items']
   itemCount: number
@@ -10,9 +16,9 @@ interface CartContextValue {
   open: () => void
   close: () => void
   refresh: () => Promise<void>
-  addItem: (productId: number, quantity?: number) => Promise<{ ok: boolean; reason?: string; error?: string }>
-  setQuantity: (productId: number, quantity: number) => Promise<{ ok: boolean; error?: string }>
-  removeItem: (productId: number) => Promise<{ ok: boolean; error?: string }>
+  addItem: (args: AddItemArgs | number) => Promise<{ ok: boolean; reason?: string; error?: string }>
+  setQuantity: (variantId: number, quantity: number) => Promise<{ ok: boolean; error?: string }>
+  removeItem: (variantId: number) => Promise<{ ok: boolean; error?: string }>
   checkout: () => Promise<string | null>
 }
 
@@ -42,10 +48,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     refresh()
   }, [refresh])
 
-  const addItem = useCallback(async (productId: number, quantity = 1) => {
+  const addItem = useCallback(async (args: AddItemArgs | number) => {
     if (!token) return { ok: false, reason: 'not_logged_in' as const }
+    // Back-compat: a bare number is treated as a productId, which the
+    // backend resolves to the parent's default variant.
+    const body = typeof args === 'number'
+      ? { product_id: args, quantity: 1 }
+      : {
+          variant_id: args.variantId,
+          product_id: args.productId,
+          quantity: args.quantity ?? 1,
+        }
     try {
-      const res = await api.addCartItem(productId, quantity, token)
+      const res = await api.addCartItem(body, token)
       setCart(res.cart)
       return { ok: true }
     } catch (e) {
@@ -53,10 +68,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [token])
 
-  const setQuantity = useCallback(async (productId: number, quantity: number) => {
+  const setQuantity = useCallback(async (variantId: number, quantity: number) => {
     if (!token) return { ok: false, error: 'Not signed in.' }
     try {
-      const res = await api.setCartItemQuantity(productId, quantity, token)
+      const res = await api.setCartItemQuantity(variantId, quantity, token)
       setCart(res.cart)
       return { ok: true }
     } catch (e) {
@@ -64,10 +79,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [token])
 
-  const removeItem = useCallback(async (productId: number) => {
+  const removeItem = useCallback(async (variantId: number) => {
     if (!token) return { ok: false, error: 'Not signed in.' }
     try {
-      const res = await api.removeCartItem(productId, token)
+      const res = await api.removeCartItem(variantId, token)
       setCart(res.cart)
       return { ok: true }
     } catch (e) {

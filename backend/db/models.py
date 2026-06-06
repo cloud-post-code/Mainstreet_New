@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, SmallInteger, String, Boolean, Numeric, Text,
+    Column, Integer, BigInteger, SmallInteger, String, Boolean, Numeric, Text,
     ForeignKey, DateTime, func, Index, CheckConstraint, UniqueConstraint, text
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, ARRAY
@@ -39,23 +39,37 @@ class Shop(Base):
 
 
 class Product(Base):
+    """Parent product. Each Shopify-style handle becomes one row; the
+    individual color/size/style choices live in ProductVariant."""
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True)
     shop_id = Column(Integer, ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    handle = Column(String(200))
     name = Column(String(300), nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
-    quantity = Column(Integer, default=0, nullable=False)
-    image_url = Column(Text)
     description = Column(JSONB)
+    default_variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
     search_vector = Column(TSVECTOR)
     embedding = Column(Vector(1536), nullable=True)
     shop_name_cached = Column(String(200))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     shop = relationship("Shop", back_populates="products")
+    variants = relationship(
+        "ProductVariant",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductVariant.variant_index",
+        foreign_keys="ProductVariant.product_id",
+    )
+    default_variant = relationship(
+        "ProductVariant",
+        foreign_keys=[default_variant_id],
+        post_update=True,
+    )
 
     __table_args__ = (
+        UniqueConstraint("shop_id", "handle", name="uq_products_shop_handle"),
         Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
         Index(
             "ix_products_name_trgm",
@@ -63,6 +77,33 @@ class Product(Base):
             postgresql_using="gin",
             postgresql_ops={"name": "gin_trgm_ops"},
         ),
+    )
+
+
+class ProductVariant(Base):
+    """One row per Shopify variant — a specific color/size/style pick of a
+    parent Product. Single-variant products still get exactly one row here."""
+    __tablename__ = "product_variants"
+
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    external_variant_id = Column(BigInteger, index=True, nullable=True)
+    variant_index = Column(SmallInteger, nullable=False, default=1)
+    option_names = Column(ARRAY(Text), nullable=False, server_default=text("ARRAY[]::text[]"))
+    option_values = Column(ARRAY(Text), nullable=False, server_default=text("ARRAY[]::text[]"))
+    price = Column(Numeric(10, 2), nullable=False, default=0)
+    quantity = Column(Integer, default=0, nullable=False)
+    image_url = Column(Text)
+    variant_label = Column(String(300))
+    description = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    product = relationship("Product", back_populates="variants", foreign_keys=[product_id])
+
+    __table_args__ = (
+        UniqueConstraint("product_id", "external_variant_id", name="uq_variants_product_external"),
+        Index("ix_variants_product_index", "product_id", "variant_index"),
+        Index("ix_variants_option_values", "option_values", postgresql_using="gin"),
     )
 
 
@@ -207,20 +248,20 @@ class CartItem(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False)
     quantity = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    product = relationship("Product")
+    variant = relationship("ProductVariant")
 
     __table_args__ = (
         Index(
-            "ix_cart_user_product", "user_id", "product_id", unique=True,
+            "ix_cart_user_variant", "user_id", "variant_id", unique=True,
             postgresql_where=text("user_id IS NOT NULL"),
         ),
         Index(
-            "ix_cart_session_product", "session_id", "product_id", unique=True,
+            "ix_cart_session_variant", "session_id", "variant_id", unique=True,
             postgresql_where=text("session_id IS NOT NULL AND user_id IS NULL"),
         ),
         CheckConstraint(

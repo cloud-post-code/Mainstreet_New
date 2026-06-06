@@ -93,6 +93,38 @@ async def update_prefs(
     return out
 
 
+# ── Shipping address ────────────────────────────────────────────────────────
+
+class ShippingPatch(BaseModel):
+    name: Optional[str] = None
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    phone: Optional[str] = None
+
+
+@router.get("/shipping")
+async def get_shipping(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await mem.get_shipping(current_user.id, db)
+
+
+@router.patch("/shipping")
+async def update_shipping(
+    body: ShippingPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    out = await mem.set_shipping(current_user.id, body.model_dump(exclude_unset=True), db)
+    await db.commit()
+    return out
+
+
 # ── Saved products ──────────────────────────────────────────────────────────
 
 class SavedProductIn(BaseModel):

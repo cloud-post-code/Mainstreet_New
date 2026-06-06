@@ -120,7 +120,6 @@ def build_canonical_text(
         tags_text,
         d.get("long") or "",
         d.get("materials") or "",
-        d.get("variant") or "",
         d.get("made_in") or "",
     ]
     return " | ".join(p for p in parts if p).strip()

@@ -7,7 +7,7 @@ from decimal import Decimal
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text as sql_text, bindparam
-from db.models import Product, Shop, AgentPlan
+from db.models import Product, ProductVariant, Shop, AgentPlan
 from agent.memory import (
     save_preference,
     add_note as memory_add_note,
@@ -38,10 +38,14 @@ async def _product_quantities_for_render_ui(payload: dict, db: AsyncSession) -> 
     ids = collect_product_card_ids(payload)
     if not ids:
         return {}
+    # Sum variant quantity per parent so the in_stock badge reflects total
+    # availability across all variant choices.
     result = await db.execute(
-        select(Product.id, Product.quantity).where(Product.id.in_(ids))
+        select(ProductVariant.product_id, func.coalesce(func.sum(ProductVariant.quantity), 0))
+        .where(ProductVariant.product_id.in_(ids))
+        .group_by(ProductVariant.product_id)
     )
-    return {row.id: row.quantity for row in result.all()}
+    return {row[0]: int(row[1] or 0) for row in result.all()}
 
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 
@@ -49,19 +53,47 @@ TOOL_DEFINITIONS = [
     {
         "name": "search_products",
         "description": (
-            "Search products in the database. Returns a list of matching products. "
-            "Call this before render_ui whenever the UI will reference products. "
-            "Supports full-text search and filters."
+            "Search parent products in the database. Each result is a single product "
+            "with its full list of variants (colors, sizes, etc.). Use the variants array "
+            "to decide whether to show a parent card with a dropdown, or pin a single variant. "
+            "Call this before render_ui whenever the UI will reference products."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search keywords (product name, tags, description)"},
+                "query": {"type": "string", "description": "Search keywords (product name, tags, option values like 'red', 'large')"},
                 "shop_id": {"type": "integer", "description": "Filter to a specific shop ID"},
-                "min_price": {"type": "number", "description": "Minimum price filter"},
-                "max_price": {"type": "number", "description": "Maximum price filter"},
-                "in_stock_only": {"type": "boolean", "description": "Only return in-stock products"},
+                "min_price": {"type": "number", "description": "Minimum price filter (matches any variant)"},
+                "max_price": {"type": "number", "description": "Maximum price filter (matches any variant)"},
+                "in_stock_only": {"type": "boolean", "description": "Only return products with at least one in-stock variant"},
                 "limit": {"type": "integer", "description": "Max results (default 10, max 20)", "default": 10},
+            },
+        },
+    },
+    {
+        "name": "show_product",
+        "description": (
+            "Decide how a single product is rendered in the UI. Use display_mode='parent' "
+            "to show the parent card with a dropdown of variants (best when the shopper "
+            "hasn't picked a specific option). Use display_mode='variant' to show a single "
+            "fixed variant card (best when the shopper named a specific color/size/style). "
+            "Optionally pass preselected_variant_id to land the dropdown on a specific option "
+            "in parent mode."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["product_id", "display_mode"],
+            "properties": {
+                "product_id": {"type": "integer", "description": "Parent product ID"},
+                "display_mode": {
+                    "type": "string",
+                    "enum": ["parent", "variant"],
+                    "description": "parent = card with variant dropdown; variant = single pinned variant",
+                },
+                "preselected_variant_id": {
+                    "type": "integer",
+                    "description": "Variant to start the dropdown on (parent mode) or to pin (variant mode)",
+                },
             },
         },
     },
@@ -105,32 +137,33 @@ TOOL_DEFINITIONS = [
     {
         "name": "add_to_cart",
         "description": (
-            "Add a product to the user's cart. If the product is already in the cart, "
-            "the quantity is incremented. Resolve the product_id with search_products first "
-            "if the user referenced the product by name."
+            "Add a specific variant to the user's cart. Always pass variant_id when the "
+            "product has multiple variants — picking the right color/size matters. "
+            "If you only pass product_id, the parent's default variant is used; only do this "
+            "when the product has a single variant. Resolve ids via search_products first."
         ),
         "input_schema": {
             "type": "object",
-            "required": ["product_id"],
             "properties": {
-                "product_id": {"type": "integer", "description": "Product ID to add"},
+                "variant_id": {"type": "integer", "description": "Variant ID to add (preferred)"},
+                "product_id": {"type": "integer", "description": "Product ID — falls back to the default variant"},
                 "quantity": {"type": "integer", "description": "How many to add (default 1)", "default": 1},
             },
         },
     },
     {
         "name": "view_cart",
-        "description": "Return the contents of the current user's cart with names, prices, quantities, subtotals, and total.",
+        "description": "Return the contents of the current user's cart with variant labels, prices, quantities, subtotals, and total.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "remove_from_cart",
-        "description": "Remove a product from the current user's cart entirely.",
+        "description": "Remove a variant from the current user's cart entirely.",
         "input_schema": {
             "type": "object",
-            "required": ["product_id"],
+            "required": ["variant_id"],
             "properties": {
-                "product_id": {"type": "integer", "description": "Product ID to remove"},
+                "variant_id": {"type": "integer", "description": "Variant ID to remove"},
             },
         },
     },
@@ -295,6 +328,8 @@ async def execute_tool(
     try:
         if tool_name == "search_products":
             return await _search_products(tool_input, db), None
+        if tool_name == "show_product":
+            return await _show_product(tool_input, db), None
         if tool_name == "search_shops":
             return await _search_shops(tool_input, db), None
         if tool_name == "render_ui":
@@ -366,7 +401,8 @@ async def execute_tool(
             return {"saved": True, "product_id": int(tool_input["product_id"]), "newly_saved": created}, None
         if tool_name == "add_to_cart":
             return await cart_service.add_item(
-                product_id=int(tool_input["product_id"]),
+                variant_id=int(tool_input["variant_id"]) if tool_input.get("variant_id") is not None else None,
+                product_id=int(tool_input["product_id"]) if tool_input.get("product_id") is not None else None,
                 quantity=int(tool_input.get("quantity") or 1),
                 user_id=user_id,
                 session_id=session_id,
@@ -375,7 +411,7 @@ async def execute_tool(
         if tool_name == "view_cart":
             return await cart_service.view(user_id, session_id, db), None
         if tool_name == "remove_from_cart":
-            return await cart_service.remove_item(int(tool_input["product_id"]), user_id, session_id, db), None
+            return await cart_service.remove_item(int(tool_input["variant_id"]), user_id, session_id, db), None
         if tool_name == "checkout":
             return await cart_service.checkout(user_id, session_id, db), None
         if tool_name == "delete_note":
@@ -505,7 +541,7 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
         )
         stmt = _apply_filters(stmt, params)
         result = await db.execute(stmt.limit(limit))
-        return _format_results(result.all())
+        return await _format_results(result.all(), db)
 
     # Rung 4: 3 query variants (literal / synonyms / product-type).
     variants = await rewrite_query(q, db=db)
@@ -566,36 +602,121 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
             if len(ordered) >= limit:
                 break
 
-    return _format_results(ordered)
+    return await _format_results(ordered, db)
 
 
 def _apply_filters(stmt, params: dict):
     if params.get("shop_id"):
         stmt = stmt.where(Product.shop_id == params["shop_id"])
-    if params.get("min_price") is not None:
-        stmt = stmt.where(Product.price >= Decimal(str(params["min_price"])))
-    if params.get("max_price") is not None:
-        stmt = stmt.where(Product.price <= Decimal(str(params["max_price"])))
-    if params.get("in_stock_only"):
-        stmt = stmt.where(Product.quantity > 0)
+    min_p = params.get("min_price")
+    max_p = params.get("max_price")
+    in_stock_only = params.get("in_stock_only")
+    if min_p is not None or max_p is not None or in_stock_only:
+        sub = select(ProductVariant.product_id).distinct()
+        if min_p is not None:
+            sub = sub.where(ProductVariant.price >= Decimal(str(min_p)))
+        if max_p is not None:
+            sub = sub.where(ProductVariant.price <= Decimal(str(max_p)))
+        if in_stock_only:
+            sub = sub.where(ProductVariant.quantity > 0)
+        stmt = stmt.where(Product.id.in_(sub))
     return stmt
 
 
-def _format_results(rows) -> dict:
+def _variant_summary(v: ProductVariant) -> dict:
+    return {
+        "variant_id": v.id,
+        "external_variant_id": v.external_variant_id,
+        "variant_index": v.variant_index,
+        "option_names": list(v.option_names or []),
+        "option_values": list(v.option_values or []),
+        "variant_label": v.variant_label,
+        "price": float(v.price or 0),
+        "quantity": int(v.quantity or 0),
+        "image_url": v.image_url,
+    }
+
+
+async def _format_results(rows, db: AsyncSession) -> dict:
+    if not rows:
+        return {"count": 0, "products": []}
+    pids = [p.id for p, _ in rows]
+    variants_by_pid: dict[int, list[ProductVariant]] = {}
+    v_result = await db.execute(
+        select(ProductVariant)
+        .where(ProductVariant.product_id.in_(pids))
+        .order_by(ProductVariant.variant_index)
+    )
+    for v in v_result.scalars().all():
+        variants_by_pid.setdefault(v.product_id, []).append(v)
+
     products = []
     for product, shop_name in rows:
+        variants = variants_by_pid.get(product.id, [])
+        prices = [float(v.price) for v in variants if v.price is not None]
+        in_stock = any((v.quantity or 0) > 0 for v in variants)
+        default_v = next((v for v in variants if v.id == product.default_variant_id), None) or (variants[0] if variants else None)
         products.append({
             "product_id": product.id,
             "name": product.name,
-            "price": float(product.price),
-            "quantity": product.quantity,
-            "image_url": product.image_url,
+            "handle": product.handle,
             "shop_name": shop_name,
             "shop_id": product.shop_id,
             "description_summary": (product.description or {}).get("summary", "")[:200],
             "tags": (product.description or {}).get("tags", []),
+            "price_range": {
+                "min": min(prices) if prices else 0.0,
+                "max": max(prices) if prices else 0.0,
+            },
+            "in_stock": in_stock,
+            "default_variant_id": default_v.id if default_v else None,
+            "default_image_url": default_v.image_url if default_v else None,
+            "variants": [_variant_summary(v) for v in variants],
         })
     return {"count": len(products), "products": products}
+
+
+async def _show_product(params: dict, db: AsyncSession) -> dict:
+    """Resolve a product + variants for rendering, plus the agent's display
+    decision. Frontend reads display_mode + preselected_variant_id to decide
+    whether to show a dropdown or pin a single variant card."""
+    try:
+        product_id = int(params["product_id"])
+    except (KeyError, TypeError, ValueError):
+        return {"error": "product_id required"}
+    display_mode = params.get("display_mode") or "parent"
+    if display_mode not in {"parent", "variant"}:
+        return {"error": "display_mode must be 'parent' or 'variant'"}
+
+    row = (await db.execute(
+        select(Product, Shop.name.label("shop_name"))
+        .join(Shop, Shop.id == Product.shop_id)
+        .where(Product.id == product_id)
+    )).first()
+    if row is None:
+        return {"error": "product_not_found", "product_id": product_id}
+    product, shop_name = row
+    variants = list((await db.execute(
+        select(ProductVariant)
+        .where(ProductVariant.product_id == product_id)
+        .order_by(ProductVariant.variant_index)
+    )).scalars().all())
+
+    preselected = params.get("preselected_variant_id")
+    if preselected is not None:
+        try:
+            preselected = int(preselected)
+        except (TypeError, ValueError):
+            preselected = None
+    if preselected is not None and not any(v.id == preselected for v in variants):
+        preselected = None
+
+    formatted = (await _format_results([(product, shop_name)], db))["products"][0]
+    formatted["display_mode"] = display_mode
+    formatted["preselected_variant_id"] = (
+        preselected if preselected is not None else product.default_variant_id
+    )
+    return formatted
 
 
 async def _search_shops(params: dict, db: AsyncSession) -> dict:

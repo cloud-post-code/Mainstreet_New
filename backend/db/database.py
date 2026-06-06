@@ -42,6 +42,45 @@ async def create_tables():
         await conn.execute(text(
             "ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS session_type varchar(20) NOT NULL DEFAULT 'shop'"
         ))
+        # Variant-aware product model. The columns may exist (Numeric/Integer
+        # NOT NULL) on older deployments — drop the NOT NULL constraints so
+        # the backfill can move data into product_variants and leave the
+        # parent rows empty. The columns themselves are dropped by the
+        # migration script after the backfill completes.
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS handle varchar(200)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS default_variant_id integer"
+        ))
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'products' AND column_name = 'price'
+                ) THEN
+                    EXECUTE 'ALTER TABLE products ALTER COLUMN price DROP NOT NULL';
+                END IF;
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'products' AND column_name = 'quantity'
+                ) THEN
+                    EXECUTE 'ALTER TABLE products ALTER COLUMN quantity DROP NOT NULL';
+                END IF;
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'cart_items' AND column_name = 'product_id'
+                ) THEN
+                    EXECUTE 'ALTER TABLE cart_items ALTER COLUMN product_id DROP NOT NULL';
+                END IF;
+            END$$;
+        """))
+        await conn.execute(text(
+            "ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_id integer REFERENCES product_variants(id) ON DELETE CASCADE"
+        ))
+        # FK to product_variants is set up below once the table is ensured
+        # to exist (Base.metadata.create_all already handled creation).
         # NOTE: the HNSW index on products.embedding is intentionally NOT created
         # here. Building it requires more shared memory than Railway's managed
         # Postgres provides by default (we hit DiskFullError resizing the shm
@@ -51,7 +90,15 @@ async def create_tables():
         # (weight A), summary + tags (B), long/materials/variant (C), made_in (D).
         await conn.execute(text("""
             CREATE OR REPLACE FUNCTION products_search_vector_update() RETURNS trigger AS $$
+            DECLARE
+                option_text text;
             BEGIN
+                -- Aggregate all variant option_values for the parent so a
+                -- search for "red tape dispenser" still finds the parent.
+                SELECT coalesce(string_agg(array_to_string(option_values, ' '), ' '), '')
+                  INTO option_text
+                  FROM product_variants
+                 WHERE product_id = NEW.id;
                 NEW.search_vector :=
                     setweight(to_tsvector('english', coalesce(NEW.name, '')), 'A') ||
                     setweight(to_tsvector('english', coalesce(NEW.shop_name_cached, '')), 'A') ||
@@ -59,9 +106,9 @@ async def create_tables():
                     setweight(to_tsvector('english', coalesce(
                         array_to_string(ARRAY(SELECT jsonb_array_elements_text(NEW.description->'tags')), ' '), ''
                     )), 'B') ||
+                    setweight(to_tsvector('english', coalesce(option_text, '')), 'B') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'long', '')), 'C') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'materials', '')), 'C') ||
-                    setweight(to_tsvector('english', coalesce(NEW.description->>'variant', '')), 'C') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'made_in', '')), 'D');
                 RETURN NEW;
             END
@@ -95,4 +142,29 @@ async def create_tables():
             CREATE TRIGGER shops_propagate_name_trigger
             AFTER UPDATE ON shops
             FOR EACH ROW EXECUTE FUNCTION shops_propagate_name()
+        """))
+        # Variant inserts/updates/deletes invalidate the parent's
+        # search_vector (which embeds the variant option_values). The cheapest
+        # way to refresh is a no-op UPDATE on the parent row, which re-fires
+        # products_search_vector_update.
+        await conn.execute(text("""
+            CREATE OR REPLACE FUNCTION variants_touch_parent() RETURNS trigger AS $$
+            BEGIN
+                IF (TG_OP = 'DELETE') THEN
+                    UPDATE products SET name = name WHERE id = OLD.product_id;
+                    RETURN OLD;
+                ELSE
+                    UPDATE products SET name = name WHERE id = NEW.product_id;
+                    RETURN NEW;
+                END IF;
+            END
+            $$ LANGUAGE plpgsql;
+        """))
+        await conn.execute(text(
+            "DROP TRIGGER IF EXISTS variants_touch_parent_trigger ON product_variants"
+        ))
+        await conn.execute(text("""
+            CREATE TRIGGER variants_touch_parent_trigger
+            AFTER INSERT OR UPDATE OR DELETE ON product_variants
+            FOR EACH ROW EXECUTE FUNCTION variants_touch_parent()
         """))

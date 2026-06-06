@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { useCart } from '../cart/CartContext'
+import { useAuth } from '../hooks/useAuth'
+import { api, ShippingAddress } from '../api'
 import styles from './CartDrawer.module.css'
+
+const EMPTY_SHIPPING: ShippingAddress = {
+  name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
+}
 
 export default function CartDrawer() {
   const { isOpen, close, items, total, setQuantity, removeItem, checkout } = useCart()
+  const { token } = useAuth()
+  const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [pendingId, setPendingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [shipping, setShipping] = useState<ShippingAddress>(EMPTY_SHIPPING)
 
   useEffect(() => {
     if (!isOpen) return
@@ -17,6 +27,15 @@ export default function CartDrawer() {
   }, [isOpen, close])
 
   useEffect(() => { if (!isOpen) setError(null) }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !token) return
+    let cancelled = false
+    api.getMasonShipping(token)
+      .then(s => { if (!cancelled) setShipping({ ...EMPTY_SHIPPING, ...s }) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isOpen, token])
 
   if (!isOpen) return null
 
@@ -32,22 +51,22 @@ export default function CartDrawer() {
     }
   }
 
-  const onSetQty = async (productId: number, qty: number) => {
+  const onSetQty = async (variantId: number, qty: number) => {
     setError(null)
-    setPendingId(productId)
+    setPendingId(variantId)
     try {
-      const res = await setQuantity(productId, qty)
+      const res = await setQuantity(variantId, qty)
       if (!res.ok && res.error) setError(res.error)
     } finally {
       setPendingId(null)
     }
   }
 
-  const onRemove = async (productId: number) => {
+  const onRemove = async (variantId: number) => {
     setError(null)
-    setPendingId(productId)
+    setPendingId(variantId)
     try {
-      const res = await removeItem(productId)
+      const res = await removeItem(variantId)
       if (!res.ok && res.error) setError(res.error)
     } finally {
       setPendingId(null)
@@ -66,12 +85,19 @@ export default function CartDrawer() {
           {error && (
             <div className={styles.errorBanner} role="alert">{error}</div>
           )}
+          <ShippingSummary
+            shipping={shipping}
+            onEdit={() => { close(); navigate('/mason') }}
+          />
           {items.length === 0 ? (
             <div className={styles.empty}>Your cart is empty.</div>
           ) : items.map(it => {
-            const rowBusy = busy || pendingId === it.product_id
+            const rowBusy = busy || pendingId === it.variant_id
+            const variantText = it.option_values && it.option_values.length > 0
+              ? it.option_values.join(' / ')
+              : null
             return (
-            <div key={it.product_id} className={styles.item}>
+            <div key={it.variant_id} className={styles.item}>
               <div className={styles.thumb}>
                 {it.image_url
                   ? <img src={it.image_url} alt={it.name} />
@@ -79,18 +105,19 @@ export default function CartDrawer() {
               </div>
               <div className={styles.itemBody}>
                 <p className={styles.itemName}>{it.name}</p>
+                {variantText && <p className={styles.itemShop}>{variantText}</p>}
                 {it.shop_name && <p className={styles.itemShop}>{it.shop_name}</p>}
                 <div className={styles.qtyRow}>
                   <button
                     className={styles.qtyBtn}
-                    onClick={() => onSetQty(it.product_id, it.quantity - 1)}
+                    onClick={() => onSetQty(it.variant_id, it.quantity - 1)}
                     aria-label="Decrease quantity"
                     disabled={rowBusy}
                   >−</button>
                   <span className={styles.qty}>{it.quantity}</span>
                   <button
                     className={styles.qtyBtn}
-                    onClick={() => onSetQty(it.product_id, it.quantity + 1)}
+                    onClick={() => onSetQty(it.variant_id, it.quantity + 1)}
                     aria-label="Increase quantity"
                     disabled={rowBusy}
                   >+</button>
@@ -100,9 +127,9 @@ export default function CartDrawer() {
                 <span className={styles.itemPrice}>${it.subtotal.toFixed(2)}</span>
                 <button
                   className={styles.removeBtn}
-                  onClick={() => onRemove(it.product_id)}
+                  onClick={() => onRemove(it.variant_id)}
                   disabled={rowBusy}
-                >{pendingId === it.product_id ? 'Removing…' : 'Remove'}</button>
+                >{pendingId === it.variant_id ? 'Removing…' : 'Remove'}</button>
               </div>
             </div>
             )
@@ -124,5 +151,34 @@ export default function CartDrawer() {
       </aside>
     </>,
     document.body,
+  )
+}
+
+function ShippingSummary({
+  shipping,
+  onEdit,
+}: { shipping: ShippingAddress; onEdit: () => void }) {
+  const hasAddress = !!(shipping.line1 || shipping.city || shipping.postal_code)
+  const cityLine = [shipping.city, shipping.state, shipping.postal_code].filter(Boolean).join(', ')
+  return (
+    <div className={styles.shipBox}>
+      <div className={styles.shipHead}>
+        <span>Ship to</span>
+        <button className={styles.shipEdit} onClick={onEdit}>
+          {hasAddress ? 'Edit' : 'Add address'}
+        </button>
+      </div>
+      {hasAddress ? (
+        <>
+          {shipping.name && <div className={styles.shipLine}>{shipping.name}</div>}
+          <div className={styles.shipLine}>{shipping.line1}</div>
+          {shipping.line2 && <div className={styles.shipLine}>{shipping.line2}</div>}
+          {cityLine && <div className={styles.shipLine}>{cityLine}</div>}
+          {shipping.country && <div className={styles.shipLine}>{shipping.country}</div>}
+        </>
+      ) : (
+        <div className={styles.shipEmpty}>No shipping address saved.</div>
+      )}
+    </div>
   )
 }

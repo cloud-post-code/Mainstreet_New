@@ -65,6 +65,39 @@
   padding: 16px 22px;
 }
 
+.shipBox {
+  background: rgba(1, 82, 55, 0.06);
+  border: 1px solid rgba(1, 82, 55, 0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-family: 'Lora', serif;
+  font-size: 13px;
+}
+.shipHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ms-primary, #015237);
+  margin-bottom: 4px;
+}
+.shipEdit {
+  background: transparent;
+  border: none;
+  color: var(--ms-primary, #015237);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'Lora', serif;
+  text-decoration: underline;
+}
+.shipLine { line-height: 1.4; }
+.shipEmpty { opacity: 0.75; font-style: italic; }
+
 .errorBanner {
   background: #fdecec;
   color: #8a1a1a;

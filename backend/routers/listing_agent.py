@@ -25,7 +25,7 @@ from auth import get_admin_user
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 from db.database import get_db
-from db.models import Product, Shop, User
+from db.models import Product, ProductVariant, Shop, User
 from db.schemas import ProductOut
 from agent.embeddings import build_canonical_text, embed_text
 
@@ -135,9 +135,6 @@ async def approve_listing(
     product = Product(
         shop_id=shop.id,
         name=name,
-        price=price,
-        quantity=quantity,
-        image_url=body.image_url,
         description=body.description or {},
         shop_name_cached=shop.name,
     )
@@ -148,9 +145,25 @@ async def approve_listing(
     if vec is not None:
         product.embedding = vec
     db.add(product)
+    await db.flush()
+
+    # Single default variant — the listing agent creates one-off products
+    # with no Shopify-style variant axes.
+    variant = ProductVariant(
+        product_id=product.id,
+        variant_index=1,
+        option_names=[],
+        option_values=[],
+        price=price,
+        quantity=quantity,
+        image_url=body.image_url,
+        variant_label=name,
+    )
+    db.add(variant)
+    await db.flush()
+    product.default_variant_id = variant.id
     await db.commit()
     await db.refresh(product)
 
-    out = ProductOut.model_validate(product)
-    out.shop_name = shop.name
-    return out
+    from routers.admin import _hydrate_product_out
+    return _hydrate_product_out(product, shop.name, [variant])

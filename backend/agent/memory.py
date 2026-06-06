@@ -468,7 +468,7 @@ def _format_prefs_for_prompt(p: dict) -> str:
 # ── Saved products ──────────────────────────────────────────────────────────
 
 async def list_saved_products(user_id: int, db: AsyncSession) -> list[dict]:
-    from db.models import Shop
+    from db.models import Shop, ProductVariant
     result = await db.execute(
         select(SavedProduct, Product, Shop.name.label("shop_name"))
         .join(Product, Product.id == SavedProduct.product_id)
@@ -476,14 +476,30 @@ async def list_saved_products(user_id: int, db: AsyncSession) -> list[dict]:
         .where(SavedProduct.user_id == user_id)
         .order_by(SavedProduct.created_at.desc())
     )
+    rows = result.all()
+    pids = [p.id for _, p, _ in rows]
+    variants_by_pid: dict[int, list[ProductVariant]] = {}
+    if pids:
+        v_result = await db.execute(
+            select(ProductVariant)
+            .where(ProductVariant.product_id.in_(pids))
+            .order_by(ProductVariant.variant_index)
+        )
+        for v in v_result.scalars().all():
+            variants_by_pid.setdefault(v.product_id, []).append(v)
     out = []
-    for saved, product, shop_name in result.all():
+    for saved, product, shop_name in rows:
+        variants = variants_by_pid.get(product.id, [])
+        default = next((v for v in variants if v.id == product.default_variant_id), None) or (variants[0] if variants else None)
+        price = float(default.price) if default and default.price is not None else 0.0
+        quantity = (default.quantity if default else 0) or 0
+        image_url = default.image_url if default else None
         out.append({
             "product_id": product.id,
             "name": product.name,
-            "price": float(product.price),
-            "quantity": product.quantity,
-            "image_url": product.image_url,
+            "price": price,
+            "quantity": quantity,
+            "image_url": image_url,
             "shop_id": product.shop_id,
             "shop_name": shop_name,
             "saved_at": saved.created_at.isoformat() if saved.created_at else None,
@@ -570,3 +586,57 @@ async def save_preference(user_id: int, key: str, value: Any, db: AsyncSession):
         await _evict_if_full(user_id, db)
         db.add(UserMemory(user_id=user_id, key=key, value=value))
     await db.flush()
+
+
+# ── Shipping address ────────────────────────────────────────────────────────
+
+SHIPPING_KEY = "shipping:address"
+
+EMPTY_SHIPPING: dict = {
+    "name": "",
+    "line1": "",
+    "line2": "",
+    "city": "",
+    "state": "",
+    "postal_code": "",
+    "country": "",
+    "phone": "",
+}
+
+_SHIPPING_FIELDS = set(EMPTY_SHIPPING.keys())
+
+
+async def get_shipping(user_id: int, db: AsyncSession) -> dict:
+    result = await db.execute(
+        select(UserMemory).where(
+            UserMemory.user_id == user_id, UserMemory.key == SHIPPING_KEY,
+        )
+    )
+    row = result.scalars().first()
+    if not row or not isinstance(row.value, dict):
+        return dict(EMPTY_SHIPPING)
+    return {k: str(row.value.get(k) or "") for k in _SHIPPING_FIELDS}
+
+
+async def set_shipping(user_id: int, patch: dict, db: AsyncSession) -> dict:
+    if not isinstance(patch, dict):
+        patch = {}
+    result = await db.execute(
+        select(UserMemory).where(
+            UserMemory.user_id == user_id, UserMemory.key == SHIPPING_KEY,
+        )
+    )
+    row = result.scalars().first()
+    current = dict(row.value) if row and isinstance(row.value, dict) else {}
+    for k, v in patch.items():
+        if k not in _SHIPPING_FIELDS:
+            continue
+        current[k] = "" if v is None else str(v).strip()[:200]
+    merged = {k: str(current.get(k) or "") for k in _SHIPPING_FIELDS}
+    if row:
+        row.value = merged
+    else:
+        await _evict_if_full(user_id, db)
+        db.add(UserMemory(user_id=user_id, key=SHIPPING_KEY, value=merged))
+    await db.flush()
+    return merged

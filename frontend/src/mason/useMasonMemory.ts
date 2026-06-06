@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, InboxMessage, MasonNote, MasonPrefs, MasonPrefsPatch, MasonSavedProduct } from '../api'
+import { api, InboxMessage, MasonNote, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
+
+const EMPTY_SHIPPING: ShippingAddress = {
+  name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
+}
 
 const EMPTY_PREFS: MasonPrefs = {
   sizes: {},
@@ -19,10 +23,12 @@ export interface MasonMemory {
   prefs: MasonPrefs
   savedProducts: MasonSavedProduct[]
   inbox: InboxMessage[]
+  shipping: ShippingAddress
   loading: boolean
   addNote: (text: string) => Promise<void>
   removeNote: (key: string) => Promise<void>
   patchPrefs: (patch: MasonPrefsPatch) => void
+  saveShipping: (patch: ShippingAddressPatch) => Promise<void>
   saveProduct: (product: MasonSavedProduct | { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => Promise<void>
   unsaveProduct: (productId: number) => Promise<void>
   refresh: () => Promise<void>
@@ -39,26 +45,39 @@ export function useMasonMemory(token: string | null): MasonMemory {
   const [prefs, setPrefs] = useState<MasonPrefs>(EMPTY_PREFS)
   const [savedProducts, setSavedProducts] = useState<MasonSavedProduct[]>([])
   const [inbox, setInbox] = useState<InboxMessage[]>([])
+  const [shipping, setShipping] = useState<ShippingAddress>(EMPTY_SHIPPING)
   const [loading, setLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!token) {
-      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([]); setInbox([])
+      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([]); setInbox([]); setShipping(EMPTY_SHIPPING)
       return
     }
     setLoading(true)
     try {
-      const [n, p, s, i] = await Promise.all([
+      const [n, p, s, i, sh] = await Promise.all([
         api.getMasonNotes(token),
         api.getMasonPrefs(token),
         api.getMasonSavedProducts(token),
         api.getInbox(token).catch(() => [] as InboxMessage[]),
+        api.getMasonShipping(token).catch(() => EMPTY_SHIPPING),
       ])
-      setNotes(n); setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setInbox(i)
+      setNotes(n); setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setInbox(i); setShipping({ ...EMPTY_SHIPPING, ...sh })
     } catch (e) {
       console.error('[useMasonMemory] refresh failed', e)
     } finally {
       setLoading(false)
+    }
+  }, [token])
+
+  const saveShipping = useCallback(async (patch: ShippingAddressPatch) => {
+    if (!token) return
+    setShipping(prev => ({ ...prev, ...patch }))
+    try {
+      const next = await api.updateMasonShipping(patch, token)
+      setShipping({ ...EMPTY_SHIPPING, ...next })
+    } catch (e) {
+      console.error('[useMasonMemory] shipping save failed', e)
     }
   }, [token])
 
@@ -160,5 +179,5 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setSavedProducts(prev => prev.filter(p => p.product_id !== productId))
   }, [token])
 
-  return { notes, prefs, savedProducts, inbox, loading, addNote, removeNote, patchPrefs, saveProduct, unsaveProduct, refresh, refreshInbox }
+  return { notes, prefs, savedProducts, inbox, shipping, loading, addNote, removeNote, patchPrefs, saveShipping, saveProduct, unsaveProduct, refresh, refreshInbox }
 }

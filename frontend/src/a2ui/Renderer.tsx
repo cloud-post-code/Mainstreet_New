@@ -72,17 +72,17 @@ function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
 
   const Comp = COMPONENTS[node.type]
   if (!Comp) return <div style={{ color: '#c0392b' }}>Unknown type: {node.type}</div>
-  const productCardVariant =
+  const productCardLayout =
     parentLayout === 'hero' ? 'hero'
       : parentLayout === 'showcase' ? 'compact'
         : parentLayout === 'trio' ? 'grid'
-          : (p.variant as string | undefined)
+          : (p.layout as string | undefined) ?? (p.variant as string | undefined)
   const compProps =
     node.type === 'product_card'
       ? {
           ...p,
           showAddToCart: (p.showAddToCart as boolean | undefined) ?? true,
-          variant: productCardVariant,
+          layout: productCardLayout,
         }
       : p
   return (

@@ -39,7 +39,33 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
 export interface User { id: number; email: string; display_name: string | null; is_admin: boolean }
 export interface Token { access_token: string; user: User }
 export interface Shop { id: number; name: string; logo_url: string | null; description: string | null; website_url: string | null; product_count: number | null }
-export interface Product { id: number; shop_id: number; shop_name: string | null; name: string; price: string; quantity: number; image_url: string | null; description: Record<string, unknown> | null }
+export interface Variant {
+  id: number
+  product_id: number
+  external_variant_id: number | null
+  variant_index: number
+  option_names: string[]
+  option_values: string[]
+  price: string
+  quantity: number
+  image_url: string | null
+  variant_label: string | null
+  description: Record<string, unknown> | null
+}
+export interface PriceRange { min: string; max: string }
+export interface Product {
+  id: number
+  shop_id: number
+  shop_name: string | null
+  handle: string | null
+  name: string
+  description: Record<string, unknown> | null
+  default_variant_id: number | null
+  variants: Variant[]
+  price_range: PriceRange | null
+  in_stock: boolean
+  image_url: string | null
+}
 export interface AdminProductsPage { items: Product[]; total: number; limit: number; offset: number }
 export interface Session { id: number; title: string; session_type?: string; created_at: string; updated_at: string }
 export interface InboxMessage { id: number; user_id: number; session_id: number | null; title: string; preview: string; body: string; read: boolean; created_at: string }
@@ -90,6 +116,17 @@ export interface MasonPrefs {
   dislikes: string[]
 }
 export type MasonPrefsPatch = Partial<MasonPrefs>
+export interface ShippingAddress {
+  name: string
+  line1: string
+  line2: string
+  city: string
+  state: string
+  postal_code: string
+  country: string
+  phone: string
+}
+export type ShippingAddressPatch = Partial<ShippingAddress>
 export interface MasonSavedProduct {
   product_id: number
   name: string
@@ -102,8 +139,12 @@ export interface MasonSavedProduct {
 }
 
 export interface CartItem {
+  variant_id: number
   product_id: number
   name: string
+  variant_label: string | null
+  option_names: string[]
+  option_values: string[]
   shop_name: string | null
   image_url: string | null
   price: number
@@ -255,18 +296,21 @@ export const api = {
   getProductTags: () => request<string[]>('/api/products/tags'),
 
   getCart: (token: string) => request<CartView>('/api/cart', {}, token),
-  addCartItem: (product_id: number, quantity: number, token: string) =>
+  addCartItem: (
+    body: { variant_id?: number; product_id?: number; quantity: number },
+    token: string,
+  ) =>
     request<{ result: unknown; cart: CartView }>('/api/cart/items', {
       method: 'POST',
-      body: JSON.stringify({ product_id, quantity }),
+      body: JSON.stringify(body),
     }, token),
-  setCartItemQuantity: (product_id: number, quantity: number, token: string) =>
-    request<{ result: unknown; cart: CartView }>(`/api/cart/items/${product_id}`, {
+  setCartItemQuantity: (variant_id: number, quantity: number, token: string) =>
+    request<{ result: unknown; cart: CartView }>(`/api/cart/items/${variant_id}`, {
       method: 'PATCH',
       body: JSON.stringify({ quantity }),
     }, token),
-  removeCartItem: (product_id: number, token: string) =>
-    request<{ result: unknown; cart: CartView }>(`/api/cart/items/${product_id}`, {
+  removeCartItem: (variant_id: number, token: string) =>
+    request<{ result: unknown; cart: CartView }>(`/api/cart/items/${variant_id}`, {
       method: 'DELETE',
     }, token),
   checkoutCart: (token: string) =>
@@ -308,6 +352,11 @@ export const api = {
     request<MasonPrefs>('/api/mason/prefs', {}, token),
   updateMasonPrefs: (patch: MasonPrefsPatch, token: string) =>
     request<MasonPrefs>('/api/mason/prefs', { method: 'PATCH', body: JSON.stringify(patch) }, token),
+
+  getMasonShipping: (token: string) =>
+    request<ShippingAddress>('/api/mason/shipping', {}, token),
+  updateMasonShipping: (patch: ShippingAddressPatch, token: string) =>
+    request<ShippingAddress>('/api/mason/shipping', { method: 'PATCH', body: JSON.stringify(patch) }, token),
 
   getMasonSavedProducts: (token: string) =>
     request<MasonSavedProduct[]>('/api/mason/saved-products', {}, token),

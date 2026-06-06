@@ -299,7 +299,7 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "Per-type props. See catalog: "
                                 "stack{}, text_block{content,tone?}, "
                                 "reasoning_block{summary}, "
-                                "product_card{product_id,name,price,shop_name,image_url?,quantity?,description_summary?,tags?,shop_id?}, "
+                                "product_card{product_id,name,price,shop_name,image_url?,quantity?,description_summary?,tags?,shop_id?,variants?:[{variant_id,option_names?:string[],option_values?:string[],variant_label?,price,quantity,image_url?}],default_variant_id?,display_mode?('parent'|'variant'),preselected_variant_id?}, "
                                 "product_grid{layout(recommendation|comparison|curated|hero|trio|showcase),title,subtitle?}, "
                                 "comparison_table{products[{product_id,name,price,pros[],cons[],shop_name?,image_url?}],sort_by?}, "
                                 "multiple_choice{question_id,question,choices,hint?}, "

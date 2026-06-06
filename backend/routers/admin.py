@@ -11,7 +11,7 @@ from sqlalchemy import select, delete, func, or_
 from agent.uploads import public_api_base, shop_logo_url, shops_dir
 from agent.upload_safety import read_capped, validate_image_bytes
 from db.database import get_db
-from db.models import Shop, Product, User
+from db.models import Shop, Product, ProductVariant, User
 from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut, AdminProductsPage
 from auth import get_admin_user
 from agent.embeddings import build_canonical_text, embed_texts
@@ -21,8 +21,53 @@ MAX_CSV_BYTES = 10 * 1024 * 1024
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-EXPECTED_COLUMNS = {"shop_name", "product_name", "price", "quantity", "image_url", "description_json"}
+EXPECTED_COLUMNS = {
+    "shop_name", "product_handle", "base_product_name", "product_name",
+    "variant_id", "variant_index", "option_names", "option_values",
+    "price", "quantity", "image_url", "description_json",
+}
 SHOP_EXPECTED_COLUMNS = {"name"}
+
+
+def _split_options(raw: str) -> list[str]:
+    """Shopify uses ' / ' to join compound options (e.g. 'Raw Polished / Fine').
+    Split on slash but preserve single-option values as a one-element list."""
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split("/") if p.strip()]
+
+
+def _hydrate_product_out(product: Product, shop_name: str | None, variants: list[ProductVariant]) -> ProductOut:
+    """Build a ProductOut with the variant list, price_range, and a default
+    image_url derived from the default (or first) variant. Frontend uses this
+    image_url when rendering the parent card before any dropdown selection."""
+    from db.schemas import VariantOut, PriceRange
+    variant_outs = [VariantOut.model_validate(v) for v in variants]
+    default_id = product.default_variant_id
+    default_variant = next((v for v in variants if v.id == default_id), None) or (variants[0] if variants else None)
+    price_range = None
+    in_stock = False
+    image_url = None
+    if variants:
+        prices = [v.price for v in variants if v.price is not None]
+        if prices:
+            price_range = PriceRange(min=min(prices), max=max(prices))
+        in_stock = any((v.quantity or 0) > 0 for v in variants)
+    if default_variant is not None:
+        image_url = default_variant.image_url
+    return ProductOut(
+        id=product.id,
+        shop_id=product.shop_id,
+        shop_name=shop_name,
+        handle=product.handle,
+        name=product.name,
+        description=product.description,
+        default_variant_id=default_variant.id if default_variant else None,
+        variants=variant_outs,
+        price_range=price_range,
+        in_stock=in_stock,
+        image_url=image_url,
+    )
 
 
 class UploadResponse(BaseModel):
@@ -69,17 +114,28 @@ async def import_csv(
     rows_updated = 0
     errors = []
 
-    shop_cache: dict[str, Shop] = {}
-    # Defer embedding to a single batched call after the row loop.
-    # Collected as (product_obj_or_none, shop_name, name, description).
-    to_embed: list[tuple[Product, str, str, dict | None]] = []
-
-    for i, row in enumerate(reader, start=2):  # row 1 = header
+    # Group CSV rows by (shop_name, product_handle). Each group becomes one
+    # parent Product; each row in the group becomes one ProductVariant.
+    groups: dict[tuple[str, str], list[tuple[int, dict]]] = {}
+    for i, row in enumerate(reader, start=2):
         try:
-            shop_name = row["shop_name"].strip()
+            shop_name = (row.get("shop_name") or "").strip()
+            handle = (row.get("product_handle") or "").strip()
             if not shop_name:
                 raise ValueError("shop_name is empty")
+            if not handle:
+                raise ValueError("product_handle is empty")
+        except Exception as e:
+            errors.append({"row": i, "error": str(e)})
+            continue
+        groups.setdefault((shop_name, handle), []).append((i, row))
 
+    shop_cache: dict[str, Shop] = {}
+    # Defer parent embeddings to a single batched call after the loop.
+    to_embed: list[tuple[Product, str, str, dict | None, list[str]]] = []
+
+    for (shop_name, handle), rows in groups.items():
+        try:
             # Upsert shop
             if shop_name not in shop_cache:
                 result = await db.execute(select(Shop).where(Shop.name == shop_name))
@@ -91,68 +147,148 @@ async def import_csv(
                 shop_cache[shop_name] = shop
             shop = shop_cache[shop_name]
 
-            product_name = row["product_name"].strip()
-            if not product_name:
-                raise ValueError("product_name is empty")
+            # Sort rows by variant_index so index 1 is first.
+            def _vi(row: dict) -> int:
+                try:
+                    return int((row.get("variant_index") or "1").strip() or 1)
+                except ValueError:
+                    return 1
+            rows.sort(key=lambda pair: _vi(pair[1]))
+            first_row = rows[0][1]
 
-            try:
-                price = Decimal(row["price"].strip())
-            except InvalidOperation:
-                raise ValueError(f"Invalid price: {row['price']}")
+            base_name = (first_row.get("base_product_name") or first_row.get("product_name") or "").strip()
+            if not base_name:
+                raise ValueError("base_product_name and product_name are both empty")
 
-            try:
-                quantity = int(row["quantity"].strip() or "0")
-            except ValueError:
-                raise ValueError(f"Invalid quantity: {row['quantity']}")
-
-            image_url = row["image_url"].strip() or None
-
-            description = None
-            raw_desc = row["description_json"].strip()
+            parent_description = None
+            raw_desc = (first_row.get("description_json") or "").strip()
             if raw_desc:
                 try:
-                    description = json.loads(raw_desc)
+                    parent_description = json.loads(raw_desc)
                 except json.JSONDecodeError:
-                    description = {"summary": raw_desc}
+                    parent_description = {"summary": raw_desc}
 
-            # Check if product exists (match by shop + name)
-            result = await db.execute(
-                select(Product).where(Product.shop_id == shop.id, Product.name == product_name)
-            )
-            existing = result.scalars().first()
+            # Upsert parent product keyed on (shop_id, handle).
+            existing = (await db.execute(
+                select(Product).where(
+                    Product.shop_id == shop.id, Product.handle == handle
+                )
+            )).scalars().first()
             if existing:
-                existing.price = price
-                existing.quantity = quantity
-                existing.image_url = image_url
-                existing.description = description
-                to_embed.append((existing, shop.name, product_name, description))
+                existing.name = base_name
+                existing.description = parent_description
+                existing.shop_name_cached = shop.name
+                product = existing
+                created_parent = False
                 rows_updated += 1
             else:
-                new_product = Product(
+                product = Product(
                     shop_id=shop.id,
-                    name=product_name,
-                    price=price,
-                    quantity=quantity,
-                    image_url=image_url,
-                    description=description,
+                    handle=handle,
+                    name=base_name,
+                    description=parent_description,
                     shop_name_cached=shop.name,
                 )
-                db.add(new_product)
-                to_embed.append((new_product, shop.name, product_name, description))
+                db.add(product)
+                await db.flush()
+                created_parent = True
                 rows_added += 1
 
-        except Exception as e:
-            errors.append({"row": i, "error": str(e)})
+            # Gather variant option_values for the embedding canonical text.
+            option_value_texts: list[str] = []
 
-    # Batch-embed every touched row in one shot. Failures degrade to NULL
+            # Upsert variants keyed on (product_id, external_variant_id).
+            seen_variant_ids: set[int] = set()
+            first_variant_id: int | None = None
+            for row_idx, row in rows:
+                try:
+                    raw_external = (row.get("variant_id") or "").strip()
+                    external_id: int | None
+                    try:
+                        external_id = int(raw_external) if raw_external else None
+                    except ValueError:
+                        external_id = None
+
+                    variant_label = (row.get("product_name") or base_name).strip()
+                    option_names = _split_options(row.get("option_names") or "")
+                    option_values = _split_options(row.get("option_values") or "")
+                    option_value_texts.extend(option_values)
+
+                    try:
+                        price = Decimal((row.get("price") or "0").strip() or "0")
+                    except InvalidOperation:
+                        raise ValueError(f"Invalid price: {row.get('price')}")
+
+                    try:
+                        quantity = int((row.get("quantity") or "0").strip() or "0")
+                    except ValueError:
+                        raise ValueError(f"Invalid quantity: {row.get('quantity')}")
+
+                    image_url = (row.get("image_url") or "").strip() or None
+                    variant_index = _vi(row)
+
+                    variant_description: dict | None = None
+                    raw_v_desc = (row.get("description_json") or "").strip()
+                    if raw_v_desc:
+                        try:
+                            variant_description = json.loads(raw_v_desc)
+                        except json.JSONDecodeError:
+                            variant_description = {"summary": raw_v_desc}
+
+                    variant: ProductVariant | None = None
+                    if external_id is not None:
+                        variant = (await db.execute(
+                            select(ProductVariant).where(
+                                ProductVariant.product_id == product.id,
+                                ProductVariant.external_variant_id == external_id,
+                            )
+                        )).scalars().first()
+                    if variant is None:
+                        variant = ProductVariant(product_id=product.id)
+                        db.add(variant)
+                    variant.external_variant_id = external_id
+                    variant.variant_index = variant_index
+                    variant.option_names = option_names
+                    variant.option_values = option_values
+                    variant.price = price
+                    variant.quantity = quantity
+                    variant.image_url = image_url
+                    variant.variant_label = variant_label
+                    variant.description = variant_description
+                    await db.flush()
+                    seen_variant_ids.add(variant.id)
+                    if variant_index == 1 or first_variant_id is None:
+                        first_variant_id = variant.id
+                except Exception as ve:
+                    errors.append({"row": row_idx, "error": str(ve)})
+
+            # Set parent.default_variant_id to the variant_index=1 (or
+            # first inserted) variant. Pre-existing default that's still in
+            # the import wins.
+            if product.default_variant_id not in seen_variant_ids:
+                product.default_variant_id = first_variant_id
+
+            # Bookkeeping: parent counts as added only if newly inserted; we
+            # already incremented rows_added/rows_updated above. Variants
+            # don't get their own counters today.
+            to_embed.append((product, shop.name, base_name, parent_description, option_value_texts))
+
+        except Exception as e:
+            # Fall back to row-level error on the first row of the group.
+            row_no = rows[0][0] if rows else 0
+            errors.append({"row": row_no, "error": str(e)})
+
+    # Batch-embed every touched parent in one shot. Failures degrade to NULL
     # (lexical-only retrieval still works for that product).
     if to_embed:
-        canonical = [
-            build_canonical_text(name=name, shop_name=shop_name, description=desc)
-            for _, shop_name, name, desc in to_embed
-        ]
+        canonical = []
+        for _, shop_name, name, desc, option_value_texts in to_embed:
+            base = build_canonical_text(name=name, shop_name=shop_name, description=desc)
+            if option_value_texts:
+                base = f"{base} | {' '.join(option_value_texts)}"
+            canonical.append(base)
         vectors = await embed_texts(canonical)
-        for (product, _, _, _), vec in zip(to_embed, vectors):
+        for (product, *_), vec in zip(to_embed, vectors):
             if vec is not None:
                 product.embedding = vec
 
@@ -240,9 +376,10 @@ async def export_products_csv(
     _: User = Depends(get_admin_user),
 ):
     stmt = (
-        select(Product, Shop.name.label("shop_name"))
+        select(Product, ProductVariant, Shop.name.label("shop_name"))
         .join(Shop, Shop.id == Product.shop_id)
-        .order_by(Shop.name, Product.name)
+        .join(ProductVariant, ProductVariant.product_id == Product.id)
+        .order_by(Shop.name, Product.name, ProductVariant.variant_index)
     )
     if shop_id:
         stmt = stmt.where(Product.shop_id == shop_id)
@@ -251,20 +388,31 @@ async def export_products_csv(
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
-        fieldnames=["shop_name", "product_name", "price", "quantity", "image_url", "description_json"],
+        fieldnames=[
+            "shop_name", "product_handle", "base_product_name", "product_name",
+            "variant_id", "variant_index", "option_names", "option_values",
+            "price", "quantity", "image_url", "description_json",
+        ],
     )
     writer.writeheader()
-    for product, shop_name in result.all():
+    for product, variant, shop_name in result.all():
         description_json = ""
-        if product.description is not None:
-            description_json = json.dumps(product.description, ensure_ascii=False)
+        desc = variant.description if variant.description is not None else product.description
+        if desc is not None:
+            description_json = json.dumps(desc, ensure_ascii=False)
         writer.writerow(
             {
                 "shop_name": _csv_safe(shop_name),
-                "product_name": _csv_safe(product.name),
-                "price": str(product.price),
-                "quantity": product.quantity,
-                "image_url": _csv_safe(product.image_url or ""),
+                "product_handle": _csv_safe(product.handle or ""),
+                "base_product_name": _csv_safe(product.name),
+                "product_name": _csv_safe(variant.variant_label or product.name),
+                "variant_id": variant.external_variant_id or "",
+                "variant_index": variant.variant_index,
+                "option_names": _csv_safe(" / ".join(variant.option_names or [])),
+                "option_values": _csv_safe(" / ".join(variant.option_values or [])),
+                "price": str(variant.price),
+                "quantity": variant.quantity,
+                "image_url": _csv_safe(variant.image_url or ""),
                 "description_json": _csv_safe(description_json),
             }
         )
@@ -370,11 +518,21 @@ async def admin_list_products(
 
     stmt = base.order_by(Product.name).limit(limit).offset(offset)
     result = await db.execute(stmt)
+    parent_rows = result.all()
+    product_ids = [p.id for p, _ in parent_rows]
+
     items: list[ProductOut] = []
-    for product, shop_name in result.all():
-        out = ProductOut.model_validate(product)
-        out.shop_name = shop_name
-        items.append(out)
+    if product_ids:
+        variants_by_pid: dict[int, list[ProductVariant]] = {}
+        v_result = await db.execute(
+            select(ProductVariant)
+            .where(ProductVariant.product_id.in_(product_ids))
+            .order_by(ProductVariant.variant_index)
+        )
+        for v in v_result.scalars().all():
+            variants_by_pid.setdefault(v.product_id, []).append(v)
+        for product, shop_name in parent_rows:
+            items.append(_hydrate_product_out(product, shop_name, variants_by_pid.get(product.id, [])))
 
     total_result = await db.execute(count_stmt)
     total = int(total_result.scalar() or 0)

@@ -69,15 +69,39 @@ class ShopCreate(BaseModel):
 
 # --- Products ---
 
+class VariantOut(BaseModel):
+    id: int
+    product_id: int
+    external_variant_id: Optional[int] = None
+    variant_index: int
+    option_names: list[str] = []
+    option_values: list[str] = []
+    price: Decimal
+    quantity: int
+    image_url: Optional[str] = None
+    variant_label: Optional[str] = None
+    description: Optional[dict[str, Any]] = None
+
+    model_config = {"from_attributes": True}
+
+
+class PriceRange(BaseModel):
+    min: Decimal
+    max: Decimal
+
+
 class ProductOut(BaseModel):
     id: int
     shop_id: int
     shop_name: Optional[str] = None
+    handle: Optional[str] = None
     name: str
-    price: Decimal
-    quantity: int
-    image_url: Optional[str]
-    description: Optional[dict[str, Any]]
+    description: Optional[dict[str, Any]] = None
+    default_variant_id: Optional[int] = None
+    variants: list[VariantOut] = []
+    price_range: Optional[PriceRange] = None
+    in_stock: bool = False
+    image_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

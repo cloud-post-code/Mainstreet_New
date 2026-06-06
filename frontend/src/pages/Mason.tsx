@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { api, Session } from '../api'
+import { api, Session, ShippingAddress, ShippingAddressPatch } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import PrefsForm from '../components/PrefsForm'
 import styles from './Mason.module.css'
 
-type TabKey = 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
+type TabKey = 'shipping' | 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'shipping', label: 'Shipping' },
   { key: 'history', label: 'History' },
   { key: 'notes', label: 'Notes' },
   { key: 'preferences', label: 'Prefs' },
@@ -27,7 +28,7 @@ export default function Mason() {
 
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
-  const [tab, setTab] = useState<TabKey>('history')
+  const [tab, setTab] = useState<TabKey>('shipping')
   const [newNote, setNewNote] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
   const [masonSessionId, setMasonSessionId] = useState<number | null>(null)
@@ -94,6 +95,10 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
         </nav>
 
         <div className={styles.panelBody}>
+          {tab === 'shipping' && (
+            <ShippingPanel shipping={memory.shipping} onSave={memory.saveShipping} />
+          )}
+
           {tab === 'notes' && (
             <>
               <p className={styles.helpText}>
@@ -308,6 +313,85 @@ function MasonChatColumn({
           disabled={!sessionId || streaming || !input.trim()}
         >Send</button>
       </div>
+    </>
+  )
+}
+
+function ShippingPanel({
+  shipping,
+  onSave,
+}: { shipping: ShippingAddress; onSave: (patch: ShippingAddressPatch) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<ShippingAddress>(shipping)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setDraft(shipping) }, [shipping])
+
+  const hasAddress = !!(shipping.line1 || shipping.city || shipping.postal_code)
+  const summary = hasAddress
+    ? [shipping.name, shipping.line1, shipping.line2,
+       [shipping.city, shipping.state, shipping.postal_code].filter(Boolean).join(', '),
+       shipping.country].filter(Boolean).join(' · ')
+    : 'No shipping address saved yet — click to add one.'
+
+  const update = (k: keyof ShippingAddress, v: string) => setDraft(d => ({ ...d, [k]: v }))
+
+  const save = async () => {
+    setSaving(true)
+    try { await onSave(draft); setOpen(false) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <>
+      <p className={styles.helpText}>
+        Mason ships your single-cart orders here. Click to edit.
+      </p>
+      <button
+        type="button"
+        className={styles.sessionItem}
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        style={{ width: '100%', textAlign: 'left' }}
+      >
+        <span className={styles.sessionTitle}>{hasAddress ? (shipping.name || 'Shipping address') : 'Add shipping address'}</span>
+        <span className={styles.sessionMeta}>{open ? '▴' : '▾'}</span>
+      </button>
+      {!open && (
+        <p className={styles.helpText} style={{ marginTop: 8 }}>{summary}</p>
+      )}
+      {open && (
+        <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+          <input className={styles.addInput} placeholder="Full name"
+            value={draft.name} onChange={e => update('name', e.target.value)} />
+          <input className={styles.addInput} placeholder="Address line 1"
+            value={draft.line1} onChange={e => update('line1', e.target.value)} />
+          <input className={styles.addInput} placeholder="Address line 2 (optional)"
+            value={draft.line2} onChange={e => update('line2', e.target.value)} />
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
+            <input className={styles.addInput} placeholder="City"
+              value={draft.city} onChange={e => update('city', e.target.value)} />
+            <input className={styles.addInput} placeholder="State"
+              value={draft.state} onChange={e => update('state', e.target.value)} />
+            <input className={styles.addInput} placeholder="ZIP"
+              value={draft.postal_code} onChange={e => update('postal_code', e.target.value)} />
+          </div>
+          <input className={styles.addInput} placeholder="Country"
+            value={draft.country} onChange={e => update('country', e.target.value)} />
+          <input className={styles.addInput} placeholder="Phone (optional)"
+            value={draft.phone} onChange={e => update('phone', e.target.value)} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className={styles.addBtn} onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button className={styles.addBtn}
+              style={{ background: 'transparent', color: 'inherit' }}
+              onClick={() => { setDraft(shipping); setOpen(false) }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

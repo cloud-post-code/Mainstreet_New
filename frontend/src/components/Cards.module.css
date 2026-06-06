@@ -173,6 +173,31 @@
   font-size: 0.75rem;
 }
 
+.variantPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.55rem 0 0.2rem;
+  font-family: var(--font-body);
+}
+.variantLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(15, 24, 5, 0.6);
+}
+.variantSelect {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid rgba(15, 24, 5, 0.2);
+  border-radius: 6px;
+  background: white;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--ms-text, #0f1805);
+  cursor: pointer;
+}
+.productCardCompact .variantPicker { display: none; }
+
 .addBtn {
   margin-top: 0.6rem;
   width: 100%;

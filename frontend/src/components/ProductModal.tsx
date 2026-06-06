@@ -56,7 +56,7 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
     if (!token) { navigate('/login'); return }
     setAddStatus('loading')
     setAddError(null)
-    const res = await cart.addItem(product.product_id, 1)
+    const res = await cart.addItem({ productId: product.product_id, quantity: 1 })
     if (res.ok) {
       setAddStatus('success')
       setTimeout(() => setAddStatus('idle'), 1500)
