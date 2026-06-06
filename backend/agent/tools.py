@@ -316,8 +316,38 @@ async def execute_tool(
         if tool_name == "save_preference":
             if user_id is None:
                 return {"saved": False, "reason": "not_logged_in"}, None
-            await save_preference(user_id, tool_input["key"], tool_input["value"], db)
-            return {"saved": True, "key": tool_input["key"]}, None
+            key = str(tool_input.get("key") or "")
+            value = str(tool_input.get("value") or "").strip()
+            if not value:
+                return {"saved": False, "reason": "empty_value"}, None
+            # Route the four legacy keys into the structured user_preferences row
+            # so they show up in the rich Prefs panel.
+            if key in {"pref:likes", "pref:dislikes"}:
+                field = key.split(":", 1)[1]
+                current = (await memory_get_prefs(user_id, db)).get(field) or []
+                # split on commas so the agent can pass "leather, cotton"
+                parts = [p.strip() for p in value.split(",") if p.strip()]
+                merged = list(current)
+                for p in parts:
+                    if not any(p.lower() == x.lower() for x in merged):
+                        merged.append(p)
+                await memory_set_prefs(user_id, {field: merged}, db)
+            elif key == "pref:budget":
+                digits = "".join(ch for ch in value if ch.isdigit())
+                patch: dict = {}
+                if digits:
+                    try:
+                        patch["personal_budget"] = int(digits)
+                    except ValueError:
+                        pass
+                patch["gift_budget"] = {"freeform": value[:200]}
+                await memory_set_prefs(user_id, patch, db)
+            elif key == "pref:sizes":
+                await memory_set_prefs(user_id, {"sizes": {"freeform": value[:200]}}, db)
+            else:
+                # Fallback: still write through the legacy user_memory store.
+                await save_preference(user_id, key, value, db)
+            return {"saved": True, "key": key}, None
         if tool_name == "save_note":
             if user_id is None:
                 return {"saved": False, "reason": "not_logged_in"}, None
@@ -361,7 +391,12 @@ async def execute_tool(
             if key not in valid:
                 return {"deleted": False, "reason": "invalid_key"}, None
             field = key.split(":", 1)[1]
-            await memory_set_prefs(user_id, {field: ""}, db)
+            if field in {"likes", "dislikes"}:
+                await memory_set_prefs(user_id, {field: []}, db)
+            elif field == "sizes":
+                await memory_set_prefs(user_id, {"sizes": None}, db)
+            elif field == "budget":
+                await memory_set_prefs(user_id, {"personal_budget": None, "gift_budget": None}, db)
             return {"deleted": True, "key": key}, None
         if tool_name == "list_notes":
             if user_id is None:

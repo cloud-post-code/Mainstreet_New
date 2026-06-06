@@ -148,12 +148,21 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
                 </span>
               )}
             </div>
-            {description && <p className={styles.desc}>{description}</p>}
+            <section className={styles.section}>
+              <h3 className={styles.sectionTitle}>Description</h3>
+              {description
+                ? <p className={styles.desc}>{description}</p>
+                : <p className={styles.descEmpty}>No description provided yet.</p>}
+            </section>
             {product.tags && product.tags.length > 0 && (
               <div className={styles.tags}>
                 {product.tags.map(t => <span key={t} className={styles.tag}>{t}</span>)}
               </div>
             )}
+            <section className={styles.section}>
+              <h3 className={styles.sectionTitle}>Reviews</h3>
+              <p className={styles.descEmpty}>No reviews yet.</p>
+            </section>
             <div className={styles.actionRow}>
               <button
                 type="button"

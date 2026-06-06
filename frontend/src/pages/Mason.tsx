@@ -4,6 +4,7 @@ import { api, Session } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { useMasonMemory } from '../mason/useMasonMemory'
+import PrefsForm from '../components/PrefsForm'
 import styles from './Mason.module.css'
 
 type TabKey = 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
@@ -134,41 +135,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
           )}
 
           {tab === 'preferences' && (
-            <>
-              <p className={styles.helpText}>Defaults Mason uses when shopping for you. Saved automatically as you type.</p>
-              <label className={styles.prefField}>
-                <span>Sizes</span>
-                <input
-                  value={memory.prefs.sizes}
-                  onChange={e => memory.setPref('sizes', e.target.value)}
-                  placeholder="e.g. M top, 32 waist, 10.5 shoe"
-                />
-              </label>
-              <label className={styles.prefField}>
-                <span>Budget</span>
-                <input
-                  value={memory.prefs.budget}
-                  onChange={e => memory.setPref('budget', e.target.value)}
-                  placeholder="e.g. up to $150"
-                />
-              </label>
-              <label className={styles.prefField}>
-                <span>Likes</span>
-                <input
-                  value={memory.prefs.likes}
-                  onChange={e => memory.setPref('likes', e.target.value)}
-                  placeholder="brands, styles, materials"
-                />
-              </label>
-              <label className={styles.prefField}>
-                <span>Dislikes</span>
-                <input
-                  value={memory.prefs.dislikes}
-                  onChange={e => memory.setPref('dislikes', e.target.value)}
-                  placeholder="things to avoid"
-                />
-              </label>
-            </>
+            <PrefsForm prefs={memory.prefs} onPatch={memory.patchPrefs} />
           )}
 
           {tab === 'saved' && (

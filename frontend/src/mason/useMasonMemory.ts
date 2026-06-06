@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, InboxMessage, MasonNote, MasonPrefs, MasonSavedProduct } from '../api'
+import { api, InboxMessage, MasonNote, MasonPrefs, MasonPrefsPatch, MasonSavedProduct } from '../api'
 
-const EMPTY_PREFS: MasonPrefs = { sizes: '', budget: '', likes: '', dislikes: '' }
+const EMPTY_PREFS: MasonPrefs = {
+  sizes: {},
+  style_tags: [],
+  quality_price: null,
+  bulk_individual: null,
+  discover_known: null,
+  gift_budget: {},
+  personal_budget: null,
+  lifestyle: {},
+  likes: [],
+  dislikes: [],
+}
 
 export interface MasonMemory {
   notes: MasonNote[]
@@ -11,12 +22,14 @@ export interface MasonMemory {
   loading: boolean
   addNote: (text: string) => Promise<void>
   removeNote: (key: string) => Promise<void>
-  setPref: (field: keyof MasonPrefs, value: string) => void
+  patchPrefs: (patch: MasonPrefsPatch) => void
   saveProduct: (product: MasonSavedProduct | { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => Promise<void>
   unsaveProduct: (productId: number) => Promise<void>
   refresh: () => Promise<void>
   refreshInbox: () => Promise<void>
 }
+
+const JSONB_KEYS: Array<keyof MasonPrefs> = ['sizes', 'gift_budget', 'lifestyle']
 
 // One hook that owns the three Mason memory resources. Gated on token —
 // signed-out users get empty data and a no-op refresh so the panel can
@@ -41,10 +54,8 @@ export function useMasonMemory(token: string | null): MasonMemory {
         api.getMasonSavedProducts(token),
         api.getInbox(token).catch(() => [] as InboxMessage[]),
       ])
-      setNotes(n); setPrefs(p); setSavedProducts(s); setInbox(i)
+      setNotes(n); setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setInbox(i)
     } catch (e) {
-      // 401 is handled globally by api.request; swallow other errors so the
-      // panel doesn't break the chat experience.
       console.error('[useMasonMemory] refresh failed', e)
     } finally {
       setLoading(false)
@@ -77,21 +88,44 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setNotes(prev => prev.filter(n => n.key !== key))
   }, [token])
 
-  // Pref edits are debounced per field so each keystroke doesn't hit the API.
-  const pendingPrefRef = useRef<Partial<MasonPrefs>>({})
+  // Pref edits are debounced so rapid slider drags / chip adds don't hit the
+  // API on every event. Patches accumulate; JSONB keys are shallow-merged so
+  // sub-fields like sizes.shirt don't clobber sizes.shoe.
+  const pendingPatchRef = useRef<MasonPrefsPatch>({})
   const prefTimerRef = useRef<number | null>(null)
-  const setPref = useCallback((field: keyof MasonPrefs, value: string) => {
-    setPrefs(prev => ({ ...prev, [field]: value }))
-    pendingPrefRef.current[field] = value
+  const patchPrefs = useCallback((patch: MasonPrefsPatch) => {
+    // Optimistic local update with the same shallow-merge rule we use server-side.
+    setPrefs(prev => {
+      const next = { ...prev } as MasonPrefs
+      for (const k of Object.keys(patch) as Array<keyof MasonPrefs>) {
+        const v = patch[k]
+        if (JSONB_KEYS.includes(k) && v && typeof v === 'object' && !Array.isArray(v)) {
+          ;(next as unknown as Record<string, unknown>)[k] = { ...(prev[k] as object), ...(v as object) }
+        } else {
+          ;(next as unknown as Record<string, unknown>)[k] = v as unknown
+        }
+      }
+      return next
+    })
+    // Merge into pending payload (same shallow-merge for JSONB fields).
+    for (const k of Object.keys(patch) as Array<keyof MasonPrefs>) {
+      const v = patch[k]
+      if (JSONB_KEYS.includes(k) && v && typeof v === 'object' && !Array.isArray(v)) {
+        const prev = (pendingPatchRef.current[k] as object | undefined) ?? {}
+        ;(pendingPatchRef.current as unknown as Record<string, unknown>)[k] = { ...prev, ...(v as object) }
+      } else {
+        ;(pendingPatchRef.current as unknown as Record<string, unknown>)[k] = v as unknown
+      }
+    }
     if (prefTimerRef.current != null) window.clearTimeout(prefTimerRef.current)
     if (!token) return
     prefTimerRef.current = window.setTimeout(async () => {
-      const patch = pendingPrefRef.current
-      pendingPrefRef.current = {}
+      const payload = pendingPatchRef.current
+      pendingPatchRef.current = {}
       prefTimerRef.current = null
       try {
-        const next = await api.updateMasonPrefs(patch, token)
-        setPrefs(next)
+        const next = await api.updateMasonPrefs(payload, token)
+        setPrefs({ ...EMPTY_PREFS, ...next })
       } catch (e) {
         console.error('[useMasonMemory] prefs save failed', e)
       }
@@ -126,5 +160,5 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setSavedProducts(prev => prev.filter(p => p.product_id !== productId))
   }, [token])
 
-  return { notes, prefs, savedProducts, inbox, loading, addNote, removeNote, setPref, saveProduct, unsaveProduct, refresh, refreshInbox }
+  return { notes, prefs, savedProducts, inbox, loading, addNote, removeNote, patchPrefs, saveProduct, unsaveProduct, refresh, refreshInbox }
 }

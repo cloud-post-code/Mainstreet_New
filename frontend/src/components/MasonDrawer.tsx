@@ -1,8 +1,10 @@
 import { MouseEvent, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
 import LiveReasoning from './LiveReasoning'
+import PrefsForm from './PrefsForm'
 import { useMason } from '../mason/MasonContext'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
@@ -37,16 +39,22 @@ export default function MasonDrawer(props: MasonDrawerProps) {
   const { isOpen, isPopped, closeDrawer, agentState } = useMason()
   const { memory } = props
 
-  // Lock body scroll on mobile so the overlay feels modal.
+  // Lock body scroll while the modal is open.
   useEffect(() => {
     if (typeof document === 'undefined') return
-    const lock = isOpen && window.matchMedia('(max-width: 768px)').matches
-    if (lock) {
-      const prev = document.body.style.overflow
-      document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = prev }
-    }
+    if (!isOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
   }, [isOpen])
+
+  // ESC closes the modal, matching ProductModal.
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isOpen, closeDrawer])
   const [tab, setTab] = useState<TabKey>('notes')
   const [newNote, setNewNote] = useState('')
 
@@ -95,9 +103,15 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     )
   }
 
-  return (
-    <>
-      <aside className={panelClass} aria-label="Mason">
+  return createPortal(
+    <div className={styles.backdrop} onClick={closeDrawer} role="presentation">
+      <aside
+        className={panelClass}
+        aria-label="Mason"
+        role="dialog"
+        aria-modal="true"
+        onClick={e => e.stopPropagation()}
+      >
         <div className={styles.header}>
           <div className={styles.headerIdent}>
             <div className={styles.avatar}>
@@ -217,41 +231,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
               {!signedIn ? (
                 <GuestNotice message="Sign in to save your shopping preferences so Mason can use them every time." />
               ) : (
-                <>
-                  <p className={styles.helpText}>Defaults Mason uses when shopping for you. Saved automatically as you type.</p>
-                  <label className={styles.prefField}>
-                    <span>Sizes</span>
-                    <input
-                      value={memory.prefs.sizes}
-                      onChange={e => memory.setPref('sizes', e.target.value)}
-                      placeholder="e.g. M top, 32 waist, 10.5 shoe"
-                    />
-                  </label>
-                  <label className={styles.prefField}>
-                    <span>Budget</span>
-                    <input
-                      value={memory.prefs.budget}
-                      onChange={e => memory.setPref('budget', e.target.value)}
-                      placeholder="e.g. up to $150"
-                    />
-                  </label>
-                  <label className={styles.prefField}>
-                    <span>Likes</span>
-                    <input
-                      value={memory.prefs.likes}
-                      onChange={e => memory.setPref('likes', e.target.value)}
-                      placeholder="brands, styles, materials"
-                    />
-                  </label>
-                  <label className={styles.prefField}>
-                    <span>Dislikes</span>
-                    <input
-                      value={memory.prefs.dislikes}
-                      onChange={e => memory.setPref('dislikes', e.target.value)}
-                      placeholder="things to avoid"
-                    />
-                  </label>
-                </>
+                <PrefsForm prefs={memory.prefs} onPatch={memory.patchPrefs} />
               )}
             </div>
           )}
@@ -333,7 +313,8 @@ export default function MasonDrawer(props: MasonDrawerProps) {
           )}
         </div>
       </aside>
-    </>
+    </div>,
+    document.body,
   )
 }
 

@@ -1,8 +1,8 @@
 from sqlalchemy import (
-    Column, Integer, String, Boolean, Numeric, Text,
+    Column, Integer, SmallInteger, String, Boolean, Numeric, Text,
     ForeignKey, DateTime, func, Index, CheckConstraint, UniqueConstraint, text
 )
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, ARRAY
 from sqlalchemy.orm import DeclarativeBase, relationship
 from pgvector.sqlalchemy import Vector
 
@@ -139,6 +139,24 @@ class UserMemory(Base):
     __table_args__ = (
         Index("ix_user_memory_user_key", "user_id", "key", unique=True),
     )
+
+
+class UserPreferences(Base):
+    """Structured shopping preferences. One row per user."""
+    __tablename__ = "user_preferences"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    sizes = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    style_tags = Column(ARRAY(Text), nullable=False, server_default=text("ARRAY[]::text[]"))
+    quality_price = Column(SmallInteger)
+    bulk_individual = Column(SmallInteger)
+    discover_known = Column(SmallInteger)
+    gift_budget = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    personal_budget = Column(Integer)
+    lifestyle = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    likes = Column(ARRAY(Text), nullable=False, server_default=text("ARRAY[]::text[]"))
+    dislikes = Column(ARRAY(Text), nullable=False, server_default=text("ARRAY[]::text[]"))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class SavedProduct(Base):

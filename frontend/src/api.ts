@@ -47,7 +47,49 @@ export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
 
 export interface MasonNote { key: string; text: string; created_at: string | null }
-export interface MasonPrefs { sizes: string; budget: string; likes: string; dislikes: string }
+
+export interface MasonSizes {
+  shirt?: string
+  waist?: string
+  inseam?: string
+  shoe?: string
+  shoe_gender?: 'mens' | 'womens' | 'unisex'
+  dress?: string
+  hat?: string
+  ring?: string
+  freeform?: string
+}
+export interface MasonGiftBudget {
+  default?: number
+  birthday?: number
+  holiday?: number
+  anniversary?: number
+  freeform?: string
+}
+export interface MasonLifestyle {
+  housing?: 'homeowner' | 'renter'
+  area?: 'urban' | 'suburban' | 'rural'
+  pets?: string[]
+  pets_notes?: string
+  hobbies?: string[]
+  cooking?: 'rarely' | 'sometimes' | 'often' | 'daily'
+  travel?: 'rarely' | 'few_times_year' | 'monthly' | 'frequently'
+  fitness?: string[]
+  work_env?: 'wfh' | 'hybrid' | 'office' | 'outdoor' | 'industrial'
+}
+export interface MasonPrefs {
+  sizes: MasonSizes
+  style_tags: string[]
+  quality_price: number | null
+  bulk_individual: number | null
+  discover_known: number | null
+  gift_budget: MasonGiftBudget
+  personal_budget: number | null
+  lifestyle: MasonLifestyle
+  likes: string[]
+  dislikes: string[]
+}
+export type MasonPrefsPatch = Partial<MasonPrefs>
 export interface MasonSavedProduct {
   product_id: number
   name: string
@@ -264,7 +306,7 @@ export const api = {
 
   getMasonPrefs: (token: string) =>
     request<MasonPrefs>('/api/mason/prefs', {}, token),
-  updateMasonPrefs: (patch: Partial<MasonPrefs>, token: string) =>
+  updateMasonPrefs: (patch: MasonPrefsPatch, token: string) =>
     request<MasonPrefs>('/api/mason/prefs', { method: 'PATCH', body: JSON.stringify(patch) }, token),
 
   getMasonSavedProducts: (token: string) =>

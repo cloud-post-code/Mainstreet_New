@@ -1,9 +1,13 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 24, 5, 0.45);
-  z-index: 90;
+  background: rgba(15, 24, 5, 0.55);
+  z-index: 200;
   animation: fadeIn 0.18s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -12,58 +16,35 @@
 
 .panel {
   position: relative;
-  flex-shrink: 0;
-  height: 100%;
-  width: 380px;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
   background: var(--ms-cream, #f1e9d8);
   color: var(--ms-dark, #0f1805);
-  border-left: 1px solid rgba(15, 24, 5, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
-}
-
-/* Popped-out side panel (desktop): inline sibling next to main, takes its own column. */
-.panelPopped {
-  position: relative;
-  flex: 0 0 auto;
-  width: min(420px, 38vw);
-  height: 100%;
-  border-radius: 0;
-  border-left: 1px solid rgba(15, 24, 5, 0.12);
-  box-shadow: -16px 0 40px rgba(15, 24, 5, 0.18);
   overflow: hidden;
-  z-index: 5;
-  animation: slideInRight 0.22s ease-out;
-}
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(24px); }
-  to { opacity: 1; transform: translateX(0); }
+  animation: popIn 0.22s ease;
 }
 
-/* Mobile: panel always behaves as a full-screen overlay when open. */
+.panelPopped {
+  /* Popped is now the default centered-modal style. */
+}
+
+@keyframes popIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 @media (max-width: 768px) {
+  .backdrop { padding: 0; }
   .panel {
-    position: fixed;
-    inset: 0;
     width: 100vw;
-    height: 100dvh;
-    border-left: none;
-    z-index: 100;
-    animation: slideUp 0.22s ease-out;
-  }
-  .panelPopped {
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 100vw;
+    max-height: 100dvh;
     height: 100dvh;
     border-radius: 0;
   }
-  .backdrop { display: none; }
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .header {

@@ -150,6 +150,33 @@
   white-space: pre-wrap;
 }
 
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 24, 5, 0.1);
+}
+
+.sectionTitle {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ms-primary, #015237);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.descEmpty {
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0;
+  color: rgba(15, 24, 5, 0.6);
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;

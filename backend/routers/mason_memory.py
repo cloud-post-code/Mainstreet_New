@@ -5,7 +5,7 @@ All endpoints require an authenticated user. Storage lives in `user_memory`
 data on each turn via `agent.memory.load_long_term`, so anything written here
 shows up in Mason's context next turn.
 """
-from typing import Optional
+from typing import Optional, Any, List, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,10 +61,16 @@ async def delete_note(
 # ── Preferences ─────────────────────────────────────────────────────────────
 
 class PrefsPatch(BaseModel):
-    sizes: Optional[str] = None
-    budget: Optional[str] = None
-    likes: Optional[str] = None
-    dislikes: Optional[str] = None
+    sizes: Optional[Dict[str, Any]] = None
+    style_tags: Optional[List[str]] = None
+    quality_price: Optional[int] = Field(default=None, ge=1, le=5)
+    bulk_individual: Optional[int] = Field(default=None, ge=1, le=5)
+    discover_known: Optional[int] = Field(default=None, ge=1, le=5)
+    gift_budget: Optional[Dict[str, Any]] = None
+    personal_budget: Optional[int] = Field(default=None, ge=0)
+    lifestyle: Optional[Dict[str, Any]] = None
+    likes: Optional[List[str]] = None
+    dislikes: Optional[List[str]] = None
 
 
 @router.get("/prefs")
