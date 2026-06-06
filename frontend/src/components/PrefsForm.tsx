@@ -1,5 +1,5 @@
 import { ChangeEvent, ReactNode } from 'react'
-import { MasonGiftBudget, MasonLifestyle, MasonPrefs, MasonPrefsPatch, MasonSizes } from '../api'
+import { MasonGiftBudget, MasonLifestyle, MasonPrefs, MasonPrefsPatch } from '../api'
 import ChipInput from './ChipInput'
 import styles from './PrefsForm.module.css'
 
@@ -8,8 +8,6 @@ interface PrefsFormProps {
   onPatch: (patch: MasonPrefsPatch) => void
 }
 
-const SHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
-const HAT_SIZES = ['S', 'M', 'L', 'XL']
 const STYLE_TAGS = [
   'minimalist', 'classic', 'streetwear', 'preppy', 'athleisure',
   'bohemian', 'vintage', 'technical', 'rugged', 'modern',
@@ -27,13 +25,9 @@ function numOrUndef(s: string): number | null {
 }
 
 export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
-  const sizes = prefs.sizes ?? {}
   const lifestyle = prefs.lifestyle ?? {}
   const gb = prefs.gift_budget ?? {}
 
-  function patchSize(field: keyof MasonSizes, value: string) {
-    onPatch({ sizes: { [field]: value || null } as Partial<MasonSizes> })
-  }
   function patchLifestyle(patch: Partial<MasonLifestyle>) {
     onPatch({ lifestyle: patch as Partial<MasonLifestyle> })
   }
@@ -51,92 +45,7 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
         Defaults Mason uses when shopping for you. Saved automatically as you change anything.
       </p>
 
-      <Section title="Sizes" defaultOpen>
-        <Row>
-          <Field label="Shirt">
-            <select
-              value={sizes.shirt ?? ''}
-              onChange={e => patchSize('shirt', e.target.value)}
-            >
-              <option value="">—</option>
-              {SHIRT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Dress / general">
-            <select
-              value={sizes.dress ?? ''}
-              onChange={e => patchSize('dress', e.target.value)}
-            >
-              <option value="">—</option>
-              {SHIRT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-        </Row>
-        <Row>
-          <Field label="Pant waist">
-            <input
-              type="number"
-              inputMode="numeric"
-              value={sizes.waist ?? ''}
-              onChange={e => patchSize('waist', e.target.value)}
-              placeholder="32"
-            />
-          </Field>
-          <Field label="Inseam">
-            <input
-              type="number"
-              inputMode="numeric"
-              value={sizes.inseam ?? ''}
-              onChange={e => patchSize('inseam', e.target.value)}
-              placeholder="32"
-            />
-          </Field>
-        </Row>
-        <Row>
-          <Field label="Shoe">
-            <input
-              type="number"
-              step="0.5"
-              value={sizes.shoe ?? ''}
-              onChange={e => patchSize('shoe', e.target.value)}
-              placeholder="10.5"
-            />
-          </Field>
-          <Field label="Shoe fit">
-            <select
-              value={sizes.shoe_gender ?? ''}
-              onChange={e => patchSize('shoe_gender', e.target.value)}
-            >
-              <option value="">—</option>
-              <option value="mens">Men's</option>
-              <option value="womens">Women's</option>
-              <option value="unisex">Unisex</option>
-            </select>
-          </Field>
-        </Row>
-        <Row>
-          <Field label="Hat">
-            <select
-              value={sizes.hat ?? ''}
-              onChange={e => patchSize('hat', e.target.value)}
-            >
-              <option value="">—</option>
-              {HAT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Ring">
-            <input
-              type="number"
-              step="0.5"
-              value={sizes.ring ?? ''}
-              onChange={e => patchSize('ring', e.target.value)}
-              placeholder="8"
-            />
-          </Field>
-        </Row>
-      </Section>
-
-      <Section title="Style preferences">
+      <Section title="Style preferences" defaultOpen>
         <div className={styles.toggleRow}>
           {STYLE_TAGS.map(tag => {
             const on = (prefs.style_tags ?? []).includes(tag)
