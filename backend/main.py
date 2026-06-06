@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,6 +12,20 @@ from db.database import create_tables
 from agent.uploads import upload_root
 from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart, mason_memory
 
+log = logging.getLogger("uvicorn.error")
+
+
+async def _run_migrations():
+    # Run schema setup in the background so a slow/locked DB doesn't block the
+    # port bind and fail Railway's healthcheck. Any error is logged loudly
+    # instead of silently hanging the startup.
+    try:
+        log.info("create_tables: starting")
+        await create_tables()
+        log.info("create_tables: done")
+    except Exception:
+        log.exception("create_tables failed")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,7 +35,7 @@ async def lifespan(app: FastAPI):
             "Generate with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
         )
     upload_root().mkdir(parents=True, exist_ok=True)
-    await create_tables()
+    asyncio.create_task(_run_migrations())
     yield
 
 
