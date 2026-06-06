@@ -1,5 +1,4 @@
 import { MouseEvent, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
@@ -39,22 +38,16 @@ export default function MasonDrawer(props: MasonDrawerProps) {
   const { isOpen, isPopped, closeDrawer, agentState } = useMason()
   const { memory } = props
 
-  // Lock body scroll while the modal is open.
+  // Lock body scroll on mobile so the overlay feels modal.
   useEffect(() => {
     if (typeof document === 'undefined') return
-    if (!isOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
+    const lock = isOpen && window.matchMedia('(max-width: 768px)').matches
+    if (lock) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
   }, [isOpen])
-
-  // ESC closes the modal, matching ProductModal.
-  useEffect(() => {
-    if (!isOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, closeDrawer])
   const [tab, setTab] = useState<TabKey>('notes')
   const [newNote, setNewNote] = useState('')
 
@@ -103,15 +96,9 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     )
   }
 
-  return createPortal(
-    <div className={styles.backdrop} onClick={closeDrawer} role="presentation">
-      <aside
-        className={panelClass}
-        aria-label="Mason"
-        role="dialog"
-        aria-modal="true"
-        onClick={e => e.stopPropagation()}
-      >
+  return (
+    <>
+      <aside className={panelClass} aria-label="Mason">
         <div className={styles.header}>
           <div className={styles.headerIdent}>
             <div className={styles.avatar}>
@@ -291,7 +278,15 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                               onClick={e => props.onDeleteSession(e, s.id)}
                               title="Delete conversation"
                               aria-label="Delete conversation"
-                            >×</button>
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M3 6h18" />
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                <path d="M10 11v6" />
+                                <path d="M14 11v6" />
+                              </svg>
+                            </button>
                           </span>
                         </button>
                       </li>
@@ -313,8 +308,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
           )}
         </div>
       </aside>
-    </div>,
-    document.body,
+    </>
   )
 }
 
