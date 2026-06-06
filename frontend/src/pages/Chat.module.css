@@ -5,9 +5,9 @@
   overflow: hidden;
   position: relative;
   background-color: #e7d9b3;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60' viewBox='0 0 120 60'><rect width='120' height='60' fill='%23e7d9b3'/><g fill='%23d9c69a' stroke='%23c9b585' stroke-width='1.2'><rect x='0' y='0' width='58' height='28' rx='2'/><rect x='62' y='0' width='58' height='28' rx='2'/><rect x='-30' y='32' width='58' height='28' rx='2'/><rect x='32' y='32' width='58' height='28' rx='2'/><rect x='94' y='32' width='58' height='28' rx='2'/></g></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60' viewBox='0 0 120 60'><rect width='120' height='60' fill='%23e7d9b3'/><g fill='%23e7d9b3' stroke='%23c9b585' stroke-width='0.6'><rect x='0' y='0' width='59.4' height='29.4' rx='1'/><rect x='60.6' y='0' width='59.4' height='29.4' rx='1'/><rect x='-30' y='30.6' width='59.4' height='29.4' rx='1'/><rect x='30.6' y='30.6' width='59.4' height='29.4' rx='1'/><rect x='91.2' y='30.6' width='59.4' height='29.4' rx='1'/></g></svg>");
   background-repeat: repeat;
-  background-size: 240px 120px;
+  background-size: 80px 40px;
 }
 
 /* ── Main ── */
