@@ -555,6 +555,7 @@ async def save_turn(
     )
     db.add(turn)
     await db.flush()
+    return turn
 
 
 async def save_preference(user_id: int, key: str, value: Any, db: AsyncSession):

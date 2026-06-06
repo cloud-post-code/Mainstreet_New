@@ -174,6 +174,33 @@ class SavedProduct(Base):
     )
 
 
+class TurnUsage(Base):
+    """One row per Claude call inside an agent turn — used for cost telemetry."""
+    __tablename__ = "turn_usage"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    turn_id = Column(Integer, ForeignKey("agent_turns.id", ondelete="CASCADE"), nullable=True, index=True)
+    model = Column(String(64), nullable=False)
+    iteration = Column(Integer, nullable=False, default=0)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    cache_read_tokens = Column(Integer, nullable=False, default=0)
+    cache_creation_tokens = Column(Integer, nullable=False, default=0)
+    thinking_tokens = Column(Integer, nullable=False, default=0)
+    estimated_cost_usd = Column(Numeric(10, 6), nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QueryRewriteCache(Base):
+    """Cache for Haiku-generated query rewrites. Keyed by normalized query."""
+    __tablename__ = "query_rewrite_cache"
+
+    key = Column(String(256), primary_key=True)
+    rewrites = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class CartItem(Base):
     __tablename__ = "cart_items"
 

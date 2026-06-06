@@ -150,7 +150,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (!token) return
-    api.getSessions(token).then(s => {
+    api.getSessions(token, 'shop').then(s => {
       setSessions(s)
       if (s.length) setActiveSessionId(s[0].id)
     })

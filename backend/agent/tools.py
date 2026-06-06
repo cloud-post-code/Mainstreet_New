@@ -508,7 +508,7 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
         return _format_results(result.all())
 
     # Rung 4: 3 query variants (literal / synonyms / product-type).
-    variants = await rewrite_query(q)
+    variants = await rewrite_query(q, db=db)
     if not variants:
         variants = [q]
 

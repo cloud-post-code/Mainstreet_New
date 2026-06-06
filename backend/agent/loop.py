@@ -20,12 +20,69 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from config import settings
-from db.models import AgentSession
+from db.models import AgentSession, TurnUsage
 from agent.memory import load_short_term, load_long_term, save_turn
 from agent.tools import TOOL_DEFINITIONS, MASON_MEMORY_TOOL_DEFINITIONS, execute_tool
 from agent.streaming import stream_claude
+from agent.pricing import compute_cost
 
 MAX_ITERATIONS = 10
+MEMORY_PLACEHOLDER = "{{LONG_TERM_MEMORY}}"
+
+
+def _tools_with_cache(tools: list[dict]) -> list[dict]:
+    """Return tools with cache_control on the last entry so the whole tool
+    block participates in the prompt cache. Safe to call repeatedly."""
+    if not tools:
+        return tools
+    out = [dict(t) for t in tools]
+    out[-1] = {**out[-1], "cache_control": {"type": "ephemeral"}}
+    return out
+
+
+def _mark_last_message_cached(messages: list[dict]) -> list[dict]:
+    """Attach cache_control to the last block of the last message so the
+    growing history caches incrementally. Only mark the prior history's
+    tail — the brand-new user turn won't be reused, so caching it would
+    just burn a cache-write with no read on the next turn.
+
+    We mutate a shallow copy of the last message's content; existing turn
+    rows in the DB are untouched.
+    """
+    if len(messages) < 2:
+        return messages
+    target = messages[-2]  # last message of prior history (new user msg is -1)
+    content = target.get("content")
+    if isinstance(content, list) and content:
+        last_block = content[-1]
+        # Anthropic Python SDK content blocks may be pydantic models or dicts.
+        if isinstance(last_block, dict):
+            new_block = {**last_block, "cache_control": {"type": "ephemeral"}}
+            new_content = list(content)
+            new_content[-1] = new_block
+            messages[-2] = {**target, "content": new_content}
+    elif isinstance(content, str):
+        # Promote string content into a single text block so we can attach cache_control.
+        messages[-2] = {
+            **target,
+            "content": [
+                {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+            ],
+        }
+    return messages
+
+
+def _extract_usage(response) -> dict:
+    """Pull token counts off the final Anthropic Message. Tolerant of missing fields."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
+    return {
+        "input": getattr(usage, "input_tokens", 0) or 0,
+        "output": getattr(usage, "output_tokens", 0) or 0,
+        "cache_read": getattr(usage, "cache_read_input_tokens", 0) or 0,
+        "cache_creation": getattr(usage, "cache_creation_input_tokens", 0) or 0,
+    }
 
 SYSTEM_PROMPT = """You are Mason, a personal shopping assistant for Main Street, a curated local shopping platform.
 
@@ -312,6 +369,8 @@ async def _run_agent_turn_inner(
 
     # Build message list
     messages = history + [{"role": "user", "content": user_content}]
+    # Cache the tail of prior history so it can be re-read on the next turn.
+    _mark_last_message_cached(messages)
 
     # Pick prompt + tool subset based on session type.
     if session_type == "mason":
@@ -320,15 +379,41 @@ async def _run_agent_turn_inner(
     else:
         base_prompt = SYSTEM_PROMPT
         tools_for_turn = TOOL_DEFINITIONS
-    # Use replace() instead of .format() so the JSON example payloads, prop
-    # docs like {content, tone?}, and grid example like {gap?} survive
-    # without needing every brace escaped.
-    system = base_prompt.replace("{{LONG_TERM_MEMORY}}", long_term)
+
+    # Split the system prompt around {{LONG_TERM_MEMORY}} so the static body
+    # caches across all users and the memory block caches per-user-per-session.
+    # We send `system` as a list of typed blocks; Anthropic supports cache_control
+    # on each. Quality is unchanged — the model concatenates them transparently.
+    if MEMORY_PLACEHOLDER in base_prompt:
+        prefix, suffix = base_prompt.split(MEMORY_PLACEHOLDER, 1)
+    else:
+        prefix, suffix = base_prompt, ""
+    static_system_text = prefix + suffix  # placeholder is in the tail; suffix is usually ""
+    system_blocks = [
+        {
+            "type": "text",
+            "text": static_system_text,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+    if long_term:
+        system_blocks.append({
+            "type": "text",
+            "text": long_term,
+            "cache_control": {"type": "ephemeral"},
+        })
+
+    cached_tools = _tools_with_cache(tools_for_turn)
 
     # Accumulate assistant content across iterations for final save
     accumulated_content = []
     accumulated_tool_calls = []
     accumulated_tool_results = []
+    # Per-turn usage totals (across iterations) for the summary log line.
+    turn_usage_totals = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0, "cost": 0.0}
+    pending_usage_rows: list[TurnUsage] = []
+
+    model_name = "claude-sonnet-4-6"
 
     for iteration in range(MAX_ITERATIONS):
         if iteration > 0:
@@ -337,10 +422,10 @@ async def _run_agent_turn_inner(
         response = None
         for kind, payload in stream_claude(
             client,
-            model="claude-sonnet-4-6",
+            model=model_name,
             max_tokens=16384,
-            system=system,
-            tools=tools_for_turn,
+            system=system_blocks,
+            tools=cached_tools,
             messages=messages,
         ):
             if kind == "thinking":
@@ -352,6 +437,32 @@ async def _run_agent_turn_inner(
 
         if response is None:
             break
+
+        # Record token usage for this iteration. We defer DB writes until
+        # the turn row is created (we need its id for the FK).
+        u = _extract_usage(response)
+        iter_cost = compute_cost(
+            model_name,
+            input_tokens=u["input"],
+            output_tokens=u["output"],
+            cache_read_tokens=u["cache_read"],
+            cache_creation_tokens=u["cache_creation"],
+        )
+        pending_usage_rows.append(TurnUsage(
+            session_id=session_id,
+            turn_id=None,  # filled in after save_turn
+            model=model_name,
+            iteration=iteration,
+            input_tokens=u["input"],
+            output_tokens=u["output"],
+            cache_read_tokens=u["cache_read"],
+            cache_creation_tokens=u["cache_creation"],
+            thinking_tokens=0,  # Anthropic doesn't surface thinking tokens separately yet
+            estimated_cost_usd=iter_cost,
+        ))
+        for k in ("input", "output", "cache_read", "cache_creation"):
+            turn_usage_totals[k] += u[k]
+        turn_usage_totals["cost"] += iter_cost
 
         # Process response blocks
         tool_use_blocks = []
@@ -414,7 +525,7 @@ async def _run_agent_turn_inner(
         messages.append({"role": "user", "content": tool_results})
 
     # Save the complete assistant turn
-    await save_turn(
+    assistant_turn = await save_turn(
         session_id,
         "assistant",
         accumulated_content,
@@ -422,6 +533,32 @@ async def _run_agent_turn_inner(
         accumulated_tool_results or None,
         db,
     )
+
+    # Attach usage rows to the assistant turn (best effort — telemetry
+    # failures must never break the user-facing reply).
+    try:
+        turn_id = getattr(assistant_turn, "id", None)
+        for row in pending_usage_rows:
+            if turn_id is not None:
+                row.turn_id = turn_id
+            db.add(row)
+        await db.flush()
+    except Exception:
+        logger.exception("Failed to persist TurnUsage rows for session %s", session_id)
+
     await db.commit()
+
+    # One-line summary for ops visibility.
+    logger.info(
+        "mason.turn session=%s model=%s iters=%d in=%d out=%d cache_read=%d cache_create=%d cost_usd=%.5f",
+        session_id,
+        model_name,
+        len(pending_usage_rows),
+        turn_usage_totals["input"],
+        turn_usage_totals["output"],
+        turn_usage_totals["cache_read"],
+        turn_usage_totals["cache_creation"],
+        turn_usage_totals["cost"],
+    )
 
     yield _event({"type": "done"})
