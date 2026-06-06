@@ -26,6 +26,7 @@ EXPECTED_COLUMNS = {
     "variant_id", "variant_index", "option_names", "option_values",
     "price", "quantity", "image_url", "description_json",
 }
+OPTIONAL_COLUMNS = {"parent_store"}
 SHOP_EXPECTED_COLUMNS = {"name"}
 
 
@@ -390,7 +391,7 @@ async def export_products_csv(
     writer = csv.DictWriter(
         output,
         fieldnames=[
-            "shop_name", "product_handle", "base_product_name", "product_name",
+            "parent_store", "shop_name", "product_handle", "base_product_name", "product_name",
             "variant_id", "variant_index", "option_names", "option_values",
             "price", "quantity", "image_url", "description_json",
         ],
@@ -403,6 +404,7 @@ async def export_products_csv(
             description_json = json.dumps(desc, ensure_ascii=False)
         writer.writerow(
             {
+                "parent_store": "",
                 "shop_name": _csv_safe(shop_name),
                 "product_handle": _csv_safe(product.handle or ""),
                 "base_product_name": _csv_safe(product.name),
