@@ -3,23 +3,8 @@
   flex-direction: row;
   height: calc(100vh - 64px);
   overflow: hidden;
+  background: var(--ms-cream);
   position: relative;
-  /* Light tan tint layered over the brick photo so the wall reads warm/airy.
-     The image is sized to "contain" so brick proportions are preserved,
-     anchored top-left; anything outside the image stays the cream tint
-     (no repeat, no stretching/cropping). */
-  background-color: var(--ms-cream);
-  background-image:
-    linear-gradient(rgba(245, 232, 205, 0.55), rgba(245, 232, 205, 0.55)),
-    url('/assets/brick-texture.png');
-  background-repeat: no-repeat, no-repeat;
-  background-position: top left, top left;
-  /* Tint overlay covers the whole viewport; brick image is sized to fully
-     cover the layout (so the wall fills the screen) while preserving the
-     brick proportions. Anything that overflows past the viewport edges is
-     clipped by the layout's overflow:hidden — nothing repeats, nothing
-     stretches. As the screen shrinks, the off-screen bricks simply disappear. */
-  background-size: 100% 100%, cover;
 }
 
 /* ── Main ── */
@@ -28,10 +13,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: transparent;
+  background: var(--ms-cream);
   min-width: 0;
-  position: relative;
-  z-index: 1;
 }
 
 /* ── Mason header (always above chat) ── */
