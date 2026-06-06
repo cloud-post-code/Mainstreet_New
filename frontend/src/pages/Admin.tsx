@@ -108,6 +108,16 @@ export default function Admin() {
     setProductsTotal(t => Math.max(0, t - 1))
   }
 
+  async function handleClearAllProducts() {
+    if (!token) return
+    if (!confirm('Are you sure you want to clear ALL products? This will permanently delete every product from the database and cannot be undone.')) return
+    const result = await api.clearAllProducts(token)
+    setProducts([])
+    setProductsTotal(0)
+    alert(`Cleared ${result.deleted} products.`)
+    api.adminShops(token).then(setShops)
+  }
+
   async function handleShopCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !token) return
@@ -239,6 +249,13 @@ export default function Admin() {
             disabled={downloadingProducts}
           >
             {downloadingProducts ? 'Downloading…' : 'Download Products CSV'}
+          </button>
+          <button
+            type="button"
+            className={styles.deleteBtn}
+            onClick={handleClearAllProducts}
+          >
+            Clear All Products
           </button>
         </div>
         {importResult && (

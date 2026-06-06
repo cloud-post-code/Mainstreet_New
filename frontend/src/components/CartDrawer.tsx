@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
 import { useCart } from '../cart/CartContext'
 import { useAuth } from '../hooks/useAuth'
 import { api, ShippingAddress } from '../api'
@@ -10,14 +9,17 @@ const EMPTY_SHIPPING: ShippingAddress = {
   name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
 }
 
+const hasShipping = (s: ShippingAddress) => !!(s.line1 || s.city || s.postal_code)
+
 export default function CartDrawer() {
   const { isOpen, close, items, total, setQuantity, removeItem, checkout } = useCart()
   const { token } = useAuth()
-  const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [pendingId, setPendingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [shipping, setShipping] = useState<ShippingAddress>(EMPTY_SHIPPING)
+  const [hasDefault, setHasDefault] = useState(false)
+  const [addrOpen, setAddrOpen] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -32,7 +34,12 @@ export default function CartDrawer() {
     if (!isOpen || !token) return
     let cancelled = false
     api.getMasonShipping(token)
-      .then(s => { if (!cancelled) setShipping({ ...EMPTY_SHIPPING, ...s }) })
+      .then(s => {
+        if (cancelled) return
+        const merged = { ...EMPTY_SHIPPING, ...s }
+        setShipping(merged)
+        setHasDefault(hasShipping(merged))
+      })
       .catch(() => {})
     return () => { cancelled = true }
   }, [isOpen, token])
@@ -87,7 +94,7 @@ export default function CartDrawer() {
           )}
           <ShippingSummary
             shipping={shipping}
-            onEdit={() => { close(); navigate('/mason') }}
+            onEdit={() => setAddrOpen(true)}
           />
           {items.length === 0 ? (
             <div className={styles.empty}>Your cart is empty.</div>
@@ -106,6 +113,7 @@ export default function CartDrawer() {
               <div className={styles.itemBody}>
                 <p className={styles.itemName}>{it.name}</p>
                 {variantText && <p className={styles.itemShop}>{variantText}</p>}
+                {it.parent_store && <p className={styles.itemShop}>{it.parent_store}</p>}
                 {it.shop_name && <p className={styles.itemShop}>{it.shop_name}</p>}
                 <div className={styles.qtyRow}>
                   <button
@@ -149,8 +157,124 @@ export default function CartDrawer() {
           </button>
         </div>
       </aside>
+      {addrOpen && (
+        <AddressModal
+          initial={shipping}
+          persist={!hasDefault}
+          onClose={() => setAddrOpen(false)}
+          onSave={async (addr) => {
+            setShipping(addr)
+            if (!hasDefault && token) {
+              try {
+                const saved = await api.updateMasonShipping(addr, token)
+                const merged = { ...EMPTY_SHIPPING, ...saved }
+                setShipping(merged)
+                setHasDefault(hasShipping(merged))
+              } catch {
+                // keep local state even if persist fails
+              }
+            }
+            setAddrOpen(false)
+          }}
+        />
+      )}
     </>,
     document.body,
+  )
+}
+
+function AddressModal({
+  initial,
+  persist,
+  onClose,
+  onSave,
+}: {
+  initial: ShippingAddress
+  persist: boolean
+  onClose: () => void
+  onSave: (addr: ShippingAddress) => void | Promise<void>
+}) {
+  const [addr, setAddr] = useState<ShippingAddress>(initial)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const set = (k: keyof ShippingAddress) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setAddr(prev => ({ ...prev, [k]: e.target.value }))
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    try { await onSave(addr) } finally { setSaving(false) }
+  }
+
+  return (
+    <>
+      <div className={styles.modalBackdrop} onClick={onClose} aria-hidden="true" />
+      <div className={styles.modal} role="dialog" aria-label="Shipping address">
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>
+            {persist ? 'Add shipping address' : 'Edit shipping address'}
+          </h3>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <form className={styles.modalBody} onSubmit={submit}>
+          <label className={styles.field}>
+            <span>Full name</span>
+            <input value={addr.name} onChange={set('name')} autoFocus />
+          </label>
+          <label className={styles.field}>
+            <span>Address line 1</span>
+            <input value={addr.line1} onChange={set('line1')} required />
+          </label>
+          <label className={styles.field}>
+            <span>Address line 2</span>
+            <input value={addr.line2} onChange={set('line2')} />
+          </label>
+          <div className={styles.fieldRow}>
+            <label className={styles.field}>
+              <span>City</span>
+              <input value={addr.city} onChange={set('city')} required />
+            </label>
+            <label className={styles.field}>
+              <span>State</span>
+              <input value={addr.state} onChange={set('state')} />
+            </label>
+          </div>
+          <div className={styles.fieldRow}>
+            <label className={styles.field}>
+              <span>Postal code</span>
+              <input value={addr.postal_code} onChange={set('postal_code')} required />
+            </label>
+            <label className={styles.field}>
+              <span>Country</span>
+              <input value={addr.country} onChange={set('country')} />
+            </label>
+          </div>
+          <label className={styles.field}>
+            <span>Phone</span>
+            <input value={addr.phone} onChange={set('phone')} />
+          </label>
+          {!persist && (
+            <p className={styles.modalNote}>
+              Updating for this order only — your saved default won't change.
+            </p>
+          )}
+          <div className={styles.modalActions}>
+            <button type="button" className={styles.btnSecondary} onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className={styles.btnPrimary} disabled={saving}>
+              {saving ? 'Saving…' : persist ? 'Save as default' : 'Use for this order'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   )
 }
 

@@ -93,6 +93,7 @@ class PriceRange(BaseModel):
 class ProductOut(BaseModel):
     id: int
     shop_id: int
+    parent_store: Optional[str] = None
     shop_name: Optional[str] = None
     handle: Optional[str] = None
     name: str

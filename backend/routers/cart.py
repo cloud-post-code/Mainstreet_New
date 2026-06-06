@@ -62,6 +62,7 @@ async def view(user_id: int | None, session_id: int | None, db: AsyncSession) ->
             "variant_label": variant.variant_label,
             "option_names": list(variant.option_names or []),
             "option_values": list(variant.option_values or []),
+            "parent_store": None,
             "shop_name": shop_name,
             "image_url": variant.image_url,
             "price": unit_price,

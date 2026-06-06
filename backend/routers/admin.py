@@ -58,6 +58,7 @@ def _hydrate_product_out(product: Product, shop_name: str | None, variants: list
     return ProductOut(
         id=product.id,
         shop_id=product.shop_id,
+        parent_store=None,
         shop_name=shop_name,
         handle=product.handle,
         name=product.name,
@@ -548,5 +549,18 @@ async def delete_product(product_id: int, db: AsyncSession = Depends(get_db), _:
         raise HTTPException(status_code=404, detail="Product not found")
     await db.delete(product)
     await db.commit()
+
+
+class ClearProductsResponse(BaseModel):
+    deleted: int
+
+
+@router.delete("/products", response_model=ClearProductsResponse)
+async def clear_all_products(db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
+    total = int((await db.execute(select(func.count(Product.id)))).scalar() or 0)
+    await db.execute(delete(ProductVariant))
+    await db.execute(delete(Product))
+    await db.commit()
+    return ClearProductsResponse(deleted=total)
 
 

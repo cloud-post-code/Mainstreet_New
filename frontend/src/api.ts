@@ -56,6 +56,7 @@ export interface PriceRange { min: string; max: string }
 export interface Product {
   id: number
   shop_id: number
+  parent_store: string | null
   shop_name: string | null
   handle: string | null
   name: string
@@ -145,6 +146,7 @@ export interface CartItem {
   variant_label: string | null
   option_names: string[]
   option_values: string[]
+  parent_store: string | null
   shop_name: string | null
   image_url: string | null
   price: number
@@ -340,6 +342,8 @@ export const api = {
     request<void>(`/api/admin/shops/${id}`, { method: 'DELETE' }, token),
   deleteProduct: (id: number, token: string) =>
     request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }, token),
+  clearAllProducts: (token: string) =>
+    request<{ deleted: number }>(`/api/admin/products`, { method: 'DELETE' }, token),
 
   getMasonNotes: (token: string) =>
     request<MasonNote[]>('/api/mason/notes', {}, token),
