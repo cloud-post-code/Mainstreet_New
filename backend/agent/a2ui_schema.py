@@ -231,10 +231,19 @@ def validate_render_ui(payload: Any) -> list[str]:
     return errors
 
 
-def enrich_render_ui_payload(payload: dict, quantities: dict[int, int]) -> dict:
-    """Fill product_card quantity from the database so the UI shows correct stock."""
-    if not quantities:
+def enrich_render_ui_payload(
+    payload: dict,
+    quantities: dict[int, int],
+    variants_by_pid: dict[int, list[dict]] | None = None,
+    default_variant_by_pid: dict[int, int] | None = None,
+) -> dict:
+    """Fill product_card quantity, variants, and default_variant_id from the
+    database so the UI shows correct stock and option chips regardless of
+    whether the agent included those fields in its render_ui payload."""
+    if not quantities and not variants_by_pid and not default_variant_by_pid:
         return payload
+    variants_by_pid = variants_by_pid or {}
+    default_variant_by_pid = default_variant_by_pid or {}
     components = []
     for comp in payload.get("components") or []:
         if not isinstance(comp, dict) or comp.get("type") != "product_card":
@@ -242,8 +251,15 @@ def enrich_render_ui_payload(payload: dict, quantities: dict[int, int]) -> dict:
             continue
         props = dict(comp.get("props") or {})
         pid = props.get("product_id")
-        if isinstance(pid, int) and pid in quantities:
-            props["quantity"] = quantities[pid]
+        if isinstance(pid, int):
+            if pid in quantities:
+                props["quantity"] = quantities[pid]
+            # Always overwrite variants/default_variant_id with the canonical
+            # DB values — the agent's copy can be stale or omitted entirely.
+            if pid in variants_by_pid:
+                props["variants"] = variants_by_pid[pid]
+            if pid in default_variant_by_pid and default_variant_by_pid[pid] is not None:
+                props.setdefault("default_variant_id", default_variant_by_pid[pid])
         components.append({**comp, "props": props})
     return {**payload, "components": components}
 
@@ -270,6 +286,9 @@ RENDER_UI_TOOL_SCHEMA: dict = {
         "Every payload MUST include a `text_block` for conversational explanation. "
         "Once a recommendation is made, include a `reasoning_block` with a plain-text summary "
         "(1-3 sentences, no UI references). "
+        "Every product_card for a product that has more than one variant MUST include the "
+        "full `variants` array and `default_variant_id` so the user can pick an option — "
+        "render_ui will be rejected otherwise. "
         "After calling render_ui, end your turn."
     ),
     "input_schema": {

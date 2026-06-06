@@ -317,6 +317,28 @@ export default function Chat() {
             description_summary: typeof p.description_summary === 'string' ? p.description_summary : undefined,
             description_long: typeof p.description_long === 'string' ? p.description_long : undefined,
             tags: Array.isArray(p.tags) ? (p.tags as unknown[]).filter((t): t is string => typeof t === 'string') : undefined,
+            variants: Array.isArray(p.variants)
+              ? (p.variants as unknown[]).flatMap((raw) => {
+                  if (!raw || typeof raw !== 'object') return []
+                  const v = raw as Record<string, unknown>
+                  const vid = typeof v.variant_id === 'number' ? v.variant_id : Number(v.variant_id)
+                  if (!Number.isFinite(vid)) return []
+                  return [{
+                    variant_id: vid,
+                    option_names: Array.isArray(v.option_names)
+                      ? (v.option_names as unknown[]).filter((x): x is string => typeof x === 'string')
+                      : undefined,
+                    option_values: Array.isArray(v.option_values)
+                      ? (v.option_values as unknown[]).filter((x): x is string => typeof x === 'string')
+                      : undefined,
+                    variant_label: typeof v.variant_label === 'string' ? v.variant_label : null,
+                    price: typeof v.price === 'number' ? v.price : Number(v.price ?? 0),
+                    quantity: typeof v.quantity === 'number' ? v.quantity : Number(v.quantity ?? 0),
+                    image_url: typeof v.image_url === 'string' ? v.image_url : null,
+                  }]
+                })
+              : undefined,
+            default_variant_id: typeof p.default_variant_id === 'number' ? p.default_variant_id : undefined,
           }
         }
       }

@@ -47,6 +47,30 @@ async def _product_quantities_for_render_ui(payload: dict, db: AsyncSession) -> 
     )
     return {row[0]: int(row[1] or 0) for row in result.all()}
 
+
+async def _product_variants_for_render_ui(
+    payload: dict, db: AsyncSession
+) -> tuple[dict[int, list[dict]], dict[int, int | None]]:
+    """Fetch the full variant list + default variant id for every product_card
+    in the payload so the frontend can always render option chips, even when
+    the agent omitted variants from its render_ui call."""
+    ids = collect_product_card_ids(payload)
+    if not ids:
+        return {}, {}
+    v_result = await db.execute(
+        select(ProductVariant)
+        .where(ProductVariant.product_id.in_(ids))
+        .order_by(ProductVariant.variant_index)
+    )
+    variants_by_pid: dict[int, list[dict]] = {}
+    for v in v_result.scalars().all():
+        variants_by_pid.setdefault(v.product_id, []).append(_variant_summary(v))
+    default_result = await db.execute(
+        select(Product.id, Product.default_variant_id).where(Product.id.in_(ids))
+    )
+    default_by_pid: dict[int, int | None] = {row[0]: row[1] for row in default_result.all()}
+    return variants_by_pid, default_by_pid
+
 # ── Tool schemas passed to Claude ────────────────────────────────────────────
 
 TOOL_DEFINITIONS = [
@@ -137,10 +161,12 @@ TOOL_DEFINITIONS = [
     {
         "name": "add_to_cart",
         "description": (
-            "Add a specific variant to the user's cart. Always pass variant_id when the "
-            "product has multiple variants — picking the right color/size matters. "
-            "If you only pass product_id, the parent's default variant is used; only do this "
-            "when the product has a single variant. Resolve ids via search_products first."
+            "Add a specific variant to the user's cart. variant_id is REQUIRED whenever the "
+            "product has more than one variant — the cart will reject the call with "
+            "reason='variant_required' if you pass only product_id for a multi-variant product. "
+            "Use product_id alone only for products with a single variant. Resolve ids via "
+            "search_products first, and when the shopper hasn't named an option yet, ask them "
+            "to pick one (render a product_card with the variants array) instead of guessing."
         ),
         "input_schema": {
             "type": "object",
@@ -344,7 +370,51 @@ async def execute_tool(
                     None,
                 )
             quantities = await _product_quantities_for_render_ui(tool_input, db)
-            enriched = enrich_render_ui_payload(tool_input, quantities)
+            variants_by_pid, default_by_pid = await _product_variants_for_render_ui(tool_input, db)
+            # Hard rule: every product_card whose product has more than one
+            # variant must include the variants array. This forces the agent
+            # to learn the contract instead of relying on silent enrichment.
+            missing_variant_cards: list[dict] = []
+            for comp in tool_input.get("components") or []:
+                if not isinstance(comp, dict) or comp.get("type") != "product_card":
+                    continue
+                props = comp.get("props") or {}
+                pid = props.get("product_id")
+                if not isinstance(pid, int):
+                    continue
+                db_variants = variants_by_pid.get(pid, [])
+                if len(db_variants) <= 1:
+                    continue
+                supplied = props.get("variants")
+                if not isinstance(supplied, list) or len(supplied) < len(db_variants):
+                    missing_variant_cards.append({
+                        "component_id": comp.get("id"),
+                        "product_id": pid,
+                        "expected_variant_count": len(db_variants),
+                    })
+            if missing_variant_cards:
+                return (
+                    {
+                        "render_ui_invalid": True,
+                        "errors": [
+                            f"product_card '{m['component_id']}' (product_id={m['product_id']}) "
+                            f"has {m['expected_variant_count']} variants but the variants array "
+                            f"was missing or incomplete. Multi-variant products MUST include the "
+                            f"full variants list and default_variant_id so the shopper can pick "
+                            f"an option."
+                            for m in missing_variant_cards
+                        ],
+                        "hint": (
+                            "Re-call render_ui with the variants array filled in for each "
+                            "multi-variant product_card. Use the variants returned by "
+                            "search_products / show_product verbatim."
+                        ),
+                    },
+                    None,
+                )
+            enriched = enrich_render_ui_payload(
+                tool_input, quantities, variants_by_pid, default_by_pid,
+            )
             return enriched, "ui_tree"
         if tool_name == "generate_plan":
             return await _generate_plan(tool_input, session_id, db), "plan_update"

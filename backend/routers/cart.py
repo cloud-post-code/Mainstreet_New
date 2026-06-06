@@ -7,7 +7,7 @@ translate to HTTPException at the route boundary.
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import get_current_user
@@ -112,6 +112,21 @@ async def add_item(
 ) -> dict:
     if quantity < 1:
         return {"added": False, "reason": "quantity_must_be_positive"}
+
+    # Enforce variant selection for multi-variant products. If only a
+    # product_id was supplied and that product has more than one variant,
+    # refuse the add — the caller must pick a specific variant.
+    if variant_id is None and product_id is not None:
+        variant_count = (await db.execute(
+            select(func.count(ProductVariant.id))
+            .where(ProductVariant.product_id == int(product_id))
+        )).scalar_one()
+        if (variant_count or 0) > 1:
+            return {
+                "added": False,
+                "reason": "variant_required",
+                "product_id": int(product_id),
+            }
 
     resolved_vid = await _resolve_variant_id(variant_id, product_id, db)
     if resolved_vid is None:
@@ -312,6 +327,14 @@ def _raise_for_reason(result: dict) -> None:
         )
     if reason in {"variant_not_found", "product_not_found"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
+    if reason == "variant_required":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "This product has multiple options — choose one before adding to your cart.",
+                **result,
+            },
+        )
 
 
 @router.get("")
