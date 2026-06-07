@@ -1,0 +1,6 @@
+shop_name,product_handle,base_product_name,product_name,variant_id,variant_index,option_names,option_values,price,quantity,image_url,description_json,parent_store
+Acme Co,wool-hat,Wool Hat,Wool Hat - Small Red,1001,1,Size / Color,Small / Red,19.99,5,http://example.com/hat-sr.jpg,"{""summary"":""Warm wool hat"",""tags"":[""wool"",""winter""]}",
+Acme Co,wool-hat,Wool Hat,Wool Hat - Large Red,1002,2,Size / Color,Large / Red,19.99,3,http://example.com/hat-lr.jpg,"{""summary"":""Warm wool hat""}",
+Acme Co,wool-hat,Wool Hat,Wool Hat - Small Blue,1003,3,Size / Color,Small / Blue,19.99,0,http://example.com/hat-sb.jpg,"{""summary"":""Warm wool hat""}",
+Acme Co,leather-belt,Leather Belt,Leather Belt - 32in,2001,1,Size,32in,45.00,4,http://example.com/belt-32.jpg,"{""summary"":""Full grain leather belt"",""materials"":""leather""}",
+Beta Goods,ceramic-mug,Ceramic Mug,Ceramic Mug - White,3001,1,Color,White,12.50,12,http://example.com/mug-w.jpg,"{""summary"":""Handmade ceramic mug""}",
