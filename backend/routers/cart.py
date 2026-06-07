@@ -11,9 +11,12 @@ from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import get_current_user
+from routers.auth import limiter
 from config import settings
 from db.database import get_db
 from db.models import CartItem, Product, ProductVariant, Shop, User
+from utils.pricing import format_price, line_total, to_stripe_amount
+from utils.cart_queries import get_variant_with_product, get_cart_item
 
 router = APIRouter(prefix="/api/cart", tags=["cart"])
 
@@ -39,6 +42,18 @@ def _owner_filter(user_id: int | None, session_id: int | None):
     return and_(CartItem.session_id == session_id, CartItem.user_id.is_(None))
 
 
+def _validate_qty(qty: int) -> dict | None:
+    """Return an error dict if qty is invalid, else None."""
+    if qty < 1:
+        return {"added": False, "reason": "quantity_must_be_positive"}
+    return None
+
+
+def _sum_cart_lines(lines: list[dict]) -> float:
+    """Sum subtotals across cart line dicts. Pure — testable without a DB."""
+    return round(sum(float(line.get("subtotal") or 0) for line in lines), 2)
+
+
 async def view(user_id: int | None, session_id: int | None, db: AsyncSession) -> dict:
     stmt = (
         select(CartItem, ProductVariant, Product, Shop.name.label("shop_name"))
@@ -50,11 +65,8 @@ async def view(user_id: int | None, session_id: int | None, db: AsyncSession) ->
     )
     rows = (await db.execute(stmt)).all()
     items = []
-    total = 0.0
     for cart_item, variant, product, shop_name in rows:
-        unit_price = float(variant.price or 0)
-        subtotal = unit_price * cart_item.quantity
-        total += subtotal
+        unit_price = format_price(variant.price)
         items.append({
             "variant_id": variant.id,
             "product_id": product.id,
@@ -67,9 +79,9 @@ async def view(user_id: int | None, session_id: int | None, db: AsyncSession) ->
             "image_url": variant.image_url,
             "price": unit_price,
             "quantity": cart_item.quantity,
-            "subtotal": round(subtotal, 2),
+            "subtotal": line_total(unit_price, cart_item.quantity),
         })
-    return {"items": items, "item_count": len(items), "total": round(total, 2)}
+    return {"items": items, "item_count": len(items), "total": _sum_cart_lines(items)}
 
 
 async def _resolve_variant_id(
@@ -110,8 +122,9 @@ async def add_item(
     *,
     product_id: int | None = None,
 ) -> dict:
-    if quantity < 1:
-        return {"added": False, "reason": "quantity_must_be_positive"}
+    err = _validate_qty(quantity)
+    if err is not None:
+        return err
 
     # Enforce variant selection for multi-variant products. If only a
     # product_id was supplied and that product has more than one variant,
@@ -132,22 +145,12 @@ async def add_item(
     if resolved_vid is None:
         return {"added": False, "reason": "variant_not_found", "variant_id": variant_id, "product_id": product_id}
 
-    variant = (await db.execute(
-        select(ProductVariant, Product)
-        .join(Product, Product.id == ProductVariant.product_id)
-        .where(ProductVariant.id == resolved_vid)
-    )).first()
-    if variant is None:
+    pair = await get_variant_with_product(db, resolved_vid)
+    if pair is None:
         return {"added": False, "reason": "variant_not_found", "variant_id": resolved_vid}
-    variant_row, product = variant
+    variant_row, product = pair
 
-    existing = (
-        await db.execute(
-            select(CartItem).where(
-                _owner_filter(user_id, session_id), CartItem.variant_id == resolved_vid
-            )
-        )
-    ).scalars().first()
+    existing = await get_cart_item(db, resolved_vid, _owner_filter(user_id, session_id))
 
     current_qty = existing.quantity if existing else 0
     new_qty = current_qty + quantity
@@ -175,7 +178,7 @@ async def add_item(
         ))
 
     await db.flush()
-    unit_price = float(variant_row.price or 0)
+    unit_price = format_price(variant_row.price)
     return {
         "added": True,
         "variant_id": resolved_vid,
@@ -184,7 +187,7 @@ async def add_item(
         "variant_label": variant_row.variant_label,
         "new_quantity": new_qty,
         "unit_price": unit_price,
-        "line_subtotal": round(unit_price * new_qty, 2),
+        "line_subtotal": line_total(unit_price, new_qty),
     }
 
 
@@ -195,13 +198,7 @@ async def set_quantity(
     session_id: int | None,
     db: AsyncSession,
 ) -> dict:
-    existing = (
-        await db.execute(
-            select(CartItem).where(
-                _owner_filter(user_id, session_id), CartItem.variant_id == variant_id
-            )
-        )
-    ).scalars().first()
+    existing = await get_cart_item(db, variant_id, _owner_filter(user_id, session_id))
     if existing is None:
         return {"updated": False, "reason": "not_in_cart", "variant_id": variant_id}
 
@@ -210,14 +207,10 @@ async def set_quantity(
         await db.flush()
         return {"updated": True, "removed": True, "variant_id": variant_id}
 
-    variant = (await db.execute(
-        select(ProductVariant, Product)
-        .join(Product, Product.id == ProductVariant.product_id)
-        .where(ProductVariant.id == variant_id)
-    )).first()
-    if variant is None:
+    pair = await get_variant_with_product(db, variant_id)
+    if pair is None:
         return {"updated": False, "reason": "variant_not_found", "variant_id": variant_id}
-    variant_row, product = variant
+    variant_row, product = pair
     if quantity > (variant_row.quantity or 0):
         return {
             "updated": False,
@@ -269,7 +262,7 @@ async def checkout(user_id: int | None, session_id: int | None, db: AsyncSession
         line_items.append({
             "price_data": {
                 "currency": "usd",
-                "unit_amount": int(round(float(it["price"]) * 100)),
+                "unit_amount": to_stripe_amount(it["price"]),
                 "product_data": product_data,
             },
             "quantity": int(it["quantity"]),
@@ -418,6 +411,7 @@ async def http_checkout(
 
 
 @router.post("/webhook")
+@limiter.exempt
 async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     if not settings.stripe_webhook_secret:
         raise HTTPException(
@@ -433,7 +427,8 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
     if event["type"] == "checkout.session.completed":
         stripe_session = event["data"]["object"]
-        ref = stripe_session.get("client_reference_id")
+        # StripeObject has no .get(); use attribute access with a default.
+        ref = getattr(stripe_session, "client_reference_id", None)
         if ref:
             try:
                 user_id = int(ref)

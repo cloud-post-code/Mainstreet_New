@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from agent.prompt_safety import wrap_untrusted
 from db.models import AgentTurn, UserMemory, SavedProduct, Product, UserPreferences
 
@@ -202,19 +202,21 @@ async def add_note(user_id: int, text: str, db: AsyncSession) -> dict:
         raise ValueError("empty note")
 
     # Skip silent duplicates so Mason re-saving the same fact doesn't pile up.
+    # Match the JSON `text` field directly in SQL instead of scanning every note row.
     existing = await db.execute(
         select(UserMemory).where(
             UserMemory.user_id == user_id,
             UserMemory.key.like(f"{NOTE_KEY_PREFIX}%"),
-        )
+            func.lower(func.trim(UserMemory.value["text"].astext)) == text.lower(),
+        ).limit(1)
     )
-    for row in existing.scalars().all():
-        if _note_text(row.value).strip().lower() == text.lower():
-            return {
-                "key": row.key,
-                "text": _note_text(row.value),
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-            }
+    row = existing.scalars().first()
+    if row:
+        return {
+            "key": row.key,
+            "text": _note_text(row.value),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
 
     await _evict_if_full(user_id, db)
     key = f"{NOTE_KEY_PREFIX}{uuid.uuid4().hex}"

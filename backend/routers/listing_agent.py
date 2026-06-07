@@ -22,6 +22,7 @@ from agent.listing_orchestrator import run_listing_agent
 from agent.upload_safety import read_capped, validate_image_bytes
 from agent.uploads import UPLOAD_SUBDIR, listings_dir, listing_url, public_api_base
 from auth import get_admin_user
+from routers.auth import limiter
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 from db.database import get_db
@@ -60,6 +61,7 @@ class UploadResponse(BaseModel):
 
 
 @router.post("/upload-image", response_model=UploadResponse)
+@limiter.limit("30/minute")
 async def upload_image(
     request: Request,
     file: UploadFile = File(...),
@@ -79,9 +81,10 @@ async def upload_image(
 
 
 @router.post("/draft")
+@limiter.limit("30/minute")
 async def draft_listing(
-    body: DraftRequest,
     request: Request,
+    body: DraftRequest,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):

@@ -9,6 +9,7 @@ from db.schemas import ProductOut
 from auth import get_current_user
 from db.models import User
 from routers.admin import _hydrate_product_out
+from utils.parsing import parse_comma_int_list, parse_comma_str_list
 
 
 router = APIRouter(prefix="/api/products", tags=["products"])
@@ -137,8 +138,8 @@ async def discover_products(
         min_price,
         max_price,
         in_stock_only,
-        shop_ids=[int(t) for t in (shop_ids or "").split(",") if t.strip().isdigit()],
-        tags=[t.strip() for t in (tags or "").split(",") if t.strip()],
+        shop_ids=parse_comma_int_list(shop_ids),
+        tags=parse_comma_str_list(tags),
     )
     if q:
         ts_query = func.websearch_to_tsquery("english", q)
@@ -173,8 +174,8 @@ async def discover_count(
         min_price,
         max_price,
         in_stock_only,
-        shop_ids=[int(t) for t in (shop_ids or "").split(",") if t.strip().isdigit()],
-        tags=[t.strip() for t in (tags or "").split(",") if t.strip()],
+        shop_ids=parse_comma_int_list(shop_ids),
+        tags=parse_comma_str_list(tags),
     )
     result = await db.execute(stmt)
     total = result.scalar() or 0

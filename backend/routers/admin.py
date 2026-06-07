@@ -15,6 +15,8 @@ from db.models import Shop, Product, ProductVariant, User
 from db.schemas import ImportResult, ShopOut, ShopCreate, ProductOut, AdminProductsPage
 from auth import get_admin_user
 from agent.embeddings import build_canonical_text, embed_texts
+from utils.db_helpers import get_or_404
+from utils.csv_export import csv_safe as _csv_safe, csv_response as _csv_response  # re-exported for tests
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_CSV_BYTES = 10 * 1024 * 1024
@@ -352,25 +354,6 @@ async def import_shops_csv(
     return ImportResult(rows_added=rows_added, rows_updated=rows_updated, errors=errors)
 
 
-def _csv_safe(value) -> str:
-    """Defuse CSV-formula injection. Excel/Sheets execute cells starting with
-    =, +, -, @, tab, or CR as formulas. Prefix with a single quote when needed."""
-    if value is None:
-        return ""
-    s = str(value)
-    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + s
-    return s
-
-
-def _csv_response(content: str, filename: str) -> StreamingResponse:
-    return StreamingResponse(
-        iter([content]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @router.get("/export/products")
 async def export_products_csv(
     shop_id: int | None = None,
@@ -487,10 +470,7 @@ async def create_shop(
 
 @router.delete("/shops/{shop_id}", status_code=204)
 async def delete_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
-    result = await db.execute(select(Shop).where(Shop.id == shop_id))
-    shop = result.scalars().first()
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
+    shop = await get_or_404(db, Shop, shop_id, detail="Shop not found")
     await db.delete(shop)
     await db.commit()
 
@@ -545,10 +525,7 @@ async def admin_list_products(
 
 @router.delete("/products/{product_id}", status_code=204)
 async def delete_product(product_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
-    result = await db.execute(select(Product).where(Product.id == product_id))
-    product = result.scalars().first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+    product = await get_or_404(db, Product, product_id, detail="Product not found")
     await db.delete(product)
     await db.commit()
 

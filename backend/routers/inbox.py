@@ -5,6 +5,7 @@ from db.database import get_db
 from db.models import InboxMessage, AgentSession, AgentTurn, User
 from db.schemas import InboxMessageOut, InboxOpenOut
 from auth import get_current_user
+from utils.db_helpers import get_owned_or_404
 
 router = APIRouter(prefix="/api/inbox", tags=["inbox"])
 
@@ -29,15 +30,9 @@ async def mark_read(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(InboxMessage).where(
-            InboxMessage.id == message_id,
-            InboxMessage.user_id == current_user.id,
-        )
+    msg = await get_owned_or_404(
+        db, InboxMessage, message_id, current_user.id, detail="Message not found"
     )
-    msg = result.scalars().first()
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
     msg.read = True
     await db.commit()
     await db.refresh(msg)
@@ -50,15 +45,9 @@ async def open_inbox_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(InboxMessage).where(
-            InboxMessage.id == message_id,
-            InboxMessage.user_id == current_user.id,
-        )
+    msg = await get_owned_or_404(
+        db, InboxMessage, message_id, current_user.id, detail="Message not found"
     )
-    msg = result.scalars().first()
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
 
     if not msg.session_id:
         session = AgentSession(

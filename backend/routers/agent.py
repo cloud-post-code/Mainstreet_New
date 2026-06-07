@@ -1,7 +1,7 @@
 import logging
 import traceback
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -11,6 +11,8 @@ from db.schemas import SessionOut, SessionCreate, TurnIn, PlanOut
 from auth import get_current_user, get_optional_user
 from agent.loop import run_agent_turn
 from agent.suggestions import get_suggestions
+from utils.db_helpers import get_owned_or_404, verify_session_ownership
+from routers.auth import limiter
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
@@ -74,15 +76,9 @@ async def delete_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(AgentSession).where(
-            AgentSession.id == session_id,
-            AgentSession.user_id == current_user.id,
-        )
+    session = await get_owned_or_404(
+        db, AgentSession, session_id, current_user.id, detail="Session not found"
     )
-    session = result.scalars().first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
     await db.delete(session)
     await db.commit()
 
@@ -102,11 +98,7 @@ async def get_turns(
     is in ascending chronological order; `has_more` indicates whether
     older turns exist beyond the returned page.
     """
-    result = await db.execute(
-        select(AgentSession).where(AgentSession.id == session_id, AgentSession.user_id == current_user.id)
-    )
-    if not result.scalars().first():
-        raise HTTPException(status_code=404, detail="Session not found")
+    await verify_session_ownership(db, session_id, current_user.id)
 
     from db.models import AgentTurn
     from datetime import datetime
@@ -158,11 +150,7 @@ async def get_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(AgentSession).where(AgentSession.id == session_id, AgentSession.user_id == current_user.id)
-    )
-    if not result.scalars().first():
-        raise HTTPException(status_code=404, detail="Session not found")
+    await verify_session_ownership(db, session_id, current_user.id)
 
     result = await db.execute(
         select(AgentPlan)
@@ -175,7 +163,9 @@ async def get_plan(
 
 
 @router.post("/turn")
+@limiter.limit("30/minute")
 async def agent_turn(
+    request: Request,
     body: TurnIn,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
