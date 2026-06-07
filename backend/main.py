@@ -2,11 +2,13 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from config import settings
 from db.database import create_tables
 from agent.uploads import upload_root
@@ -45,6 +47,12 @@ app = FastAPI(title="Personal Shopper API", version="1.0.0", lifespan=lifespan)
 # referenced via decorators; this just registers the handler at the app level.
 app.state.limiter = auth.limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Enforce the limiter's default_limits across every route (not just decorated ones).
+app.add_middleware(SlowAPIMiddleware)
+# Railway terminates TLS at its proxy, so the client IP arrives in
+# X-Forwarded-For. Without this, get_remote_address returns the proxy's
+# internal IP for every request and the limiter buckets all traffic together.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # Allow multiple frontend origins via comma-separated FRONTEND_URL, plus
 # localhost dev and any *.up.railway.app preview/production URL. The regex
@@ -81,5 +89,6 @@ app.mount("/uploads", StaticFiles(directory=str(upload_root())), name="uploads")
 
 
 @app.get("/api/health")
-async def health():
+@auth.limiter.exempt
+async def health(request: Request):
     return {"status": "ok"}

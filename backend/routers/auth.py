@@ -10,7 +10,16 @@ from auth import hash_password, verify_password, create_access_token, get_curren
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-limiter = Limiter(key_func=get_remote_address)
+# Global defaults apply to every route on the app unless overridden by a
+# per-route @limiter.limit(...) decorator or marked @limiter.exempt.
+# Keyed by client IP (works for anonymous users; fine while traffic is small).
+#
+# TODO: storage is in-memory per worker. When this service scales past one
+# Uvicorn worker, pass `storage_uri="redis://..."` so counters are shared.
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["300/minute", "5000/hour"],
+)
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
