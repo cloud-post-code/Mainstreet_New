@@ -4,6 +4,8 @@ import { useCart } from '../cart/CartContext'
 import { useAuth } from '../hooks/useAuth'
 import { api, ShippingAddress } from '../api'
 import styles from './CartDrawer.module.css'
+import { formatCurrency } from '../lib/format'
+import { useModalDismiss } from '../hooks/useModalDismiss'
 
 const EMPTY_SHIPPING: ShippingAddress = {
   name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
@@ -21,12 +23,7 @@ export default function CartDrawer() {
   const [hasDefault, setHasDefault] = useState(false)
   const [addrOpen, setAddrOpen] = useState(false)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, close])
+  useModalDismiss(isOpen, close)
 
   useEffect(() => { if (!isOpen) setError(null) }, [isOpen])
 
@@ -132,7 +129,7 @@ export default function CartDrawer() {
                 </div>
               </div>
               <div className={styles.itemRight}>
-                <span className={styles.itemPrice}>${it.subtotal.toFixed(2)}</span>
+                <span className={styles.itemPrice}>{formatCurrency(it.subtotal)}</span>
                 <button
                   className={styles.removeBtn}
                   onClick={() => onRemove(it.variant_id)}
@@ -146,7 +143,7 @@ export default function CartDrawer() {
         <div className={styles.footer}>
           <div className={styles.totalRow}>
             <span className={styles.totalLabel}>Total</span>
-            <span className={styles.totalValue}>${total.toFixed(2)}</span>
+            <span className={styles.totalValue}>{formatCurrency(total)}</span>
           </div>
           <button
             className={styles.purchaseBtn}

@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
 import styles from './Cards.module.css'
 import { IntentHandler } from '../a2ui/types'
-import { useCart } from '../cart/CartContext'
-import { useAuth } from '../hooks/useAuth'
+import { formatCurrency } from '../lib/format'
+import { useVariantSelector } from '../hooks/useVariantSelector'
+import { useAddToCart } from '../hooks/useAddToCart'
 
 interface VariantOption {
   variant_id: number
@@ -48,8 +48,16 @@ export default function ProductCard(props: Props) {
     return variants[0]?.variant_id
   }, [props.preselected_variant_id, props.default_variant_id, variants])
 
-  const [selectedId, setSelectedId] = useState<number | undefined>(initialVariantId)
-  const selected = variants.find(v => v.variant_id === selectedId)
+  const variantSelector = useVariantSelector(variants, initialVariantId)
+  const {
+    selectedVariantId: selectedId,
+    selectedVariant: selected,
+    optionAxes,
+    selectedValues,
+    pickValue,
+    setSelectedVariantId: setSelectedId,
+    isReachable,
+  } = variantSelector
 
   // The displayed price/qty/image come from the selected variant when one
   // is set; otherwise we fall back to the parent-level props that the
@@ -65,11 +73,7 @@ export default function ProductCard(props: Props) {
   const inStock = qty === null || !Number.isFinite(qty) ? true : qty > 0
   const showAddToCart = props.showAddToCart ?? false
   const clickable = Boolean(props.onIntent)
-  const cart = useCart()
-  const { token } = useAuth()
-  const navigate = useNavigate()
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const { add, busy, added, error: errorMsg } = useAddToCart({ successMs: 1200 })
 
   const showOptions = hasVariants && !props.lockVariant
 
@@ -77,108 +81,20 @@ export default function ProductCard(props: Props) {
   const isCompact = props.layout === 'compact'
   const isOptions = props.layout === 'options'
   const isGrid = props.layout === 'grid' || isHero || isOptions
-  const busy = status === 'loading'
-  const added = status === 'success'
 
   const onAdd = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!token) {
-      navigate('/login')
-      return
-    }
-    setStatus('loading')
-    setErrorMsg(null)
-    const res = await cart.addItem(
+    await add(
       selectedId != null
-        ? { variantId: selectedId, quantity: 1 }
-        : { productId: props.product_id, quantity: 1 },
+        ? { variantId: selectedId }
+        : { productId: props.product_id },
     )
-    if (res.ok) {
-      setStatus('success')
-      setTimeout(() => setStatus('idle'), 1200)
-    } else {
-      setStatus('error')
-      setErrorMsg(res.error ?? null)
-      setTimeout(() => { setStatus('idle'); setErrorMsg(null) }, 3500)
-    }
   }
 
   const variantLabel = (v: VariantOption): string =>
     (v.option_values && v.option_values.length > 0)
       ? v.option_values.join(' / ')
       : (v.variant_label ?? `Variant ${v.variant_id}`)
-
-  // Build ordered option axes: { Color: ["Blue","Black"], Size: ["S","M","L"] }
-  const optionAxes = useMemo(() => {
-    const axes: { name: string; values: string[] }[] = []
-    const seenAxis = new Map<string, Set<string>>()
-    for (const v of variants) {
-      const names = v.option_names ?? []
-      const values = v.option_values ?? []
-      for (let i = 0; i < names.length; i++) {
-        const name = names[i]
-        const value = values[i]
-        if (!name || value == null) continue
-        if (!seenAxis.has(name)) {
-          seenAxis.set(name, new Set())
-          axes.push({ name, values: [] })
-        }
-        const set = seenAxis.get(name)!
-        if (!set.has(value)) {
-          set.add(value)
-          axes.find(a => a.name === name)!.values.push(value)
-        }
-      }
-    }
-    return axes
-  }, [variants])
-
-  const selectedValues: Record<string, string | undefined> = {}
-  if (selected) {
-    const names = selected.option_names ?? []
-    const values = selected.option_values ?? []
-    for (let i = 0; i < names.length; i++) selectedValues[names[i]] = values[i]
-  }
-
-  // Click a chip → find a variant matching all current selections (keeping
-  // other axes fixed when possible) and select it.
-  const pickValue = (axisName: string, value: string) => {
-    const target = { ...selectedValues, [axisName]: value }
-    // exact match first
-    let match = variants.find(v => {
-      const names = v.option_names ?? []
-      const values = v.option_values ?? []
-      return Object.entries(target).every(([n, val]) => {
-        const idx = names.indexOf(n)
-        return idx >= 0 && values[idx] === val
-      })
-    })
-    // fallback: any variant where this axis matches
-    if (!match) {
-      match = variants.find(v => {
-        const names = v.option_names ?? []
-        const values = v.option_values ?? []
-        const idx = names.indexOf(axisName)
-        return idx >= 0 && values[idx] === value
-      })
-    }
-    if (match) setSelectedId(match.variant_id)
-  }
-
-  // Is a chip value reachable given the other current selections?
-  const isReachable = (axisName: string, value: string): boolean => {
-    return variants.some(v => {
-      const names = v.option_names ?? []
-      const values = v.option_values ?? []
-      const idx = names.indexOf(axisName)
-      if (idx < 0 || values[idx] !== value) return false
-      return Object.entries(selectedValues).every(([n, val]) => {
-        if (n === axisName) return true
-        const i = names.indexOf(n)
-        return i < 0 || values[i] === val
-      })
-    })
-  }
 
   return (
     <div
@@ -250,7 +166,7 @@ export default function ProductCard(props: Props) {
           </div>
         )}
         <div className={styles.productFooter}>
-          <span className={`${styles.price} ${isGrid ? styles.priceGrid : ''}`}>${Number(displayPrice).toFixed(2)}</span>
+          <span className={`${styles.price} ${isGrid ? styles.priceGrid : ''}`}>{formatCurrency(displayPrice)}</span>
           {qty !== null && Number.isFinite(qty) && (
             <span className={`${styles.stock} ${inStock ? styles.inStock : styles.outOfStock}`}>
               {inStock ? `${qty} in stock` : 'Out of stock'}

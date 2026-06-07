@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useVariantSelector } from '../hooks/useVariantSelector'
+import { useAddToCart } from '../hooks/useAddToCart'
+import { useModalDismiss } from '../hooks/useModalDismiss'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { useCart } from '../cart/CartContext'
 import { useAuth } from '../hooks/useAuth'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './ProductModal.module.css'
 import cardStyles from './Cards.module.css'
+import { formatCurrency } from '../lib/format'
 
 export interface ProductModalVariant {
   variant_id: number
@@ -40,11 +43,9 @@ interface Props {
 }
 
 export default function ProductModal({ product, memory, onClose, onChatAbout }: Props) {
-  const cart = useCart()
   const { token } = useAuth()
   const navigate = useNavigate()
-  const [addStatus, setAddStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [addError, setAddError] = useState<string | null>(null)
+  const { add: addToCart, busy, added, error: addError } = useAddToCart()
   const [toast, setToast] = useState<string | null>(null)
   const [likeBusy, setLikeBusy] = useState(false)
 
@@ -52,8 +53,13 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   const hasVariants = variants.length > 1
   const initialVariantId =
     product.default_variant_id ?? variants[0]?.variant_id
-  const [selectedVariantId, setSelectedVariantId] = useState<number | undefined>(initialVariantId)
-  const selectedVariant = variants.find(v => v.variant_id === selectedVariantId)
+  const {
+    selectedVariantId,
+    selectedVariant,
+    optionAxes,
+    selectedValues,
+    pickValue,
+  } = useVariantSelector(variants, initialVariantId)
 
   const displayPrice = selectedVariant ? selectedVariant.price : product.price
   const displayImage = selectedVariant?.image_url ?? product.image_url
@@ -63,53 +69,7 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   const isLiked = memory.savedProducts.some(p => p.product_id === product.product_id)
   const description = product.description_long ?? product.description_summary ?? ''
 
-  const optionAxes = useMemo(() => {
-    const axes: { name: string; values: string[] }[] = []
-    const seen = new Map<string, Set<string>>()
-    for (const v of variants) {
-      const names = v.option_names ?? []
-      const values = v.option_values ?? []
-      for (let i = 0; i < names.length; i++) {
-        const n = names[i]; const val = values[i]
-        if (!n || val == null) continue
-        if (!seen.has(n)) { seen.set(n, new Set()); axes.push({ name: n, values: [] }) }
-        const set = seen.get(n)!
-        if (!set.has(val)) { set.add(val); axes.find(a => a.name === n)!.values.push(val) }
-      }
-    }
-    return axes
-  }, [variants])
-
-  const selectedValues: Record<string, string | undefined> = {}
-  if (selectedVariant) {
-    const names = selectedVariant.option_names ?? []
-    const values = selectedVariant.option_values ?? []
-    for (let i = 0; i < names.length; i++) selectedValues[names[i]] = values[i]
-  }
-  const pickValue = (axisName: string, value: string) => {
-    const target = { ...selectedValues, [axisName]: value }
-    let match = variants.find(v => {
-      const names = v.option_names ?? []; const values = v.option_values ?? []
-      return Object.entries(target).every(([n, val]) => {
-        const idx = names.indexOf(n)
-        return idx >= 0 && values[idx] === val
-      })
-    })
-    if (!match) {
-      match = variants.find(v => {
-        const names = v.option_names ?? []; const values = v.option_values ?? []
-        const idx = names.indexOf(axisName)
-        return idx >= 0 && values[idx] === value
-      })
-    }
-    if (match) setSelectedVariantId(match.variant_id)
-  }
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useModalDismiss(true, onClose)
 
   useEffect(() => {
     if (!toast) return
@@ -118,22 +78,11 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   }, [toast])
 
   const onAdd = async () => {
-    if (!token) { navigate('/login'); return }
-    setAddStatus('loading')
-    setAddError(null)
-    const res = await cart.addItem(
+    await addToCart(
       selectedVariantId != null
-        ? { variantId: selectedVariantId, quantity: 1 }
-        : { productId: product.product_id, quantity: 1 },
+        ? { variantId: selectedVariantId }
+        : { productId: product.product_id },
     )
-    if (res.ok) {
-      setAddStatus('success')
-      setTimeout(() => setAddStatus('idle'), 1500)
-    } else {
-      setAddStatus('error')
-      setAddError(res.error ?? 'Could not add to cart')
-      setTimeout(() => { setAddStatus('idle'); setAddError(null) }, 3500)
-    }
   }
 
   const onLike = async () => {
@@ -187,9 +136,6 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
     onClose()
   }
 
-  const added = addStatus === 'success'
-  const busy = addStatus === 'loading'
-
   return createPortal(
     <div className={styles.backdrop} onClick={onClose} role="presentation">
       <div
@@ -210,7 +156,7 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
             <div className={styles.shop}>{product.shop_name}</div>
             <h2 className={styles.name}>{product.name}</h2>
             <div className={styles.priceRow}>
-              <span className={styles.price}>${Number(displayPrice).toFixed(2)}</span>
+              <span className={styles.price}>{formatCurrency(displayPrice)}</span>
               {qty !== null && Number.isFinite(qty) && (
                 <span className={`${styles.stock} ${inStock ? styles.inStock : styles.outOfStock}`}>
                   {inStock ? `${qty} in stock` : 'Out of stock'}

@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { api, Shop, Product, ListingDraft, ListingStage } from '../api'
 import { safeHref } from '../lib/safeHref'
 import styles from './Admin.module.css'
+import { formatCurrency } from '../lib/format'
 
 interface ImportResult {
   rows_added: number
@@ -522,8 +523,8 @@ export default function Admin() {
                       <td>{p.shop_name}</td>
                       <td>
                         {minPrice === maxPrice
-                          ? `$${minPrice.toFixed(2)}`
-                          : `$${minPrice.toFixed(2)}–$${maxPrice.toFixed(2)}`}
+                          ? formatCurrency(minPrice)
+                          : `${formatCurrency(minPrice)}–${formatCurrency(maxPrice)}`}
                       </td>
                       <td>{totalQty}</td>
                       <td>

@@ -3,6 +3,7 @@ import { api, Product } from '../api'
 import ProductCard from '../components/ProductCard'
 import ShopCard from '../components/ShopCard'
 import styles from './Discover.module.css'
+import { useModalDismiss } from '../hooks/useModalDismiss'
 
 type ShopFull = {
   id: number
@@ -69,13 +70,7 @@ export default function Discover() {
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
-  // Close modal on Escape.
-  useEffect(() => {
-    if (!modalProduct) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setModalProduct(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [modalProduct])
+  useModalDismiss(!!modalProduct, () => setModalProduct(null))
 
   // Debounce search input.
   const debounceRef = useRef<number | null>(null)

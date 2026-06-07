@@ -6,6 +6,8 @@ import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import PrefsForm from '../components/PrefsForm'
 import styles from './Mason.module.css'
+import { formatDate } from '../lib/format'
+import SavedProductItem from '../components/SavedProductItem'
 
 type TabKey = 'shipping' | 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
 
@@ -28,7 +30,7 @@ export default function Mason() {
 
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
-  const [tab, setTab] = useState<TabKey>('inbox')
+  const [tab, setTab] = useState<TabKey>('shipping')
   const [newNote, setNewNote] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
   const [masonSessionId, setMasonSessionId] = useState<number | null>(null)
@@ -111,7 +113,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
                       {n.text}
                       {n.created_at && (
                         <span className={styles.noteMeta}>
-                          {new Date(n.created_at).toLocaleDateString()}
+                          {formatDate(n.created_at)}
                         </span>
                       )}
                     </span>
@@ -151,23 +153,19 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
             ) : (
               <ul className={styles.savedList}>
                 {memory.savedProducts.map(p => (
-                  <li key={p.product_id} className={styles.savedItem}>
-                    <div className={styles.savedThumb}>
-                      {p.image_url && <img src={p.image_url} alt="" />}
-                    </div>
-                    <div className={styles.savedBody}>
-                      <p className={styles.savedName}>{p.name}</p>
-                      <div className={styles.savedSub}>
-                        {(p.shop_name ?? 'Unknown shop')} · ${p.price.toFixed(2)}
-                      </div>
-                    </div>
-                    <button
-                      className={styles.iconBtn}
-                      onClick={() => memory.unsaveProduct(p.product_id)}
-                      title="Remove from Saved"
-                      aria-label="Remove from Saved"
-                    >×</button>
-                  </li>
+                  <SavedProductItem
+                    key={p.product_id}
+                    product={p}
+                    classes={{
+                      item: styles.savedItem,
+                      thumb: styles.savedThumb,
+                      body: styles.savedBody,
+                      name: styles.savedName,
+                      sub: styles.savedSub,
+                      remove: styles.iconBtn,
+                    }}
+                    onRemove={memory.unsaveProduct}
+                  />
                 ))}
               </ul>
             )
@@ -186,7 +184,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
                     >
                       <span className={styles.sessionTitle}>{s.title}</span>
                       <span className={styles.sessionMeta}>
-                        {new Date(s.updated_at).toLocaleDateString()}
+                        {formatDate(s.updated_at)}
                       </span>
                     </button>
                   </li>
@@ -211,7 +209,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
                       <p className={styles.inboxTitle}>{msg.title}</p>
                       <p className={styles.inboxPreview}>{msg.preview}</p>
                       <div className={styles.inboxDate}>
-                        {new Date(msg.created_at).toLocaleDateString()}
+                        {formatDate(msg.created_at)}
                       </div>
                     </div>
                   </li>

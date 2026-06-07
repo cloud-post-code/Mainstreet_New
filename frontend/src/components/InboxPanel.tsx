@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, InboxMessage } from '../api'
 import styles from './InboxPanel.module.css'
+import { formatDate } from '../lib/format'
 
 interface Props {
   token: string
@@ -58,7 +59,7 @@ export default function InboxPanel({ token, onClose, onOpenSession }: Props) {
                 <p className={styles.itemTitle}>{msg.title}</p>
                 <p className={styles.itemPreview}>{msg.preview}</p>
                 <span className={styles.itemDate}>
-                  {new Date(msg.created_at).toLocaleDateString()}
+                  {formatDate(msg.created_at)}
                 </span>
               </div>
               {openingId === msg.id && <span className={styles.spinner}>…</span>}

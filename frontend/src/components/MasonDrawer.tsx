@@ -7,6 +7,8 @@ import PrefsForm from './PrefsForm'
 import { useMason } from '../mason/MasonContext'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
+import { formatDate } from '../lib/format'
+import SavedProductItem from './SavedProductItem'
 
 type TabKey = 'notes' | 'preferences' | 'saved' | 'history'
 
@@ -184,7 +186,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                         <span>
                           {n.text}
                           {n.created_at && (
-                            <span className={styles.noteMeta}>{new Date(n.created_at).toLocaleDateString()}</span>
+                            <span className={styles.noteMeta}>{formatDate(n.created_at)}</span>
                           )}
                         </span>
                         <button
@@ -234,23 +236,19 @@ export default function MasonDrawer(props: MasonDrawerProps) {
               ) : (
                 <ul className={styles.savedList}>
                   {memory.savedProducts.map(p => (
-                    <li key={p.product_id} className={styles.savedItem}>
-                      <div className={styles.savedThumb}>
-                        {p.image_url && <img src={p.image_url} alt="" />}
-                      </div>
-                      <div className={styles.savedBody}>
-                        <p className={styles.savedName}>{p.name}</p>
-                        <div className={styles.savedSub}>
-                          {(p.shop_name ?? 'Unknown shop')} · ${p.price.toFixed(2)}
-                        </div>
-                      </div>
-                      <button
-                        className={styles.savedRemove}
-                        onClick={() => memory.unsaveProduct(p.product_id)}
-                        title="Remove from Saved"
-                        aria-label="Remove from Saved"
-                      >×</button>
-                    </li>
+                    <SavedProductItem
+                      key={p.product_id}
+                      product={p}
+                      classes={{
+                        item: styles.savedItem,
+                        thumb: styles.savedThumb,
+                        body: styles.savedBody,
+                        name: styles.savedName,
+                        sub: styles.savedSub,
+                        remove: styles.savedRemove,
+                      }}
+                      onRemove={memory.unsaveProduct}
+                    />
                   ))}
                 </ul>
               )}
@@ -272,7 +270,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                         >
                           <span className={styles.sessionTitle}>{s.title}</span>
                           <span className={styles.sessionMeta}>
-                            <span className={styles.sessionDate}>{new Date(s.updated_at).toLocaleDateString()}</span>
+                            <span className={styles.sessionDate}>{formatDate(s.updated_at)}</span>
                             <button
                               className={styles.sessionDelete}
                               onClick={e => props.onDeleteSession(e, s.id)}
