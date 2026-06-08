@@ -543,3 +543,34 @@ async def clear_all_products(db: AsyncSession = Depends(get_db), _: User = Depen
     return ClearProductsResponse(deleted=total)
 
 
+@router.post("/reindex-search", status_code=200)
+async def reindex_search(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Backfill shop_name_cached and rebuild search_vector on all products.
+
+    This should be run after deploying changes to the products_search_vector_update trigger.
+    """
+    from sqlalchemy import text
+
+    async with db.begin():
+        result = await db.execute(text("""
+            UPDATE products p
+            SET shop_name_cached = s.name
+            FROM shops s
+            WHERE s.id = p.shop_id
+              AND (p.shop_name_cached IS DISTINCT FROM s.name)
+        """))
+        backfilled = result.rowcount
+
+        result = await db.execute(text("UPDATE products SET name = name"))
+        rebuilt = result.rowcount
+
+    return {
+        "status": "success",
+        "shop_name_cached_backfilled": backfilled,
+        "search_vector_rebuilt": rebuilt,
+    }
+
+
