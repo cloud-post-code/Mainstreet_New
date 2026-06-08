@@ -50,7 +50,6 @@ const descTags = (d: Product['description']) =>
 export default function Discover() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [inStockOnly, setInStockOnly] = useState(false)
   const [shopIds, setShopIds] = useState<number[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
@@ -138,20 +137,19 @@ export default function Discover() {
   )
 
   const filterKey = useMemo(
-    () => JSON.stringify({ search, inStockOnly, shopIds, selectedTags, selectedPriceId }),
-    [search, inStockOnly, shopIds, selectedTags, selectedPriceId],
+    () => JSON.stringify({ search, shopIds, selectedTags, selectedPriceId }),
+    [search, shopIds, selectedTags, selectedPriceId],
   )
 
   const buildFilters = useCallback((offset: number) => ({
     q: search || undefined,
-    in_stock_only: inStockOnly || undefined,
     shop_ids: shopIds.length ? shopIds : undefined,
     tags: selectedTags.length ? selectedTags : undefined,
     min_price: selectedPrice?.min,
     max_price: selectedPrice?.max,
     limit: PAGE_SIZE,
     offset,
-  }), [search, inStockOnly, shopIds, selectedTags, selectedPrice])
+  }), [search, shopIds, selectedTags, selectedPrice])
 
   // Fetch first page whenever filters change.
   useEffect(() => {
@@ -163,7 +161,6 @@ export default function Discover() {
       api.getDiscoverProducts(opts),
       api.getDiscoverCount({
         q: opts.q,
-        in_stock_only: opts.in_stock_only,
         shop_ids: opts.shop_ids,
         tags: opts.tags,
         min_price: opts.min_price,
@@ -214,7 +211,6 @@ export default function Discover() {
   const activeFilterCount =
     (shopIds.length ? 1 : 0)
     + (selectedTags.length ? 1 : 0)
-    + (inStockOnly ? 1 : 0)
     + (selectedPriceId ? 1 : 0)
 
   const toggleShop = (id: number) => {
@@ -226,7 +222,6 @@ export default function Discover() {
   const clearFilters = () => {
     setShopIds([])
     setSelectedTags([])
-    setInStockOnly(false)
     setSelectedPriceId(null)
   }
   const togglePrice = (id: string) => {
@@ -340,21 +335,13 @@ export default function Discover() {
               </div>
             </div>
           )}
-          <div className={styles.filterGroup}>
-            <label className={styles.checkbox}>
-              <input
-                type="checkbox"
-                checked={inStockOnly}
-                onChange={e => setInStockOnly(e.target.checked)}
-              />
-              In stock only
-            </label>
-            {activeFilterCount > 0 && (
+          {activeFilterCount > 0 && (
+            <div className={styles.filterGroup}>
               <button type="button" className={styles.clearBtn} onClick={clearFilters}>
                 Clear filters
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -384,7 +371,6 @@ export default function Discover() {
                           product_id={p.id}
                           name={p.name}
                           price={Number(p.price_range?.min ?? 0)}
-                          quantity={p.variants.reduce((s, v) => s + (v.quantity ?? 0), 0)}
                           image_url={p.image_url ?? undefined}
                           shop_name={p.shop_name ?? ''}
                           shop_id={p.shop_id}
@@ -397,7 +383,7 @@ export default function Discover() {
                             option_values: v.option_values,
                             variant_label: v.variant_label,
                             price: Number(v.price),
-                            quantity: v.quantity,
+                            quantity: Number.POSITIVE_INFINITY,
                             image_url: v.image_url,
                           }))}
                           default_variant_id={p.default_variant_id ?? undefined}
@@ -427,7 +413,6 @@ export default function Discover() {
                     product_id={p.id}
                     name={p.name}
                     price={Number(p.price_range?.min ?? 0)}
-                    quantity={p.variants.reduce((s, v) => s + (v.quantity ?? 0), 0)}
                     image_url={p.image_url ?? undefined}
                     shop_name={p.shop_name ?? ''}
                     shop_id={p.shop_id}
@@ -441,7 +426,7 @@ export default function Discover() {
                       option_values: v.option_values,
                       variant_label: v.variant_label,
                       price: Number(v.price),
-                      quantity: v.quantity,
+                      quantity: Number.POSITIVE_INFINITY,
                       image_url: v.image_url,
                     }))}
                     default_variant_id={p.default_variant_id ?? undefined}
@@ -523,7 +508,6 @@ export default function Discover() {
               product_id={modalProduct.id}
               name={modalProduct.name}
               price={Number(modalProduct.price_range?.min ?? 0)}
-              quantity={modalProduct.variants.reduce((s, v) => s + (v.quantity ?? 0), 0)}
               image_url={modalProduct.image_url ?? undefined}
               shop_name={modalProduct.shop_name ?? ''}
               shop_id={modalProduct.shop_id}
@@ -537,7 +521,7 @@ export default function Discover() {
                 option_values: v.option_values,
                 variant_label: v.variant_label,
                 price: Number(v.price),
-                quantity: v.quantity,
+                quantity: Number.POSITIVE_INFINITY,
                 image_url: v.image_url,
               }))}
               default_variant_id={modalProduct.default_variant_id ?? undefined}
