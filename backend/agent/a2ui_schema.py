@@ -325,7 +325,7 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "question_card{question_id,question,options?,hint?}, "
                                 "questionnaire{questionnaire_id,current_step,steps:[{step_id,question,kind('single'|'multi'|'text'),options?:string[],hint?,allow_other?:bool}],title?}, "
                                 "product_details_modal{product_id,name,price,shop_name,image_url?,gallery?,description_long?,tags?}, "
-                                "next_actions{actions[{label,intent}]}, "
+                                "next_actions{actions[{label,intent,url?,style?('primary'|'default')}]}, "
                                 "shop_card{shop_id,name,logo_url?,description?,website_url?,product_count?}, "
                                 "plan{steps}."
                             ),

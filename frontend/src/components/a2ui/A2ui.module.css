@@ -428,6 +428,24 @@
   color: white;
   border-color: var(--ms-primary);
 }
+.actionChip:is(a) {
+  display: inline-block;
+  text-decoration: none;
+  line-height: 1.2;
+}
+.actionChipPrimary {
+  background: var(--ms-primary);
+  color: white;
+  border-color: var(--ms-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1.1rem;
+}
+.actionChipPrimary:hover {
+  background: #013b27;
+  border-color: #013b27;
+  color: white;
+}
 
 /* ── Questionnaire ── */
 .questionnaireCard {
