@@ -30,10 +30,21 @@ export default function Mason() {
 
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
-  const [tab, setTab] = useState<TabKey>('shipping')
+  const [tab, setTab] = useState<TabKey>('inbox')
   const [newNote, setNewNote] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
   const [masonSessionId, setMasonSessionId] = useState<number | null>(null)
+  const [chatOpen, setChatOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    const stored = window.localStorage.getItem('mason.chatOpen')
+    return stored === null ? true : stored === '1'
+  })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('mason.chatOpen', chatOpen ? '1' : '0')
+    }
+  }, [chatOpen])
 
   // Load all sessions (for History tab) and pick or create a mason-type session
   // for the persistent chat panel.
@@ -77,7 +88,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${chatOpen ? '' : styles.pageCollapsed}`}>
       <section className={styles.column} aria-label="Mason memory">
         <nav className={styles.tabs} role="tablist">
           {TABS.map(t => (
@@ -220,9 +231,26 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
         </div>
       </section>
 
-      <section className={styles.column} aria-label="Chat with Mason">
-        <MasonChatColumn sessionId={masonSessionId} onAfterTurn={memory.refresh} />
-      </section>
+      {chatOpen && (
+        <section className={styles.column} aria-label="Chat with Mason">
+          <MasonChatColumn
+            sessionId={masonSessionId}
+            onAfterTurn={memory.refresh}
+            onClose={() => setChatOpen(false)}
+          />
+        </section>
+      )}
+
+      {!chatOpen && (
+        <button
+          type="button"
+          className={styles.popOut}
+          onClick={() => setChatOpen(true)}
+          aria-label="Open Mason chat"
+        >
+          <img src="/mason/mason-1.png" alt="" />
+        </button>
+      )}
     </div>
   )
 }
@@ -230,7 +258,8 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
 function MasonChatColumn({
   sessionId,
   onAfterTurn,
-}: { sessionId: number | null; onAfterTurn: () => void }) {
+  onClose,
+}: { sessionId: number | null; onAfterTurn: () => void; onClose: () => void }) {
   const { messages, streaming, sendMessage } = useAgentStream(sessionId)
   const [input, setInput] = useState('')
   const transcriptRef = useRef<HTMLDivElement | null>(null)
@@ -259,10 +288,16 @@ function MasonChatColumn({
         <div className={styles.chatAvatar}>
           <img src="/mason/mason-1.png" alt="" />
         </div>
-        <div>
+        <div className={styles.chatHeaderText}>
           <div className={styles.chatTitle}>Mason</div>
-          <div className={styles.chatSub}>Tell me what to remember, change, or look up.</div>
+          <div className={styles.chatSub}>available</div>
         </div>
+        <button
+          type="button"
+          className={styles.chatClose}
+          onClick={onClose}
+          aria-label="Close Mason chat"
+        >×</button>
       </div>
 
       <div className={styles.transcript} ref={transcriptRef}>
@@ -319,7 +354,7 @@ function ShippingPanel({
   shipping,
   onSave,
 }: { shipping: ShippingAddress; onSave: (patch: ShippingAddressPatch) => Promise<void> }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [draft, setDraft] = useState<ShippingAddress>(shipping)
   const [saving, setSaving] = useState(false)
 
