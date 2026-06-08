@@ -10,6 +10,7 @@ from db.models import AgentSession, AgentPlan, User
 from db.schemas import SessionOut, SessionCreate, TurnIn, PlanOut
 from auth import get_current_user, get_optional_user
 from agent.loop import run_agent_turn
+from agent.router_classifier import classify_intent
 from agent.suggestions import get_suggestions
 from utils.db_helpers import get_owned_or_404, verify_session_ownership
 from routers.auth import limiter
@@ -199,9 +200,56 @@ async def agent_turn(
     session_id = body.session_id
     message = body.message
     question_card_id = body.question_card_id
+    session_type = getattr(session, "session_type", "shop") or "shop"
+    raw_override = (body.mode_override or "").strip().lower() or None
+    mode_override = raw_override if raw_override in ("fast", "full") else None
+
+    # Check for an active plan up-front so the classifier can stay on the
+    # `full` path for in-flight multi-step work.
+    has_active_plan = False
+    if session_type != "mason":
+        plan_row = (
+            await db.execute(
+                select(AgentPlan).where(AgentPlan.session_id == session_id).limit(1)
+            )
+        ).scalars().first()
+        has_active_plan = plan_row is not None
 
     async def stream():
         import json as _json
+
+        # Decide fast vs full BEFORE opening the streaming DB session so the
+        # classifier latency overlaps cleanly with the HTTP response start.
+        # /mason memory sessions always run on the full memory prompt.
+        # User override (Thinking/Fast toggle) skips the classifier entirely.
+        if session_type == "mason":
+            mode = "full"
+            classify_ms = 0
+            decided_by = "session_type"
+        elif mode_override is not None:
+            mode = mode_override
+            classify_ms = 0
+            decided_by = "user_override"
+        else:
+            mode, classify_ms = await classify_intent(
+                message,
+                {
+                    "has_active_plan": has_active_plan,
+                    "has_active_questionnaire": bool(question_card_id),
+                    "last_assistant_action": None,
+                },
+            )
+            decided_by = "classifier"
+
+        # Emit a meta event up-front so the frontend (and ops logs) know
+        # which path is running.
+        yield _json.dumps({
+            "type": "meta",
+            "mode": mode,
+            "classify_ms": classify_ms,
+            "decided_by": decided_by,
+        }) + "\n"
+
         # The request-scoped `db` session is closed when this generator starts
         # streaming, so the streaming turn needs its own session with a
         # lifetime tied to the generator. Without this, the connection leaks
@@ -214,6 +262,7 @@ async def agent_turn(
                     user_id=user_id,
                     question_card_id=question_card_id,
                     db=stream_db,
+                    mode=mode,
                 ):
                     yield chunk
             except Exception:

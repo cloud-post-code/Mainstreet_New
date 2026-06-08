@@ -137,6 +137,9 @@ class TurnIn(BaseModel):
     session_id: int
     message: str
     question_card_id: Optional[str] = None  # ties answer back to a question card
+    # Optional user override: "fast" forces Fast Mason, "full" forces Full Mason
+    # (no classifier call). None = auto (classifier decides).
+    mode_override: Optional[str] = None
 
 
 class PlanOut(BaseModel):

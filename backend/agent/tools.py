@@ -258,6 +258,24 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+# ── Fast Mason tool subset ──────────────────────────────────────────────────
+# Smaller surface for the fast path. Drops search_shops, generate_plan,
+# remove_from_cart, checkout — fast Mason handles single-product asks; cart
+# management and checkout flow back through the full path.
+
+_FAST_TOOL_NAMES = {
+    "search_products",
+    "show_product",
+    "render_ui",
+    "add_to_cart",
+    "view_cart",
+    "save_preference",
+    "save_note",
+    "save_product",
+}
+FAST_TOOL_DEFINITIONS = [t for t in TOOL_DEFINITIONS if t["name"] in _FAST_TOOL_NAMES]
+
+
 # ── Mason memory-mode tool schemas ──────────────────────────────────────────
 # Used on the /mason page chat. No shopping tools (no product search, cart,
 # checkout, render_ui). Mason can read and write memory directly.
