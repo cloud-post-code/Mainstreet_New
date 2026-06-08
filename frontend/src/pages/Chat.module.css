@@ -279,22 +279,64 @@
   box-sizing: border-box;
 }
 
-.textarea {
+.inputWrap {
   flex: 1;
-  padding: 0.75rem 1rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
   border: 1.5px solid rgba(122,158,126,0.4);
+  border-radius: 12px;
+  background: white;
+  transition: border-color 0.15s;
+}
+.inputWrap:focus-within { border-color: var(--ms-primary); }
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem 1rem 0.5rem;
+  border: none;
   border-radius: 12px;
   font-size: 0.95rem;
   font-family: var(--font-body);
   resize: none;
   outline: none;
-  background: white;
+  background: transparent;
   max-height: 150px;
-  transition: border-color 0.15s;
   line-height: 1.5;
   color: var(--ms-dark);
+  box-sizing: border-box;
 }
-.textarea:focus { border-color: var(--ms-primary); }
+
+.modeToggle {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 0 0.5rem 0.5rem;
+  padding: 2px;
+  background: rgba(122,158,126,0.10);
+  border-radius: 999px;
+  gap: 2px;
+}
+.modeOption {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--ms-dark);
+  opacity: 0.65;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s, color 0.15s;
+  line-height: 1.2;
+}
+.modeOption:hover { opacity: 0.9; }
+.modeOptionActive {
+  background: var(--ms-primary);
+  color: white;
+  opacity: 1;
+}
+.modeOptionActive:hover { opacity: 1; }
 
 .sendButton {
   width: 44px;

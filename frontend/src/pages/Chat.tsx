@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, FormEvent, KeyboardEvent, MouseEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
+import { useAgentStream, StreamEvent, MasonMode } from '../hooks/useAgentStream'
 import { api, Session } from '../api'
 import AgentMessage from '../components/AgentMessage'
 import AgentErrorBoundary from '../components/AgentErrorBoundary'
@@ -105,6 +105,7 @@ export default function Chat() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<string[] | null>(null)
   const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
+  const [mode, setMode] = useState<MasonMode>('auto')
   const bottomRef = useRef<HTMLDivElement>(null)
   const selectTokenRef = useRef(0)
   const skipNextScrollRef = useRef(false)
@@ -264,10 +265,10 @@ export default function Chat() {
         : await api.createGuestSession()
       if (token) setSessions(prev => [s, ...prev])
       setActiveSessionId(s.id)
-      setTimeout(() => sendMessage(text), 50)
+      setTimeout(() => sendMessage(text, undefined, mode), 50)
       return
     }
-    await sendMessage(text)
+    await sendMessage(text, undefined, mode)
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -504,15 +505,42 @@ export default function Chat() {
         )}
 
         <form className={styles.inputBar} onSubmit={handleSubmit}>
-          <textarea
-            className={styles.textarea}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask Mason…"
-            rows={1}
-            disabled={streaming}
-          />
+          <div className={styles.inputWrap}>
+            <textarea
+              className={styles.textarea}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask Mason…"
+              rows={1}
+              disabled={streaming}
+            />
+            <div
+              className={styles.modeToggle}
+              role="radiogroup"
+              aria-label="Response speed"
+            >
+              {(['fast', 'auto', 'thinking'] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === opt}
+                  className={`${styles.modeOption} ${mode === opt ? styles.modeOptionActive : ''}`}
+                  onClick={() => setMode(opt)}
+                  title={
+                    opt === 'fast'
+                      ? 'Fast: skip the router, run Fast Mason (quicker, simpler answers)'
+                      : opt === 'thinking'
+                        ? 'Thinking: skip the router, run Full Mason (slower, deeper answers)'
+                        : 'Auto: let Mason decide (default)'
+                  }
+                >
+                  {opt === 'fast' ? 'Fast' : opt === 'thinking' ? 'Thinking' : 'Auto'}
+                </button>
+              ))}
+            </div>
+          </div>
           <button className={styles.sendButton} type="submit" disabled={!input.trim() || streaming}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />

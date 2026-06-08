@@ -4,6 +4,8 @@ import { A2uiComponent } from '../a2ui/types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
 
+export type MasonMode = 'auto' | 'fast' | 'thinking'
+
 export type StreamEvent =
   | { type: 'thinking'; content: string }
   | { type: 'text'; content: string }
@@ -11,6 +13,7 @@ export type StreamEvent =
   | { type: 'tool_result'; tool: string; result: unknown }
   | { type: 'ui_tree'; root: string; components: A2uiComponent[]; tool_use_id: string }
   | { type: 'plan_update'; steps: Array<{ step: number; description: string; done: boolean }> }
+  | { type: 'meta'; mode: 'fast' | 'full'; classify_ms?: number; decided_by?: string }
   | { type: 'error'; error: string; traceback?: string }
   | { type: 'done' }
 
@@ -29,7 +32,7 @@ export function useAgentStream(sessionId: number | null) {
   const [plan, setPlan] = useState<Array<{ step: number; description: string; done: boolean }>>([])
   const abortRef = useRef<AbortController | null>(null)
 
-  const sendMessage = useCallback(async (text: string, questionCardId?: string) => {
+  const sendMessage = useCallback(async (text: string, questionCardId?: string, mode: MasonMode = 'auto') => {
     if (!sessionId || streaming) return
 
     const userMsg: Message = { id: Date.now().toString(), from: 'user', text }
@@ -49,7 +52,13 @@ export function useAgentStream(sessionId: number | null) {
       const res = await fetch(`${BASE}/api/agent/turn`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ session_id: sessionId, message: text, question_card_id: questionCardId }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          message: text,
+          question_card_id: questionCardId,
+          // 'auto' => let the classifier decide; 'fast'/'thinking' override.
+          mode_override: mode === 'auto' ? null : mode === 'thinking' ? 'full' : 'fast',
+        }),
         signal: abortRef.current.signal,
       })
 
