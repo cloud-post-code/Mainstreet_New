@@ -5,8 +5,6 @@ AI Listing Agent — admin-only endpoints.
   POST /api/admin/listing/draft         → streams sub-agent progress (NDJSON)
   POST /api/admin/listing/approve       → inserts the final Product row (Postgres)
 """
-from __future__ import annotations
-
 import json
 import uuid
 from decimal import Decimal, InvalidOperation
