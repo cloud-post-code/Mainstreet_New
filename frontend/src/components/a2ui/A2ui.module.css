@@ -116,6 +116,16 @@
 @media (max-width: 720px) {
   .gridTrio { grid-template-columns: 1fr; }
 }
+/* Quad — 2x2 grid (4 cards). Wraps to 1 column on narrow screens. */
+.gridQuad {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+@media (max-width: 560px) {
+  .gridQuad { grid-template-columns: 1fr; }
+}
+
 /* Showcase — 3 across (2 rows of 3 for 6 items); wraps to 2 then 1 on smaller widths */
 .gridShowcase {
   display: grid;

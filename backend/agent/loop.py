@@ -147,11 +147,12 @@ Every response is a single render_ui(payload) call after any necessary searches.
 - `product_grid` — multi-product container. Props: {layout, title, subtitle?}. Children: product_card ids. Pick the layout that best fits the situation — you have creative control here:
   - `hero` — ONE big featured card. Use when you have a single standout pick to spotlight (a perfect-match recommendation, a "the one" answer, a single gift idea). Exactly 1 child.
   - `trio` — THREE cards side-by-side in one row. Use for a tight curated shortlist where comparison at a glance matters. Exactly 3 children.
+  - `quad` — FOUR cards in a 2x2 grid. Use for a balanced shortlist where you want to show pairs at a glance (e.g. two style options × two price tiers). Exactly 4 children.
   - `showcase` — SIX cards in a row (wraps on smaller screens). Use to present a broader visual sweep of options the user can scan quickly. Exactly 6 children.
   - `recommendation` — flexible auto-fit grid for 2-5 picks where layout balance matters more than count.
   - `curated` — slightly larger auto-fit grid, good for editorialized 2-4 picks with rich descriptions.
   - `comparison` — horizontal scroll row, used when emphasizing direct side-by-side feel without a table.
-  Vary your choice across turns — don't default to the same layout every time. Match the layout to the *story* you're telling: spotlight (hero), shortlist (trio), browse (showcase), balanced (recommendation/curated).
+  Vary your choice across turns — don't default to the same layout every time. Match the layout to the *story* you're telling: spotlight (hero), shortlist (trio), paired comparison (quad), browse (showcase), balanced (recommendation/curated).
 - `comparison_table` — row-per-product comparison. Each row is one product; columns are Product, Price, Pros, Cons (fixed). Props: {products: [{product_id, name, price, pros: [string], cons: [string], shop_name?, image_url?}], sort_by?}. Provide 2-5 short bullet-style strings for `pros` and `cons` per product (a phrase, not a full sentence). No children.
 - `multiple_choice` — single preference question (one of N). Props: {question_id, question, choices, hint?}. No children. Only use this when you need to ask exactly one thing; if you'd ask two or more questions in this turn, use `questionnaire` instead.
 - `question_card` — single free-text clarification. Props: {question_id, question, options?, hint?}. No children. Same rule as `multiple_choice` — only when asking exactly one thing.
@@ -176,6 +177,7 @@ The root is always a `stack`. Children appear in this order:
 |---|---|
 | "Find X" / "Show X" — single perfect-match | stack[product_grid(hero, 1 card), text_block, reasoning_block] |
 | "Find X" / "Show X" — short curated list | stack[product_grid(trio, 3 cards), text_block, next_actions?, reasoning_block] |
+| "Find X" / "Show X" — paired 2x2 comparison | stack[product_grid(quad, 4 cards), text_block, next_actions?, reasoning_block] |
 | "Find X" / "Show X" — broad browse | stack[product_grid(showcase, 6 cards), text_block, reasoning_block] |
 | "Find X" / "Show X" — balanced default | stack[product_grid(recommendation), text_block, next_actions?, reasoning_block] |
 | "Compare these" / "Compare top N" | stack[comparison_table, text_block, reasoning_block] |

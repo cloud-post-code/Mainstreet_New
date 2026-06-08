@@ -76,7 +76,8 @@ function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
     parentLayout === 'hero' ? 'hero'
       : parentLayout === 'showcase' ? 'compact'
         : parentLayout === 'trio' ? 'grid'
-          : (p.layout as string | undefined) ?? (p.variant as string | undefined)
+          : parentLayout === 'quad' ? 'grid'
+            : (p.layout as string | undefined) ?? (p.variant as string | undefined)
   const compProps =
     node.type === 'product_card'
       ? {

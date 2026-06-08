@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import styles from './A2ui.module.css'
 
-type Layout = 'recommendation' | 'comparison' | 'curated' | 'hero' | 'trio' | 'showcase'
+type Layout = 'recommendation' | 'comparison' | 'curated' | 'hero' | 'trio' | 'quad' | 'showcase'
 
 interface Props {
   layout: Layout
@@ -16,6 +16,7 @@ const LAYOUT_CLASS: Record<Layout, string> = {
   curated: styles.gridCurated,
   hero: styles.gridHero,
   trio: styles.gridTrio,
+  quad: styles.gridQuad,
   showcase: styles.gridShowcase,
 }
 

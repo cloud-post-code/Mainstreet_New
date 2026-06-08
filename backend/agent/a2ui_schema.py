@@ -42,7 +42,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     "plan": ("steps",),
 }
 
-VALID_GRID_LAYOUTS = {"recommendation", "comparison", "curated", "hero", "trio", "showcase"}
+VALID_GRID_LAYOUTS = {"recommendation", "comparison", "curated", "hero", "trio", "quad", "showcase"}
 
 
 def validate_render_ui(payload: Any) -> list[str]:
@@ -94,7 +94,7 @@ def validate_render_ui(payload: Any) -> list[str]:
                     f"components[{cid}].props.layout '{layout}' invalid. "
                     f"Allowed: {sorted(VALID_GRID_LAYOUTS)}"
                 )
-            expected_child_counts = {"hero": 1, "trio": 3, "showcase": 6}
+            expected_child_counts = {"hero": 1, "trio": 3, "quad": 4, "showcase": 6}
             if layout in expected_child_counts:
                 child_ids = comp.get("children") or []
                 expected = expected_child_counts[layout]
@@ -319,7 +319,7 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "stack{}, text_block{content,tone?}, "
                                 "reasoning_block{summary}, "
                                 "product_card{product_id,name,price,shop_name,image_url?,quantity?,description_summary?,tags?,shop_id?,variants?:[{variant_id,option_names?:string[],option_values?:string[],variant_label?,price,quantity,image_url?}],default_variant_id?,display_mode?('parent'|'variant'),preselected_variant_id?}, "
-                                "product_grid{layout(recommendation|comparison|curated|hero|trio|showcase),title,subtitle?}, "
+                                "product_grid{layout(recommendation|comparison|curated|hero|trio|quad|showcase),title,subtitle?}, "
                                 "comparison_table{products[{product_id,name,price,pros[],cons[],shop_name?,image_url?}],sort_by?}, "
                                 "multiple_choice{question_id,question,choices,hint?}, "
                                 "question_card{question_id,question,options?,hint?}, "
