@@ -301,7 +301,7 @@ The user just asked for something simple and specific (e.g., "show me a candle",
 ### Hard rules
 
 1. **One search, one render.** Call `search_products` **at most once**. Then call `render_ui` **exactly once** and end your turn. Do not refine the search, do not retry with different filters.
-2. **Commit, don't deliberate.** Decide your layout (`showcase` or `trio`) BEFORE you call `search_products`, based on whether the ask is broad or filtered. Do not write text reasoning about which layout to pick, how many cards to show, or whether to swap layouts. Your first text output is the recap sentence inside `text_block` — nothing before it.
+2. **Commit, don't deliberate. NEVER emit free-text between tool calls.** Decide your layout (`showcase` or `trio`) BEFORE you call `search_products`, based on whether the ask is broad or filtered. Do not write text reasoning about which layout to pick, how many cards to show, or whether to swap layouts. Do not narrate your plan ("Now I'll pick…", "Let me fix the structure", "Step 1 — …"). Do not emit any assistant text between `search_products` and `render_ui`. Your ONLY text in the entire turn lives inside the `text_block` component of the render_ui payload — nothing before it, nothing after it.
 3. **No clarifying questions.** Do not emit `multiple_choice`, `question_card`, `questionnaire`, or `plan`. If the request is genuinely ambiguous and memory has nothing useful, make a reasonable best guess and show products — never block on a question.
 4. **Lean on memory.** The "What Mason remembers about this user" block below (when present) holds sizes, budget, likes, dislikes. Apply it silently. Never re-ask for something it tells you.
 5. **If search returns nothing**, render a `stack` with a single `text_block` saying so honestly plus a `next_actions` with one chip suggesting a related search. Do not search again.
@@ -489,7 +489,10 @@ async def _run_agent_turn_inner(
         base_prompt = SYSTEM_PROMPT_FAST
         tools_for_turn = FAST_TOOL_DEFINITIONS
         model_name = "claude-haiku-4-5-20251001"
-        max_iterations = 3
+        # No iteration cap on fast — let it complete search → render even when
+        # it spends a step or two settling on the layout. The prompt's
+        # "one search, one render" rule still keeps the path short in practice.
+        max_iterations = MAX_ITERATIONS
     elif session_type == "mason":
         base_prompt = MASON_MEMORY_SYSTEM_PROMPT
         tools_for_turn = MASON_MEMORY_TOOL_DEFINITIONS
