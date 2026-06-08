@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, FormEvent, KeyboardEvent, MouseEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { api, Session } from '../api'
@@ -94,6 +94,7 @@ function deriveAgentState(events: StreamEvent[], streaming: boolean): AgentState
 export default function Chat() {
   const { token, user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const mason = useMason()
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
@@ -197,6 +198,17 @@ export default function Chat() {
     setLoadedMessages([])
     reset()
   }
+
+  const lastNewChatRef = useRef<number | null>(null)
+  useEffect(() => {
+    const stamp = (location.state as { newChat?: number } | null)?.newChat
+    if (!stamp) return
+    if (lastNewChatRef.current === stamp) return
+    lastNewChatRef.current = stamp
+    newSession()
+    navigate('/', { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
 
   async function selectSession(id: number) {
     if (id === activeSessionId) return

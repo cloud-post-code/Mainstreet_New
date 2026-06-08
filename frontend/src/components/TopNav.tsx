@@ -28,7 +28,12 @@ export default function TopNav() {
   return (
     <nav className={styles.nav}>
       <div className={styles.links}>
-        <Link to="/" className={styles.brand} aria-label="Main St. home">
+        <Link
+          to="/"
+          state={{ newChat: Date.now() }}
+          className={styles.brand}
+          aria-label="Main St. home"
+        >
           <MainStLogo size="nav" />
         </Link>
       </div>

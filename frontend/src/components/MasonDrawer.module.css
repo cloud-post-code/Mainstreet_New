@@ -396,7 +396,7 @@
 .newTaskBtn {
   width: 100%;
   padding: 10px;
-  background: var(--ms-sage, #7a9e7e);
+  background: var(--ms-primary, #015237);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -404,8 +404,19 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  box-shadow:
+    -8px 0 16px -6px rgba(1, 82, 55, 0.55),
+    8px 0 16px -6px rgba(1, 82, 55, 0.55),
+    0 1px 2px rgba(1, 82, 55, 0.25);
+  transition: box-shadow 0.15s ease, background 0.15s ease;
 }
-.newTaskBtn:hover { opacity: 0.9; }
+.newTaskBtn:hover {
+  background: #016a47;
+  box-shadow:
+    -10px 0 22px -6px rgba(1, 82, 55, 0.7),
+    10px 0 22px -6px rgba(1, 82, 55, 0.7),
+    0 2px 4px rgba(1, 82, 55, 0.3);
+}
 
 .sessionList {
   list-style: none;
