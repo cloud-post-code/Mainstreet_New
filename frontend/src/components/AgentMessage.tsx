@@ -21,7 +21,7 @@ function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
       const content = textBlocks.splice(0).join('')
       rendered.push(
         <div key={key} className={styles.textBubble}>
-          <p className={styles.text}>{renderInlineMarkdown(content)}</p>
+          {renderBlocks(content)}
         </div>
       )
     }
@@ -73,6 +73,84 @@ function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
 
 const AgentMessage = React.memo(AgentMessageImpl)
 export default AgentMessage
+
+// Split text into block-level chunks (paragraphs + pipe tables) and render each.
+function renderBlocks(content: string): React.ReactNode[] {
+  const lines = content.split('\n')
+  const blocks: React.ReactNode[] = []
+  let para: string[] = []
+  let i = 0
+  let key = 0
+
+  const flushPara = () => {
+    if (para.length) {
+      const text = para.join('\n').replace(/^\n+|\n+$/g, '')
+      if (text) {
+        blocks.push(
+          <p key={`p-${key++}`} className={styles.text}>
+            {renderInlineMarkdown(text)}
+          </p>
+        )
+      }
+      para = []
+    }
+  }
+
+  const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s)
+  const isSeparatorRow = (s: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(s)
+
+  while (i < lines.length) {
+    const line = lines[i]
+    // Detect a pipe table: 2+ consecutive pipe-rows. An optional separator row
+    // (|---|---|) right after the header is skipped if present.
+    if (
+      isTableRow(line) &&
+      i + 1 < lines.length &&
+      (isTableRow(lines[i + 1]) || isSeparatorRow(lines[i + 1]))
+    ) {
+      flushPara()
+      const header = parseRow(line)
+      const bodyRows: string[][] = []
+      let j = i + 1
+      if (isSeparatorRow(lines[j])) j++
+      while (j < lines.length && isTableRow(lines[j]) && !isSeparatorRow(lines[j])) {
+        bodyRows.push(parseRow(lines[j]))
+        j++
+      }
+      blocks.push(
+        <table key={`t-${key++}`} className={styles.table}>
+          <thead>
+            <tr>
+              {header.map((cell, ci) => (
+                <th key={ci}>{renderInlineMarkdown(cell)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {bodyRows.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td key={ci}>{renderInlineMarkdown(cell)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+      i = j
+      continue
+    }
+    para.push(line)
+    i++
+  }
+  flushPara()
+  return blocks
+}
+
+function parseRow(line: string): string[] {
+  const trimmed = line.trim().replace(/^\||\|$/g, '')
+  return trimmed.split('|').map(c => c.trim())
+}
 
 // Lightweight inline markdown: **bold**, __bold__, *italic*, _italic_, `code`.
 // Intentionally minimal — block-level markdown is not supported.

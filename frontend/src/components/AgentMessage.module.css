@@ -67,3 +67,37 @@
 .uiTreeWrapper {
   margin-top: 0.4rem;
 }
+
+.table {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--ms-dark);
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(1, 82, 55, 0.18);
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid rgba(1, 82, 55, 0.12);
+  vertical-align: top;
+}
+.table th {
+  background: rgba(1, 82, 55, 0.08);
+  font-weight: 600;
+  color: var(--ms-primary, #015237);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+.table tbody tr:nth-child(even) td {
+  background: rgba(1, 82, 55, 0.025);
+}
