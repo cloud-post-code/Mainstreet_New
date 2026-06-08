@@ -307,41 +307,78 @@
   box-sizing: border-box;
 }
 
-.modeToggle {
-  display: inline-flex;
-  align-self: flex-start;
-  margin: 0 0.5rem 0.5rem;
-  padding: 2px;
-  background: rgba(122,158,126,0.10);
-  border-radius: 999px;
-  gap: 2px;
+.composerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.5rem 0.5rem;
+  gap: 0.5rem;
 }
-.modeOption {
+
+.modeDropdown {
+  position: relative;
+  display: inline-block;
+}
+.modeTrigger {
   appearance: none;
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(122,158,126,0.10);
   border: none;
-  padding: 0.25rem 0.75rem;
+  padding: 0.3rem 0.65rem;
   border-radius: 999px;
   font-family: var(--font-body);
   font-size: 0.78rem;
   color: var(--ms-dark);
-  opacity: 0.65;
   cursor: pointer;
-  transition: background-color 0.15s, opacity 0.15s, color 0.15s;
+  line-height: 1.2;
+  transition: background-color 0.15s;
+}
+.modeTrigger:hover { background: rgba(122,158,126,0.18); }
+.modeCaret {
+  width: 10px;
+  height: 10px;
+  opacity: 0.6;
+}
+.modeMenu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 140px;
+  background: white;
+  border: 1px solid rgba(122,158,126,0.3);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.modeMenuItem {
+  appearance: none;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: var(--ms-dark);
+  cursor: pointer;
   line-height: 1.2;
 }
-.modeOption:hover { opacity: 0.9; }
-.modeOptionActive {
+.modeMenuItem:hover { background: rgba(122,158,126,0.10); }
+.modeMenuItemActive {
   background: var(--ms-primary);
   color: white;
-  opacity: 1;
 }
-.modeOptionActive:hover { opacity: 1; }
+.modeMenuItemActive:hover { background: var(--ms-primary); }
 
 .sendButton {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: var(--ms-primary);
   border: none;
   color: white;

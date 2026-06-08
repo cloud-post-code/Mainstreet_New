@@ -106,6 +106,8 @@ export default function Chat() {
   const [suggestions, setSuggestions] = useState<string[] | null>(null)
   const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
   const [mode, setMode] = useState<MasonMode>('auto')
+  const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const modeMenuRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const selectTokenRef = useRef(0)
   const skipNextScrollRef = useRef(false)
@@ -172,6 +174,17 @@ export default function Chat() {
       .catch(() => { /* fallback chips remain */ })
     return () => { cancelled = true }
   }, [token])
+
+  useEffect(() => {
+    if (!modeMenuOpen) return
+    function onDocClick(e: globalThis.MouseEvent) {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setModeMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [modeMenuOpen])
 
   const prevSessionRef = useRef<number | null>(null)
   useEffect(() => {
@@ -515,37 +528,54 @@ export default function Chat() {
               rows={1}
               disabled={streaming}
             />
-            <div
-              className={styles.modeToggle}
-              role="radiogroup"
-              aria-label="Response speed"
-            >
-              {(['fast', 'auto', 'thinking'] as const).map(opt => (
+            <div className={styles.composerActions}>
+              <div className={styles.modeDropdown} ref={modeMenuRef}>
                 <button
-                  key={opt}
                   type="button"
-                  role="radio"
-                  aria-checked={mode === opt}
-                  className={`${styles.modeOption} ${mode === opt ? styles.modeOptionActive : ''}`}
-                  onClick={() => setMode(opt)}
+                  className={styles.modeTrigger}
+                  aria-haspopup="listbox"
+                  aria-expanded={modeMenuOpen}
+                  onClick={() => setModeMenuOpen(o => !o)}
                   title={
-                    opt === 'fast'
+                    mode === 'fast'
                       ? 'Fast: skip the router, run Fast Mason (quicker, simpler answers)'
-                      : opt === 'thinking'
+                      : mode === 'thinking'
                         ? 'Thinking: skip the router, run Full Mason (slower, deeper answers)'
                         : 'Auto: let Mason decide (default)'
                   }
                 >
-                  {opt === 'fast' ? 'Fast' : opt === 'thinking' ? 'Thinking' : 'Auto'}
+                  {mode === 'fast' ? 'Fast' : mode === 'thinking' ? 'Thinking' : 'Auto'}
+                  <svg className={styles.modeCaret} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 4.5 6 7.5 9 4.5" />
+                  </svg>
                 </button>
-              ))}
+                {modeMenuOpen && (
+                  <div className={styles.modeMenu} role="listbox">
+                    {(['fast', 'auto', 'thinking'] as const).map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        role="option"
+                        aria-selected={mode === opt}
+                        className={`${styles.modeMenuItem} ${mode === opt ? styles.modeMenuItemActive : ''}`}
+                        onClick={() => {
+                          setMode(opt)
+                          setModeMenuOpen(false)
+                        }}
+                      >
+                        {opt === 'fast' ? 'Fast' : opt === 'thinking' ? 'Thinking' : 'Auto'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button className={styles.sendButton} type="submit" disabled={!input.trim() || streaming} aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
             </div>
           </div>
-          <button className={styles.sendButton} type="submit" disabled={!input.trim() || streaming}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-          </button>
         </form>
       </main>
 
