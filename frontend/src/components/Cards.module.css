@@ -225,6 +225,33 @@
   opacity: 0.45;
   text-decoration: line-through;
 }
+.optionSelect {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1.5px solid rgba(15, 24, 5, 0.18);
+  border-radius: 8px;
+  background: white;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: var(--ms-dark, #0f1805);
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+  line-height: 1.2;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23015237' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  padding-right: 1.8rem;
+}
+.optionSelect:hover {
+  border-color: var(--ms-primary, #015237);
+}
+.optionSelect:focus {
+  outline: none;
+  border-color: var(--ms-primary, #015237);
+  box-shadow: 0 0 0 2px rgba(1, 82, 55, 0.15);
+}
 
 .productCardCompact .optionsBlock {
   gap: 0.25rem;
@@ -234,6 +261,12 @@
 .productCardCompact .optionChip {
   padding: 0.2rem 0.45rem;
   font-size: 0.7rem;
+  border-width: 1px;
+}
+.productCardCompact .optionSelect {
+  padding: 0.25rem 0.5rem;
+  padding-right: 1.5rem;
+  font-size: 0.72rem;
   border-width: 1px;
 }
 
@@ -268,6 +301,12 @@
 .productCardOptions .optionChip {
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
+  border-width: 1.5px;
+}
+.productCardOptions .optionSelect {
+  padding: 0.5rem 0.75rem;
+  padding-right: 2rem;
+  font-size: 0.9rem;
   border-width: 1.5px;
 }
 

@@ -123,24 +123,24 @@ export default function ProductCard(props: Props) {
           <div className={styles.optionsBlock} onClick={(e) => e.stopPropagation()}>
             {optionAxes.map(axis => (
               <div key={axis.name} className={styles.optionGroup}>
-                <span className={styles.optionGroupLabel}>{axis.name}</span>
-                <div className={styles.optionChips}>
+                <label className={styles.optionGroupLabel} htmlFor={`opt-${props.product_id}-${axis.name}`}>
+                  {axis.name}
+                </label>
+                <select
+                  id={`opt-${props.product_id}-${axis.name}`}
+                  className={styles.optionSelect}
+                  value={selectedValues[axis.name] ?? ''}
+                  onChange={(e) => pickValue(axis.name, e.target.value)}
+                >
                   {axis.values.map(val => {
-                    const active = selectedValues[axis.name] === val
                     const reachable = isReachable(axis.name, val)
                     return (
-                      <button
-                        key={val}
-                        type="button"
-                        className={`${styles.optionChip} ${active ? styles.optionChipActive : ''} ${!reachable ? styles.optionChipDisabled : ''}`}
-                        onClick={() => pickValue(axis.name, val)}
-                        aria-pressed={active}
-                      >
-                        {val}
-                      </button>
+                      <option key={val} value={val}>
+                        {reachable ? val : `${val} (unavailable)`}
+                      </option>
                     )
                   })}
-                </div>
+                </select>
               </div>
             ))}
           </div>
@@ -148,20 +148,21 @@ export default function ProductCard(props: Props) {
         {showOptions && optionAxes.length === 0 && (
           <div className={styles.optionsBlock} onClick={(e) => e.stopPropagation()}>
             <div className={styles.optionGroup}>
-              <span className={styles.optionGroupLabel}>Variant</span>
-              <div className={styles.optionChips}>
+              <label className={styles.optionGroupLabel} htmlFor={`opt-${props.product_id}-variant`}>
+                Variant
+              </label>
+              <select
+                id={`opt-${props.product_id}-variant`}
+                className={styles.optionSelect}
+                value={selectedId ?? ''}
+                onChange={(e) => setSelectedId(Number(e.target.value))}
+              >
                 {variants.map(v => (
-                  <button
-                    key={v.variant_id}
-                    type="button"
-                    className={`${styles.optionChip} ${selectedId === v.variant_id ? styles.optionChipActive : ''} ${v.quantity <= 0 ? styles.optionChipDisabled : ''}`}
-                    onClick={() => setSelectedId(v.variant_id)}
-                    aria-pressed={selectedId === v.variant_id}
-                  >
-                    {variantLabel(v)}
-                  </button>
+                  <option key={v.variant_id} value={v.variant_id}>
+                    {variantLabel(v)}{v.quantity <= 0 ? ' (out of stock)' : ''}
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
           </div>
         )}
