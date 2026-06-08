@@ -551,7 +551,7 @@ export default function Chat() {
                 </button>
                 {modeMenuOpen && (
                   <div className={styles.modeMenu} role="listbox">
-                    {(['fast', 'auto', 'thinking'] as const).map(opt => (
+                    {(['auto', 'fast', 'thinking'] as const).map(opt => (
                       <button
                         key={opt}
                         type="button"
