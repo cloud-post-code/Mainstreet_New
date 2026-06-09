@@ -30,6 +30,20 @@ const PRICE_BUCKETS: PriceBucket[] = [
   { id: 'p4', label: '$50+', min: 50 },
 ]
 
+// Multiple shops (or repeated scrapes) can produce separate Product rows that
+// share the same display name. The feed should show each name once.
+function dedupeByName(items: Product[], seenNames?: Set<string>): Product[] {
+  const seen = seenNames ?? new Set<string>()
+  const out: Product[] = []
+  for (const p of items) {
+    const key = p.name.trim().toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(p)
+  }
+  return out
+}
+
 function sampleN<T>(arr: T[], n: number): T[] {
   if (arr.length <= n) return [...arr]
   const copy = [...arr]
@@ -169,7 +183,7 @@ export default function Discover() {
     ])
       .then(([items, countRes]) => {
         if (cancelled) return
-        setProducts(items)
+        setProducts(dedupeByName(items))
         setTotal(countRes.total)
       })
       .catch(err => {
@@ -188,7 +202,10 @@ export default function Discover() {
     setLoading(true)
     try {
       const more = await api.getDiscoverProducts(buildFilters(products.length))
-      setProducts(prev => [...prev, ...more])
+      setProducts(prev => {
+        const seenNames = new Set(prev.map(p => p.name.trim().toLowerCase()))
+        return [...prev, ...dedupeByName(more, seenNames)]
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more')
     } finally {

@@ -1,9 +1,6 @@
-const BASE = import.meta.env.VITE_API_URL
-if (!BASE) {
-  throw new Error(
-    'VITE_API_URL is not set. Configure it in your .env file (see frontend/.env.example).',
-  )
-}
+// Keep this in lockstep with `useAgentStream.ts`. If the Railway backend
+// service is renamed, update both fallbacks (or set VITE_API_URL at build).
+const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
 
 export function clearStoredAuth() {
   localStorage.removeItem('token')
@@ -18,6 +15,11 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   if (token) headers['Authorization'] = `Bearer ${token}`
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  const refreshed = res.headers.get('X-Refreshed-Token')
+  if (refreshed) {
+    localStorage.setItem('token', refreshed)
+    window.dispatchEvent(new CustomEvent('auth:token-refreshed', { detail: refreshed }))
+  }
   if (!res.ok) {
     if (res.status === 401) {
       clearStoredAuth()

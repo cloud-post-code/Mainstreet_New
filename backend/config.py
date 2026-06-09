@@ -4,9 +4,11 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
-    # 24h. Was 7 days. Shorter expiry limits the blast radius of a stolen token.
+    # 7 days. Tokens are sliding-refreshed on each authenticated request
+    # (see middleware in main.py), so active users stay signed in and only
+    # 7-days-idle users are forced back to login.
     # Long-term plan: migrate to httpOnly cookies + refresh-token rotation.
-    access_token_expire_minutes: int = 60 * 24
+    access_token_expire_minutes: int = 60 * 24 * 7
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     openai_api_key: str = ""

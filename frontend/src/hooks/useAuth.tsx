@@ -30,6 +30,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   })
 
+  useEffect(() => {
+    const onRefresh = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail
+      if (typeof detail === 'string' && detail) setToken(detail)
+    }
+    window.addEventListener('auth:token-refreshed', onRefresh)
+    return () => window.removeEventListener('auth:token-refreshed', onRefresh)
+  }, [])
+
   const login = useCallback((t: string, u: User) => {
     setToken(t)
     setUser(u)

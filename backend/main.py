@@ -2,13 +2,17 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from jose import JWTError, jwt
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+import auth as _auth_module
 from config import settings
 from db.database import create_tables
 from agent.uploads import upload_root
@@ -73,7 +77,55 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Refreshed-Token"],
 )
+
+
+# Sliding session refresh: when an authenticated request comes in with a token
+# that has used up more than 1 day of its life, mint a fresh full-lifetime
+# token and return it in X-Refreshed-Token. The frontend persists it so active
+# users never get bounced to login while a 7-day-idle user still expires.
+_REFRESH_THRESHOLD_SECONDS = 24 * 60 * 60
+
+
+@app.middleware("http")
+async def sliding_token_refresh(request: Request, call_next):
+    response = await call_next(request)
+
+    path = request.url.path
+    if path.startswith("/api/auth/login") or path.startswith("/api/auth/register"):
+        return response
+
+    authorization = request.headers.get("authorization") or request.headers.get("Authorization")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return response
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return response
+
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    except JWTError:
+        return response
+
+    user_id = payload.get("sub")
+    exp = payload.get("exp")
+    if not user_id or not exp:
+        return response
+
+    full_lifetime = settings.access_token_expire_minutes * 60
+    remaining = int(exp) - int(datetime.now(timezone.utc).timestamp())
+    if remaining <= 0 or (full_lifetime - remaining) < _REFRESH_THRESHOLD_SECONDS:
+        return response
+
+    try:
+        new_token = _auth_module.create_access_token(int(user_id))
+    except (ValueError, TypeError):
+        return response
+
+    response.headers["X-Refreshed-Token"] = new_token
+    return response
 
 app.include_router(auth.router)
 app.include_router(shops.router)
