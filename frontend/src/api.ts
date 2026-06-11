@@ -212,14 +212,20 @@ export const api = {
   getPlan: (sessionId: number, token: string) =>
     request<Plan | null>(`/api/agent/sessions/${sessionId}/plan`, {}, token),
 
-  importCsv: (file: File, token: string) => {
+  importCsv: async (file: File, token: string) => {
     const fd = new FormData()
     fd.append('file', file)
-    return fetch(`${BASE}/api/admin/import`, {
+    const r = await fetch(`${BASE}/api/admin/import`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
-    }).then(r => r.json())
+    })
+    if (!r.ok) {
+      if (r.status === 413) throw new Error('CSV is too large for the server to accept. Try splitting it into smaller files.')
+      const err = await r.json().catch(() => ({}))
+      throw new Error(err.detail ?? `Import failed (${r.status})`)
+    }
+    return r.json()
   },
 
   getTurns: (
@@ -241,14 +247,20 @@ export const api = {
   deleteSession: (id: number, token: string) =>
     request<void>(`/api/agent/sessions/${id}`, { method: 'DELETE' }, token),
 
-  importShopsCsv: (file: File, token: string) => {
+  importShopsCsv: async (file: File, token: string) => {
     const fd = new FormData()
     fd.append('file', file)
-    return fetch(`${BASE}/api/admin/import/shops`, {
+    const r = await fetch(`${BASE}/api/admin/import/shops`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
-    }).then(r => r.json())
+    })
+    if (!r.ok) {
+      if (r.status === 413) throw new Error('CSV is too large for the server to accept. Try splitting it into smaller files.')
+      const err = await r.json().catch(() => ({}))
+      throw new Error(err.detail ?? `Import failed (${r.status})`)
+    }
+    return r.json()
   },
 
   downloadProductsCsv: async (token: string, shopId?: number) => {

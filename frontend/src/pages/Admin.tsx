@@ -25,8 +25,10 @@ export default function Admin() {
   const [productPageSize, setProductPageSize] = useState(100)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
   const [shopImportResult, setShopImportResult] = useState<ImportResult | null>(null)
   const [importingShops, setImportingShops] = useState(false)
+  const [shopImportError, setShopImportError] = useState<string | null>(null)
   const [downloadingProducts, setDownloadingProducts] = useState(false)
   const [downloadingShops, setDownloadingShops] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -73,6 +75,7 @@ export default function Admin() {
     if (!file || !token) return
     setImporting(true)
     setImportResult(null)
+    setImportError(null)
     try {
       const result = await api.importCsv(file, token)
       setImportResult(result)
@@ -89,6 +92,8 @@ export default function Admin() {
           setProducts(page.items)
           setProductsTotal(page.total)
         })
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Import failed')
     } finally {
       setImporting(false)
       e.target.value = ''
@@ -124,10 +129,13 @@ export default function Admin() {
     if (!file || !token) return
     setImportingShops(true)
     setShopImportResult(null)
+    setShopImportError(null)
     try {
       const result = await api.importShopsCsv(file, token)
       setShopImportResult(result)
       api.adminShops(token).then(setShops)
+    } catch (err) {
+      setShopImportError(err instanceof Error ? err.message : 'Import failed')
     } finally {
       setImportingShops(false)
       e.target.value = ''
@@ -259,10 +267,15 @@ export default function Admin() {
             Clear All Products
           </button>
         </div>
+        {importError && (
+          <div className={styles.importResult}>
+            <span className={styles.errorText}>⚠️ {importError}</span>
+          </div>
+        )}
         {importResult && (
           <div className={styles.importResult}>
             <p>✅ {importResult.rows_added} added, {importResult.rows_updated} updated</p>
-            {importResult.errors.length > 0 && (
+            {(importResult.errors?.length ?? 0) > 0 && (
               <div className={styles.errors}>
                 <p>⚠️ {importResult.errors.length} errors:</p>
                 <ul>
@@ -330,10 +343,15 @@ export default function Admin() {
             {downloadingShops ? 'Downloading…' : 'Download Shops CSV'}
           </button>
         </div>
+        {shopImportError && (
+          <div className={styles.importResult}>
+            <span className={styles.errorText}>⚠️ {shopImportError}</span>
+          </div>
+        )}
         {shopImportResult && (
           <div className={styles.importResult}>
             <p>✅ {shopImportResult.rows_added} added, {shopImportResult.rows_updated} updated</p>
-            {shopImportResult.errors.length > 0 && (
+            {(shopImportResult.errors?.length ?? 0) > 0 && (
               <div className={styles.errors}>
                 <p>⚠️ {shopImportResult.errors.length} errors:</p>
                 <ul>
