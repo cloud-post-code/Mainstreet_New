@@ -12,6 +12,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import anthropic
+from posthog.ai.anthropic import Anthropic as PostHogAnthropic
+import posthog as _posthog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -106,7 +108,11 @@ def _validate_suggestions(value: Any) -> bool:
 
 
 def _generate_with_claude(signals: str) -> list[str]:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = PostHogAnthropic(
+        api_key=settings.anthropic_api_key,
+        posthog_client=_posthog,
+        posthog_properties={"agent": "welcome_suggestions"},
+    )
     system = (
         "You generate welcome-screen prompt chips for a personal-shopper chat assistant "
         "that helps people discover products and local shops. Produce exactly 4 distinct "

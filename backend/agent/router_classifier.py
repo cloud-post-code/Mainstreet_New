@@ -13,6 +13,8 @@ import time
 from typing import Literal
 
 import anthropic
+from posthog.ai.anthropic import Anthropic as PostHogAnthropic
+import posthog as _posthog
 
 from config import settings
 
@@ -57,7 +59,11 @@ def _build_state_line(session_state: dict | None) -> str:
 
 async def _call_classifier(message: str, state_line: str) -> str:
     """Single Haiku call. Synchronous SDK wrapped in a thread."""
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = PostHogAnthropic(
+        api_key=settings.anthropic_api_key,
+        posthog_client=_posthog,
+        posthog_properties={"agent": "intent_classifier"},
+    )
 
     def _sync_call() -> str:
         resp = client.messages.create(

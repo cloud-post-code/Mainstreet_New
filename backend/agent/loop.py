@@ -15,6 +15,8 @@ import logging
 import traceback
 from typing import AsyncGenerator, Any
 import anthropic
+from posthog.ai.anthropic import Anthropic as PostHogAnthropic
+import posthog as _posthog
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -453,7 +455,12 @@ async def _run_agent_turn_inner(
     db: AsyncSession,
     mode: str = "full",
 ) -> AsyncGenerator[str, None]:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = PostHogAnthropic(
+        api_key=settings.anthropic_api_key,
+        posthog_client=_posthog,
+        posthog_distinct_id=str(user_id) if user_id else None,
+        posthog_properties={"session_id": session_id, "agent": "shop_loop"},
+    )
 
     # Load memory — anonymous users get no long-term memory
     long_term = await load_long_term(user_id, db) if user_id else ""

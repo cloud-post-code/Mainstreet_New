@@ -22,6 +22,8 @@ from typing import Any, AsyncGenerator, Generator, Optional
 
 import anthropic
 import httpx
+from posthog.ai.anthropic import Anthropic as PostHogAnthropic
+import posthog as _posthog
 
 from agent.prompt_safety import wrap_untrusted
 from agent.streaming import stream_claude
@@ -296,7 +298,11 @@ async def run_listing_agent(
     public_api_base_url: str = "",
 ) -> AsyncGenerator[dict, None]:
     """Yield NDJSON-ready event dicts as each sub-agent runs."""
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = PostHogAnthropic(
+        api_key=settings.anthropic_api_key,
+        posthog_client=_posthog,
+        posthog_properties={"agent": "listing_orchestrator"},
+    )
 
     # ── Vision ───────────────────────────────────────────────────────────────
     yield _event({"type": "stage", "stage": "vision", "status": "start"})
