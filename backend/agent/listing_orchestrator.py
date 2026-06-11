@@ -298,10 +298,7 @@ async def run_listing_agent(
     public_api_base_url: str = "",
 ) -> AsyncGenerator[dict, None]:
     """Yield NDJSON-ready event dicts as each sub-agent runs."""
-    client = PostHogAnthropic(
-        posthog_client=_posthog,
-        api_key=settings.anthropic_api_key,
-    )
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     # ── Vision ───────────────────────────────────────────────────────────────
     yield _event({"type": "stage", "stage": "vision", "status": "start"})

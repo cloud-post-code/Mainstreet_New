@@ -455,10 +455,7 @@ async def _run_agent_turn_inner(
     db: AsyncSession,
     mode: str = "full",
 ) -> AsyncGenerator[str, None]:
-    client = PostHogAnthropic(
-        posthog_client=_posthog,
-        api_key=settings.anthropic_api_key,
-    )
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     # Load memory — anonymous users get no long-term memory
     long_term = await load_long_term(user_id, db) if user_id else ""
@@ -554,8 +551,6 @@ async def _run_agent_turn_inner(
             system=system_blocks,
             tools=cached_tools,
             messages=messages,
-            posthog_distinct_id=str(user_id) if user_id else None,
-            posthog_properties={"session_id": session_id, "agent": "shop_loop"},
         ):
             if kind == "thinking":
                 yield _event({"type": "thinking", "content": payload})
