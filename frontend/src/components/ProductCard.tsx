@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import styles from './Cards.module.css'
 import { IntentHandler } from '../a2ui/types'
 import { formatCurrency } from '../lib/format'
+import { normalizeTags } from '../lib/normalizeTags'
 import { useVariantSelector } from '../hooks/useVariantSelector'
 import { useAddToCart } from '../hooks/useAddToCart'
 
@@ -114,9 +115,9 @@ export default function ProductCard(props: Props) {
         {props.description_summary && (
           <p className={styles.productDesc}>{props.description_summary}</p>
         )}
-        {props.tags && props.tags.length > 0 && (
+        {normalizeTags(props.tags).length > 0 && (
           <div className={styles.tags}>
-            {props.tags.slice(0, 4).map(t => <span key={t} className={styles.tag}>{t}</span>)}
+            {normalizeTags(props.tags).slice(0, 4).map(t => <span key={t} className={styles.tag}>{t}</span>)}
           </div>
         )}
         {showOptions && optionAxes.length > 0 && (

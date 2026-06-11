@@ -31,6 +31,10 @@ etsy-data-pull/cache/
 etsy-data-pull/output/
 etsy-data-pull/.venv/
 
-# Scraping output (scrapers in scripts/ are tracked)
-scripts/*.csv
-scripts/*.progress.json
+# Local scripts directory (scrapers, importers, CSV outputs, logs)
+scripts/
+*.csv
+*.log
+
+# One-off setup/report files
+posthog-setup-report.md

@@ -25,6 +25,8 @@ from agent.embeddings import (
     reciprocal_rank_fusion,
     vector_literal,
 )
+from agent.reranker import rerank as _zerank_rerank, RerankerError
+from config import settings as _settings
 from agent.a2ui_schema import (
     RENDER_UI_TOOL_SCHEMA,
     collect_product_card_ids,
@@ -671,8 +673,11 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
     fused = reciprocal_rank_fusion(ranked_lists)
     fused_ids = [pid for pid, _ in fused]
 
-    # Hydrate + apply filters. Pull more than `limit` so filters don't
-    # starve the result set; cap to the fused candidate pool.
+    # Widen the post-fusion candidate pool when the reranker is on so it has
+    # material to reorder; otherwise just take what the agent asked for.
+    rerank_on = _settings.zeroentropy_rerank_enabled and bool(_settings.zeroentropy_api_key)
+    pool_cap = _settings.zeroentropy_rerank_pool if rerank_on else limit
+
     hydrate_stmt = (
         select(Product, Shop.name.label("shop_name"))
         .join(Shop, Shop.id == Product.shop_id)
@@ -687,10 +692,26 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
         hit = by_id.get(pid)
         if hit is not None:
             ordered.append(hit)
-            if len(ordered) >= limit:
+            if len(ordered) >= pool_cap:
                 break
 
-    return await _format_results(ordered, db)
+    if rerank_on and len(ordered) > 1:
+        docs = []
+        for product, _shop_name in ordered:
+            desc = product.description or {}
+            summary = desc.get("summary", "") if isinstance(desc, dict) else ""
+            tags = desc.get("tags", []) if isinstance(desc, dict) else []
+            tag_str = ", ".join(t for t in tags if isinstance(t, str))
+            docs.append(f"{product.name}\n{summary}\n{tag_str}")
+        idx_order, _telemetry = await _zerank_rerank(query=q, docs=docs, top_n=limit)
+        try:
+            from posthog import capture as _ph_capture
+            _ph_capture("mason_reranker_called", properties={"success": True, **_telemetry})
+        except Exception:
+            logger.debug("posthog mason_reranker_called capture failed", exc_info=True)
+        ordered = [ordered[i] for i in idx_order if 0 <= i < len(ordered)]
+
+    return await _format_results(ordered[:limit], db)
 
 
 def _apply_filters(stmt, params: dict):

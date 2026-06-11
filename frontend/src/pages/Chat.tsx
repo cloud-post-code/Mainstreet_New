@@ -23,6 +23,7 @@ const FALLBACK_SUGGESTIONS = [
 ]
 
 type Turn = {
+  id: number
   role: string
   content: unknown
   tool_calls: unknown
@@ -39,7 +40,7 @@ function parseTurns(turns: Turn[]): import('../hooks/useAgentStream').Message[] 
         : Array.isArray(t.content)
           ? (t.content as Array<{type:string;text?:string}>).find(b => b.type === 'text')?.text ?? ''
           : ''
-      if (text) msgs.push({ id: t.created_at + '-u', from: 'user', text })
+      if (text) msgs.push({ id: `turn-${t.id}-u`, from: 'user', text })
     } else if (t.role === 'assistant') {
       const blocks = Array.isArray(t.content)
         ? t.content as Array<{ type: string; text?: string; name?: string; id?: string; input?: { root?: string; components?: import('../a2ui/types').A2uiComponent[] } }>
@@ -75,7 +76,7 @@ function parseTurns(turns: Turn[]): import('../hooks/useAgentStream').Message[] 
           })
         }
       }
-      if (events.length) msgs.push({ id: t.created_at + '-a', from: 'agent', events })
+      if (events.length) msgs.push({ id: `turn-${t.id}-a`, from: 'agent', events })
     }
   }
   return msgs
@@ -180,18 +181,14 @@ export default function Chat() {
           return
         }
       }
-      const created = await api.createSession(token)
-      setSessions(prev => [created, ...prev])
-      setActiveSessionId(created.id)
+      // Defer session creation until the user actually sends a message
+      // so empty "New conversation" entries don't pile up in history.
+      setActiveSessionId(null)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  useEffect(() => {
-    if (token) return
-    if (activeSessionId) return
-    api.createGuestSession().then(s => setActiveSessionId(s.id))
-  }, [token, activeSessionId])
+  // Guest sessions are also created lazily on first send (see handleSubmit).
 
   useEffect(() => {
     if (!token) { setSuggestions(null); return }
@@ -228,14 +225,10 @@ export default function Chat() {
 
   async function newSession() {
     ++selectTokenRef.current
-    if (token) {
-      const s = await api.createSession(token)
-      setSessions(prev => [s, ...prev])
-      setActiveSessionId(s.id)
-    } else {
-      const s = await api.createGuestSession()
-      setActiveSessionId(s.id)
-    }
+    // Defer creating a backend session until the user sends a message,
+    // so opening "New task" without typing doesn't leave an empty
+    // "New conversation" entry in history.
+    setActiveSessionId(null)
     setLoadedMessages([])
     reset()
   }
@@ -284,7 +277,11 @@ export default function Chat() {
       if (myToken !== selectTokenRef.current) return
       const older = parseTurns(res.turns)
       skipNextScrollRef.current = true
-      setLoadedMessages(prev => [...older, ...prev])
+      setLoadedMessages(prev => {
+        const seen = new Set(prev.map(m => m.id))
+        const deduped = older.filter(m => !seen.has(m.id))
+        return [...deduped, ...prev]
+      })
       setHistoryHasMore(res.has_more)
       setHistoryCursor(res.next_cursor)
     } catch { /* ignore */ }

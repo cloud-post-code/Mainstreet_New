@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { MasonMemory } from '../mason/useMasonMemory'
+import { normalizeTags } from '../lib/normalizeTags'
 import styles from './ProductModal.module.css'
 import cardStyles from './Cards.module.css'
 import { formatCurrency } from '../lib/format'
@@ -197,11 +198,15 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
                 ? <p className={styles.desc}>{description}</p>
                 : <p className={styles.descEmpty}>No description provided yet.</p>}
             </section>
-            {product.tags && product.tags.length > 0 && (
-              <div className={styles.tags}>
-                {product.tags.map(t => <span key={t} className={styles.tag}>{t}</span>)}
-              </div>
-            )}
+            {(() => {
+              const tagList = normalizeTags(product.tags);
+              if (tagList.length === 0) return null;
+              return (
+                <div className={styles.tags}>
+                  {tagList.map(t => <span key={t} className={styles.tag}>{t}</span>)}
+                </div>
+              );
+            })()}
             <section className={styles.section}>
               <h3 className={styles.sectionTitle}>Reviews</h3>
               <p className={styles.descEmpty}>No reviews yet.</p>

@@ -1,4 +1,5 @@
 import styles from './A2ui.module.css'
+import { normalizeTags } from '../../lib/normalizeTags'
 
 interface Props {
   product_id: number
@@ -26,11 +27,15 @@ export default function ProductDetailsModal(props: Props) {
       <h2 className={styles.modalName}>{props.name}</h2>
       <div className={styles.modalPrice}>${Number(props.price).toFixed(2)}</div>
       {props.description_long && <p className={styles.modalDesc}>{props.description_long}</p>}
-      {props.tags && props.tags.length > 0 && (
-        <div className={styles.modalTags}>
-          {props.tags.map(t => <span key={t} className={styles.modalTag}>{t}</span>)}
-        </div>
-      )}
+      {(() => {
+        const tagList = normalizeTags(props.tags);
+        if (tagList.length === 0) return null;
+        return (
+          <div className={styles.modalTags}>
+            {tagList.map(t => <span key={t} className={styles.modalTag}>{t}</span>)}
+          </div>
+        );
+      })()}
     </div>
   )
 }

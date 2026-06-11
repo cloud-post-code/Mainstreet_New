@@ -238,7 +238,7 @@ export const api = {
     if (opts.before) params.set('before', opts.before)
     const qs = params.toString()
     return request<{
-      turns: Array<{ role: string; content: unknown; tool_calls: unknown; tool_results: unknown; created_at: string }>
+      turns: Array<{ id: number; role: string; content: unknown; tool_calls: unknown; tool_results: unknown; created_at: string }>
       has_more: boolean
       next_cursor: string | null
     }>(`/api/agent/sessions/${sessionId}/turns${qs ? `?${qs}` : ''}`, {}, token)

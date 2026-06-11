@@ -37,9 +37,20 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from db.models import AgentTurn
+
+    # Hide sessions that were created but never received a user query — they
+    # show up as empty "New conversation" entries cluttering history.
+    has_user_turn = (
+        select(AgentTurn.id)
+        .where(AgentTurn.session_id == AgentSession.id, AgentTurn.role == "user")
+        .limit(1)
+        .exists()
+    )
     stmt = (
         select(AgentSession)
         .where(AgentSession.user_id == current_user.id)
+        .where(has_user_turn)
         .order_by(AgentSession.updated_at.desc())
         .limit(50)
     )
@@ -113,15 +124,17 @@ async def get_turns(
 ):
     """Cursor-paginated turn history.
 
-    Returns the most recent `limit` turns older than `before` (an ISO
-    timestamp). Without `before`, returns the most recent page. Response
-    is in ascending chronological order; `has_more` indicates whether
-    older turns exist beyond the returned page.
+    Returns the most recent `limit` turns older than `before` (the `id` of
+    the oldest turn from the previous page, as a string). Without `before`,
+    returns the most recent page. Response is in ascending insertion order
+    (by primary key); `has_more` indicates whether older turns exist beyond
+    the returned page. Ordering uses `id` rather than `created_at` so that
+    turns written in the same microsecond (assistant + tool results within
+    one streaming turn) preserve a stable, tie-free order across pages.
     """
     await verify_session_ownership(db, session_id, current_user.id)
 
     from db.models import AgentTurn
-    from datetime import datetime
 
     # Clamp limit to a sane range — guards against accidental huge fetches
     # while still letting callers tune page size.
@@ -130,14 +143,14 @@ async def get_turns(
     q = select(AgentTurn).where(AgentTurn.session_id == session_id)
     if before:
         try:
-            cursor = datetime.fromisoformat(before)
-            q = q.where(AgentTurn.created_at < cursor)
+            cursor_id = int(before)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid `before` cursor")
+        q = q.where(AgentTurn.id < cursor_id)
 
     # Fetch one extra row so we can tell the client whether more pages exist
     # without a separate count query.
-    q = q.order_by(AgentTurn.created_at.desc()).limit(limit + 1)
+    q = q.order_by(AgentTurn.id.desc()).limit(limit + 1)
     turns_result = await db.execute(q)
     page = turns_result.scalars().all()
 
@@ -150,6 +163,7 @@ async def get_turns(
     return {
         "turns": [
             {
+                "id": t.id,
                 "role": t.role,
                 "content": t.content,
                 "tool_calls": t.tool_calls,
@@ -160,7 +174,7 @@ async def get_turns(
         ],
         "has_more": has_more,
         # Cursor for fetching the next (older) page — pass back as `before`.
-        "next_cursor": page[0].created_at.isoformat() if has_more and page else None,
+        "next_cursor": str(page[0].id) if has_more and page else None,
     }
 
 

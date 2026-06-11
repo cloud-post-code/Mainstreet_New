@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     posthog_host: str = "https://us.i.posthog.com"
     posthog_disabled: bool = False
 
+    # ZeroEntropy reranker (applied after RRF in product search).
+    zeroentropy_api_key: str = ""
+    zeroentropy_rerank_model: str = "zerank-1-small"
+    zeroentropy_rerank_pool: int = 30
+    zeroentropy_rerank_timeout_s: float = 1.5
+    zeroentropy_rerank_enabled: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
