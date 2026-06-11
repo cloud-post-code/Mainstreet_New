@@ -1,5 +1,6 @@
 import logging
 import traceback
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import posthog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -226,7 +227,16 @@ async def agent_turn(
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session.processing:
-        raise HTTPException(status_code=429, detail="A turn is already in progress for this session")
+        # A prior turn that crashed or was cancelled before the stream's
+        # finally block ran can leave processing=True forever. Treat the
+        # lock as stale if the row hasn't been touched in 2 minutes.
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
+        last_touched = session.updated_at
+        if last_touched is not None and last_touched.tzinfo is None:
+            last_touched = last_touched.replace(tzinfo=timezone.utc)
+        if last_touched is None or last_touched > stale_cutoff:
+            raise HTTPException(status_code=429, detail="A turn is already in progress for this session")
+        logger.warning("Clearing stale processing lock for session %s", body.session_id)
 
     await db.execute(
         update(AgentSession).where(AgentSession.id == body.session_id).values(processing=True)
