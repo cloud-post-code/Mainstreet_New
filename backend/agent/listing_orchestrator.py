@@ -299,9 +299,8 @@ async def run_listing_agent(
 ) -> AsyncGenerator[dict, None]:
     """Yield NDJSON-ready event dicts as each sub-agent runs."""
     client = PostHogAnthropic(
-        api_key=settings.anthropic_api_key,
         posthog_client=_posthog,
-        posthog_properties={"agent": "listing_orchestrator"},
+        api_key=settings.anthropic_api_key,
     )
 
     # ── Vision ───────────────────────────────────────────────────────────────

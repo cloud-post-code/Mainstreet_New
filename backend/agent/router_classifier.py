@@ -60,9 +60,8 @@ def _build_state_line(session_state: dict | None) -> str:
 async def _call_classifier(message: str, state_line: str) -> str:
     """Single Haiku call. Synchronous SDK wrapped in a thread."""
     client = PostHogAnthropic(
-        api_key=settings.anthropic_api_key,
         posthog_client=_posthog,
-        posthog_properties={"agent": "intent_classifier"},
+        api_key=settings.anthropic_api_key,
     )
 
     def _sync_call() -> str:

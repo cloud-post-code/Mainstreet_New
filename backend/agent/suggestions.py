@@ -109,9 +109,8 @@ def _validate_suggestions(value: Any) -> bool:
 
 def _generate_with_claude(signals: str) -> list[str]:
     client = PostHogAnthropic(
-        api_key=settings.anthropic_api_key,
         posthog_client=_posthog,
-        posthog_properties={"agent": "welcome_suggestions"},
+        api_key=settings.anthropic_api_key,
     )
     system = (
         "You generate welcome-screen prompt chips for a personal-shopper chat assistant "
