@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from posthog import capture
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text, or_
 from typing import Optional
@@ -152,7 +153,18 @@ async def discover_products(
     stmt = stmt.limit(limit).offset(offset)
 
     result = await db.execute(stmt)
-    return await _hydrate_parents(result.all(), db)
+    rows = result.all()
+    if q:
+        capture(
+            "product_searched",
+            properties={
+                "result_count": len(rows),
+                "has_shop_filter": shop_id is not None or bool(shop_ids),
+                "has_price_filter": min_price is not None or max_price is not None,
+                "in_stock_only": in_stock_only,
+            },
+        )
+    return await _hydrate_parents(rows, db)
 
 
 @router.get("/discover/count")
@@ -209,4 +221,12 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db), _: Us
         .where(ProductVariant.product_id == product_id)
         .order_by(ProductVariant.variant_index)
     )).scalars().all()
+    capture(
+        "product_viewed",
+        properties={
+            "product_id": product_id,
+            "shop_id": product.shop_id,
+            "variant_count": len(variants),
+        },
+    )
     return _hydrate_product_out(product, shop_name, list(variants))

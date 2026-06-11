@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from datetime import datetime, timezone
 
+import posthog as _posthog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +17,7 @@ import auth as _auth_module
 from config import settings
 from db.database import create_tables
 from agent.uploads import upload_root
+from posthog_middleware import PostHogMiddleware
 from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart, mason_memory
 
 log = logging.getLogger("uvicorn.error")
@@ -42,7 +44,15 @@ async def lifespan(app: FastAPI):
         )
     upload_root().mkdir(parents=True, exist_ok=True)
     asyncio.create_task(_run_migrations())
+
+    if not settings.posthog_disabled:
+        _posthog.api_key = settings.posthog_project_token
+        _posthog.host = settings.posthog_host
+
     yield
+
+    if not settings.posthog_disabled:
+        _posthog.flush()
 
 
 app = FastAPI(title="Personal Shopper API", version="1.0.0", lifespan=lifespan)
@@ -57,6 +67,7 @@ app.add_middleware(SlowAPIMiddleware)
 # X-Forwarded-For. Without this, get_remote_address returns the proxy's
 # internal IP for every request and the limiter buckets all traffic together.
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+app.add_middleware(PostHogMiddleware)
 
 # Allow multiple frontend origins via comma-separated FRONTEND_URL, plus
 # localhost dev and any *.up.railway.app preview/production URL. The regex

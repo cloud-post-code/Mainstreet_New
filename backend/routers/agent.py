@@ -1,8 +1,10 @@
 import logging
 import traceback
 from typing import Optional
+import posthog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from posthog import capture
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from db.database import get_db, AsyncSessionLocal
@@ -60,6 +62,7 @@ async def create_session(
     db.add(session)
     await db.commit()
     await db.refresh(session)
+    capture("agent_session_created", properties={"session_type": session_type})
     return session
 
 
@@ -217,6 +220,14 @@ async def agent_turn(
     await db.commit()
 
     user_id = current_user.id if current_user else None
+    if user_id is not None:
+        capture(
+            "agent_turn_sent",
+            properties={
+                "session_type": getattr(session, "session_type", "shop") or "shop",
+                "message_length": len(body.message),
+            },
+        )
     session_id = body.session_id
     message = body.message
     question_card_id = body.question_card_id

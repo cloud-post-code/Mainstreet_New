@@ -1,4 +1,6 @@
+import posthog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from posthog import capture, identify_context, new_context
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +42,11 @@ async def register(request: Request, body: UserRegister, db: AsyncSession = Depe
     await db.commit()
     await db.refresh(user)
 
+    with new_context():
+        identify_context(str(user.id))
+        posthog.set(str(user.id), {"display_name": user.display_name})
+        capture("user_registered", properties={"signup_method": "form"})
+
     return Token(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
 
 
@@ -50,6 +57,10 @@ async def login(request: Request, body: UserLogin, db: AsyncSession = Depends(ge
     user = result.scalars().first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    with new_context():
+        identify_context(str(user.id))
+        capture("user_logged_in", properties={"login_method": "password"})
 
     return Token(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
 

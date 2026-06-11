@@ -19,3 +19,4 @@ slowapi==0.1.9
 openai>=1.40.0
 pgvector>=0.3.0
 stripe>=11.0.0
+posthog>=6.0.0

@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     stripe_success_url: str = ""
     stripe_cancel_url: str = ""
 
+    # PostHog
+    posthog_project_token: str = ""
+    posthog_host: str = "https://us.i.posthog.com"
+    posthog_disabled: bool = False
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -4,8 +4,10 @@ The agent tool dispatcher imports the bare functions (view, add_item, etc.)
 and expects them to return dicts — that's why we keep dict returns and only
 translate to HTTPException at the route boundary.
 """
+import posthog
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from posthog import capture
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -359,6 +361,16 @@ async def http_add_item(
     )
     _raise_for_reason(result)
     await db.commit()
+    if result.get("added"):
+        capture(
+            "cart_item_added",
+            properties={
+                "product_id": result.get("product_id"),
+                "variant_id": result.get("variant_id"),
+                "quantity": body.quantity,
+                "unit_price": result.get("unit_price"),
+            },
+        )
     cart = await view(user_id=user.id, session_id=None, db=db)
     return {"result": result, "cart": cart}
 
@@ -396,6 +408,8 @@ async def http_remove_item(
         db=db,
     )
     await db.commit()
+    if result.get("removed"):
+        capture("cart_item_removed", properties={"variant_id": variant_id})
     cart = await view(user_id=user.id, session_id=None, db=db)
     return {"result": result, "cart": cart}
 
@@ -407,6 +421,14 @@ async def http_checkout(
 ):
     result = await checkout(user_id=user.id, session_id=None, db=db)
     await db.commit()
+    if result.get("checkout_url"):
+        capture(
+            "checkout_initiated",
+            properties={
+                "items_count": result.get("items_count"),
+                "total": result.get("total"),
+            },
+        )
     return result
 
 
@@ -437,5 +459,14 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             if user_id is not None:
                 await db.execute(delete(CartItem).where(_owner_filter(user_id, None)))
                 await db.commit()
+                amount_total = getattr(stripe_session, "amount_total", None)
+                posthog.capture(
+                    str(user_id),
+                    "checkout_completed",
+                    properties={
+                        "stripe_session_id": getattr(stripe_session, "id", None),
+                        "amount_total_cents": amount_total,
+                    },
+                )
 
     return {"received": True}
