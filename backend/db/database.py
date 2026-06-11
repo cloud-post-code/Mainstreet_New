@@ -92,6 +92,7 @@ async def create_tables():
             CREATE OR REPLACE FUNCTION products_search_vector_update() RETURNS trigger AS $$
             DECLARE
                 option_text text;
+                tags_text text;
             BEGIN
                 -- Aggregate all variant option_values for the parent so a
                 -- search for "red tape dispenser" still finds the parent.
@@ -99,13 +100,22 @@ async def create_tables():
                   INTO option_text
                   FROM product_variants
                  WHERE product_id = NEW.id;
+                -- tags may be a JSON array (preferred) or a comma-delimited
+                -- string from older imports; tolerate both, ignore other shapes.
+                IF jsonb_typeof(NEW.description->'tags') = 'array' THEN
+                    tags_text := array_to_string(
+                        ARRAY(SELECT jsonb_array_elements_text(NEW.description->'tags')), ' '
+                    );
+                ELSIF jsonb_typeof(NEW.description->'tags') = 'string' THEN
+                    tags_text := NEW.description->>'tags';
+                ELSE
+                    tags_text := '';
+                END IF;
                 NEW.search_vector :=
                     setweight(to_tsvector('english', coalesce(NEW.name, '')), 'A') ||
                     setweight(to_tsvector('english', coalesce(NEW.shop_name_cached, '')), 'A') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'summary', '')), 'B') ||
-                    setweight(to_tsvector('english', coalesce(
-                        array_to_string(ARRAY(SELECT jsonb_array_elements_text(NEW.description->'tags')), ' '), ''
-                    )), 'B') ||
+                    setweight(to_tsvector('english', coalesce(tags_text, '')), 'B') ||
                     setweight(to_tsvector('english', coalesce(option_text, '')), 'B') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'long', '')), 'C') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'materials', '')), 'C') ||
