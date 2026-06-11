@@ -11,6 +11,21 @@ import Chat from './pages/Chat'
 import Admin from './pages/Admin'
 import Discover from './pages/Discover'
 import Mason from './pages/Mason'
+import { initPostHog, identify, reset } from './analytics/posthog'
+
+initPostHog()
+
+function PostHogIdentity() {
+  const { user } = useAuth()
+  React.useEffect(() => {
+    if (user?.id) {
+      identify(user.id, { email: user.email, is_admin: user.is_admin })
+    } else {
+      reset()
+    }
+  }, [user?.id])
+  return null
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
@@ -27,6 +42,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>
+      <PostHogIdentity />
       <BrowserRouter>
         <CartProvider>
           <MasonProvider>

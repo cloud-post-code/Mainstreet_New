@@ -11,6 +11,8 @@ import ProductModal, { ProductModalData } from '../components/ProductModal'
 import { useMason, AgentState } from '../mason/MasonContext'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import { useCart } from '../cart/CartContext'
+import { track } from '../analytics/posthog'
+import MasonFeedback from '../components/MasonFeedback'
 import styles from './Chat.module.css'
 
 const FALLBACK_SUGGESTIONS = [
@@ -116,14 +118,24 @@ export default function Chat() {
   const cart = useCart()
   const masonMemory = useMasonMemory(token)
   const prevStreamingRef = useRef(streaming)
+  const sentAtRef = useRef<number | null>(null)
   useEffect(() => {
     if (prevStreamingRef.current && !streaming) {
       cart.refresh()
       // Pick up any save_note / save_preference / save_product that ran this turn.
       masonMemory.refresh()
+      track('mason_response_rendered', {
+        session_id: activeSessionId,
+        surface: 'chat',
+        mode,
+        latency_perceived_ms: sentAtRef.current != null
+          ? Math.round(performance.now() - sentAtRef.current)
+          : null,
+      })
+      sentAtRef.current = null
     }
     prevStreamingRef.current = streaming
-  }, [streaming, cart, masonMemory])
+  }, [streaming, cart, masonMemory, activeSessionId, mode])
 
   const messages = useMemo(
     () => [...loadedMessages, ...liveMessages],
@@ -154,10 +166,25 @@ export default function Chat() {
 
   useEffect(() => {
     if (!token) return
-    api.getSessions(token, 'shop').then(s => {
+    // Honor ?session=<id> for deep links (e.g. opening an inbox message);
+    // otherwise start a fresh shop session so prior turns aren't replayed
+    // to the model. Past sessions remain available through the history UI.
+    const params = new URLSearchParams(location.search)
+    const requested = params.get('session')
+    api.getSessions(token, 'shop').then(async s => {
       setSessions(s)
-      if (s.length) setActiveSessionId(s[0].id)
+      if (requested) {
+        const id = Number(requested)
+        if (Number.isFinite(id) && s.some(x => x.id === id)) {
+          setActiveSessionId(id)
+          return
+        }
+      }
+      const created = await api.createSession(token)
+      setSessions(prev => [created, ...prev])
+      setActiveSessionId(created.id)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
   useEffect(() => {
@@ -272,6 +299,15 @@ export default function Chat() {
     const text = input.trim()
     setInput('')
 
+    track('mason_message_sent', {
+      session_id: activeSessionId,
+      surface: 'chat',
+      mode,
+      message_length: text.length,
+      is_authenticated: !!token,
+    })
+    sentAtRef.current = performance.now()
+
     if (!activeSessionId) {
       const s = token
         ? await api.createSession(token)
@@ -383,6 +419,13 @@ export default function Chat() {
       if (pid != null) {
         const found = findProductProps(pid)
         const fallbackName = typeof p.name === 'string' ? p.name : `Product ${pid}`
+        track('mason_product_clicked', {
+          session_id: activeSessionId,
+          product_id: pid,
+          product_name: found?.name ?? fallbackName,
+          shop_name: found?.shop_name ?? null,
+          source: 'mason_response',
+        })
         setModalProduct(found ?? {
           product_id: pid,
           name: fallbackName,
@@ -507,6 +550,13 @@ export default function Chat() {
                         onAnswer={handleAnswer}
                         onIntent={handleIntent}
                       />
+                      {!streaming && idx === lastAgentIdx && (
+                        <MasonFeedback
+                          sessionId={activeSessionId}
+                          messageId={String(msg.id)}
+                          surface="chat"
+                        />
+                      )}
                     </AgentErrorBoundary>
                   )}
                 </div>

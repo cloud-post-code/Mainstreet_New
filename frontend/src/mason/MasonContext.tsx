@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react'
+import { track } from '../analytics/posthog'
 
 export type AgentState = 'idle' | 'thinking' | 'tool' | 'replying'
 
@@ -34,8 +35,31 @@ export function MasonProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  const sessionStartedAt = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      if (sessionStartedAt.current === null) {
+        sessionStartedAt.current = performance.now()
+        track('mason_session_started', {
+          page: typeof window !== 'undefined' ? window.location.pathname : undefined,
+        })
+      }
+    } else if (sessionStartedAt.current !== null) {
+      track('mason_session_ended', {
+        duration_ms: Math.round(performance.now() - sessionStartedAt.current),
+      })
+      sessionStartedAt.current = null
+    }
+  }, [isOpen])
+
   const openDrawer = useCallback(() => setIsOpen(true), [])
-  const closeDrawer = useCallback(() => setIsOpen(false), [])
+  const closeDrawer = useCallback(() => {
+    track('mason_chip_closed', {
+      page: typeof window !== 'undefined' ? window.location.pathname : undefined,
+    })
+    setIsOpen(false)
+  }, [])
   const toggleDrawer = useCallback(() => setIsOpen(o => !o), [])
 
   const value = useMemo<MasonContextValue>(() => ({

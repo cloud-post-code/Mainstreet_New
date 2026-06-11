@@ -8,6 +8,8 @@ import PrefsForm from '../components/PrefsForm'
 import styles from './Mason.module.css'
 import { formatDate } from '../lib/format'
 import SavedProductItem from '../components/SavedProductItem'
+import { track } from '../analytics/posthog'
+import MasonFeedback from '../components/MasonFeedback'
 
 type TabKey = 'shipping' | 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
 
@@ -54,17 +56,14 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
       if (cancelled) return
       setSessions(all)
     })
-    api.getSessions(token, 'mason').then(async mason => {
+    // Always start a fresh Mason chat session on page load — prior turns from
+    // earlier conversations shouldn't be replayed to the model. Durable
+    // context (notes, prefs, saved products) still flows through long-term
+    // memory on the backend.
+    api.createSession(token, 'mason').then(created => {
       if (cancelled) return
-      if (mason.length > 0) {
-        setMasonSessionId(mason[0].id)
-      } else {
-        const created = await api.createSession(token, 'mason')
-        if (!cancelled) {
-          setMasonSessionId(created.id)
-          setSessions(prev => [created, ...prev])
-        }
-      }
+      setMasonSessionId(created.id)
+      setSessions(prev => [created, ...prev])
     })
     return () => { cancelled = true }
   }, [token])
@@ -97,7 +96,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
               role="tab"
               aria-selected={tab === t.key}
               className={`${styles.tab} ${tab === t.key ? styles.tabActive : ''}`}
-              onClick={() => setTab(t.key)}
+              onClick={() => { track('mason_tab_switched', { from: tab, to: t.key }); setTab(t.key) }}
             >
               {t.label}
               {t.key === 'inbox' && unreadCount > 0 && (
@@ -264,11 +263,22 @@ function MasonChatColumn({
   const [input, setInput] = useState('')
   const transcriptRef = useRef<HTMLDivElement | null>(null)
   const prevStreaming = useRef(streaming)
+  const sentAt = useRef<number | null>(null)
 
   useEffect(() => {
-    if (prevStreaming.current && !streaming) onAfterTurn()
+    if (prevStreaming.current && !streaming) {
+      onAfterTurn()
+      track('mason_response_rendered', {
+        session_id: sessionId,
+        surface: 'mason_page',
+        latency_perceived_ms: sentAt.current != null
+          ? Math.round(performance.now() - sentAt.current)
+          : null,
+      })
+      sentAt.current = null
+    }
     prevStreaming.current = streaming
-  }, [streaming, onAfterTurn])
+  }, [streaming, onAfterTurn, sessionId])
 
   useEffect(() => {
     const el = transcriptRef.current
@@ -278,6 +288,12 @@ function MasonChatColumn({
   const handleSend = useCallback(() => {
     const t = input.trim()
     if (!t || !sessionId || streaming) return
+    track('mason_message_sent', {
+      session_id: sessionId,
+      surface: 'mason_page',
+      message_length: t.length,
+    })
+    sentAt.current = performance.now()
     sendMessage(t)
     setInput('')
   }, [input, sessionId, streaming, sendMessage])
@@ -318,9 +334,19 @@ function MasonChatColumn({
               <div key={m.id} className={`${styles.bubble} ${styles.bubbleAgent}`}>…</div>
             )
           }
+          const isLast = m.id === messages[messages.length - 1]?.id
           return (
-            <div key={m.id} className={`${styles.bubble} ${styles.bubbleAgent}`}>
-              {text || ' '}
+            <div key={m.id}>
+              <div className={`${styles.bubble} ${styles.bubbleAgent}`}>
+                {text || ' '}
+              </div>
+              {!streaming && isLast && text && (
+                <MasonFeedback
+                  sessionId={sessionId}
+                  messageId={String(m.id)}
+                  surface="mason_page"
+                />
+              )}
             </div>
           )
         })}

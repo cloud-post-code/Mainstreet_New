@@ -12,9 +12,11 @@ The payload is streamed to the client as a ui_tree event for the A2UI renderer.
 """
 import json
 import logging
+import time
 import traceback
 from typing import AsyncGenerator, Any
 import anthropic
+from posthog import capture as _ph_capture
 from posthog.ai.anthropic import Anthropic as PostHogAnthropic
 import posthog as _posthog
 
@@ -35,6 +37,17 @@ from agent.pricing import compute_cost
 
 MAX_ITERATIONS = 10
 MEMORY_PLACEHOLDER = "{{LONG_TERM_MEMORY}}"
+
+
+def _safe_capture(event: str, properties: dict, distinct_id: str | None = None) -> None:
+    """Fire-and-forget PostHog capture. Never raise into the agent loop."""
+    try:
+        if distinct_id:
+            _ph_capture(event, distinct_id=distinct_id, properties=properties)
+        else:
+            _ph_capture(event, properties=properties)
+    except Exception:
+        logger.debug("posthog capture failed for %s", event, exc_info=True)
 
 
 def _tools_with_cache(tools: list[dict]) -> list[dict]:
@@ -206,6 +219,9 @@ The root is always a `stack`. Children appear in this order:
 7. If render_ui returns a validation error, fix it and call render_ui again in the same turn.
 8. Never emit more than one `multiple_choice` or `question_card` in the same payload. If you need to ask two or more things, use a single `questionnaire` instead.
 9. When using `questionnaire`, emit it exactly ONCE with `current_step: 0`. The client walks the user through every step locally and returns all answers in a single bundled message. Do not re-emit the questionnaire on the follow-up turn — render product results instead.
+10. All conversational prose belongs inside the `text_block` of your single `render_ui` call. Do NOT narrate before tool calls. Pre-tool text is limited to at most one short status line (e.g. "Checking your cart…"). Never repeat the same intro twice — if you wrote a sentence before a tool call, do not paraphrase it again in the final `text_block`. Each idea is stated once, in `text_block` only.
+11. When the user sends a new search or intent (e.g. "Find Eco Home Goods"), answer that intent only. Do NOT open by recapping or summarizing prior topics from earlier in the conversation unless the user explicitly asks. Skip phrases like "You've already got…" or "I also know you've been eyeing…" — go straight to the new ask.
+12. Proofread every `question` and `text_block` string before emitting. No typos, no truncated words ("fr partner"), no half-sentences.
 
 ### Example payload — questionnaire (preferences unclear, asking 3 things)
 
@@ -439,6 +455,16 @@ async def run_agent_turn(
     except Exception as e:
         tb = traceback.format_exc()
         logger.exception("run_agent_turn crashed for session %s", session_id)
+        _safe_capture(
+            "mason_turn_failed",
+            {
+                "session_id": session_id,
+                "mode": mode,
+                "error_type": type(e).__name__,
+                "error_message": str(e)[:500],
+            },
+            distinct_id=str(user_id) if user_id else None,
+        )
         yield _event({
             "type": "error",
             "error": f"{type(e).__name__}: {e}",
@@ -455,6 +481,14 @@ async def _run_agent_turn_inner(
     db: AsyncSession,
     mode: str = "full",
 ) -> AsyncGenerator[str, None]:
+    turn_started_at = time.perf_counter()
+    distinct_id = str(user_id) if user_id else None
+
+    # NOTE: PostHogAnthropic.messages.stream() returns a plain generator
+    # rather than a context manager, which breaks stream_claude's
+    # `with client.messages.stream(...)`. Until the wrapper supports
+    # streaming, the main loop stays on the native SDK and we rely on
+    # the explicit mason_* events below for behavior tracking.
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     # Load memory — anonymous users get no long-term memory
@@ -535,10 +569,27 @@ async def _run_agent_turn_inner(
     accumulated_content = []
     accumulated_tool_calls = []
     accumulated_tool_results = []
+    tools_used: list[str] = []
     # Per-turn usage totals (across iterations) for the summary log line.
     turn_usage_totals = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0, "cost": 0.0}
     pending_usage_rows: list[TurnUsage] = []
 
+    _safe_capture(
+        "mason_turn_started",
+        {
+            "session_id": session_id,
+            "session_type": session_type,
+            "mode": mode,
+            "model": model_name,
+            "message_length": len(user_message or ""),
+            "has_long_term_memory": bool(long_term),
+            "history_turns": len(history),
+        },
+        distinct_id=distinct_id,
+    )
+
+    iteration = 0
+    final_stop_reason: str | None = None
     for iteration in range(max_iterations):
         if iteration > 0:
             yield _event({"type": "thinking", "content": f"\n\n— Step {iteration + 1} —\n"})
@@ -605,18 +656,74 @@ async def _run_agent_turn_inner(
                 }
                 accumulated_content.append(tc)
                 accumulated_tool_calls.append(tc)
+                tools_used.append(block.name)
+                tool_input_keys = (
+                    list(block.input.keys()) if isinstance(block.input, dict) else []
+                )
+                _safe_capture(
+                    "mason_tool_called",
+                    {
+                        "session_id": session_id,
+                        "mode": mode,
+                        "tool_name": block.name,
+                        "tool_input_keys": tool_input_keys,
+                        "iteration": iteration,
+                    },
+                    distinct_id=distinct_id,
+                )
                 yield _event({"type": "tool_call", "tool": block.name, "args": block.input, "id": block.id})
 
         # If no tool calls, we're done
         if not tool_use_blocks or response.stop_reason == "end_turn":
+            final_stop_reason = response.stop_reason
             break
 
         # Execute tools and collect results
         tool_results = []
         for block in tool_use_blocks:
-            result, event_hint = await execute_tool(
-                block.name, block.input, user_id, session_id, db
-            )
+            tool_started_at = time.perf_counter()
+            tool_error: str | None = None
+            try:
+                result, event_hint = await execute_tool(
+                    block.name, block.input, user_id, session_id, db
+                )
+            except Exception as _tool_exc:
+                tool_error = type(_tool_exc).__name__
+                _safe_capture(
+                    "mason_tool_completed",
+                    {
+                        "session_id": session_id,
+                        "mode": mode,
+                        "tool_name": block.name,
+                        "success": False,
+                        "latency_ms": int((time.perf_counter() - tool_started_at) * 1000),
+                        "error_type": tool_error,
+                        "iteration": iteration,
+                    },
+                    distinct_id=distinct_id,
+                )
+                raise
+            else:
+                try:
+                    result_size_bytes = len(
+                        result if isinstance(result, str) else json.dumps(result, default=str)
+                    )
+                except Exception:
+                    result_size_bytes = 0
+                _safe_capture(
+                    "mason_tool_completed",
+                    {
+                        "session_id": session_id,
+                        "mode": mode,
+                        "tool_name": block.name,
+                        "success": True,
+                        "latency_ms": int((time.perf_counter() - tool_started_at) * 1000),
+                        "result_size_bytes": result_size_bytes,
+                        "event_hint": event_hint,
+                        "iteration": iteration,
+                    },
+                    distinct_id=distinct_id,
+                )
 
             if event_hint == "ui_tree":
                 payload = result if isinstance(result, dict) else block.input
@@ -671,6 +778,41 @@ async def _run_agent_turn_inner(
         logger.exception("Failed to persist TurnUsage rows for session %s", session_id)
 
     await db.commit()
+
+    turn_latency_ms = int((time.perf_counter() - turn_started_at) * 1000)
+    iterations_run = len(pending_usage_rows)
+    if iterations_run >= max_iterations and final_stop_reason is None:
+        _safe_capture(
+            "mason_iteration_capped",
+            {
+                "session_id": session_id,
+                "mode": mode,
+                "tools_used": tools_used,
+                "iterations": iterations_run,
+            },
+            distinct_id=distinct_id,
+        )
+
+    _safe_capture(
+        "mason_turn_completed",
+        {
+            "session_id": session_id,
+            "mode": mode,
+            "model": model_name,
+            "iterations": iterations_run,
+            "tools_used": tools_used,
+            "tools_used_count": len(tools_used),
+            "unique_tools_used": sorted(set(tools_used)),
+            "total_input_tokens": turn_usage_totals["input"],
+            "total_output_tokens": turn_usage_totals["output"],
+            "total_cache_read_tokens": turn_usage_totals["cache_read"],
+            "total_cache_creation_tokens": turn_usage_totals["cache_creation"],
+            "estimated_cost_usd": round(turn_usage_totals["cost"], 6),
+            "latency_ms": turn_latency_ms,
+            "final_stop_reason": final_stop_reason,
+        },
+        distinct_id=distinct_id,
+    )
 
     # One-line summary for ops visibility.
     logger.info(

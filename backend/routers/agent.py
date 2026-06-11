@@ -248,6 +248,9 @@ async def agent_turn(
 
     async def stream():
         import json as _json
+        import time as _time
+
+        stream_started_at = _time.perf_counter()
 
         # Decide fast vs full BEFORE opening the streaming DB session so the
         # classifier latency overlaps cleanly with the HTTP response start.
@@ -272,6 +275,22 @@ async def agent_turn(
             )
             decided_by = "classifier"
 
+        try:
+            capture(
+                "mason_classifier_decided",
+                properties={
+                    "session_id": session_id,
+                    "session_type": session_type,
+                    "chosen_mode": mode,
+                    "classify_ms": classify_ms,
+                    "decided_by": decided_by,
+                    "had_active_plan": has_active_plan,
+                    "had_active_questionnaire": bool(question_card_id),
+                },
+            )
+        except Exception:
+            logger.debug("posthog capture failed for mason_classifier_decided", exc_info=True)
+
         # Emit a meta event up-front so the frontend (and ops logs) know
         # which path is running.
         yield _json.dumps({
@@ -280,6 +299,10 @@ async def agent_turn(
             "classify_ms": classify_ms,
             "decided_by": decided_by,
         }) + "\n"
+
+        had_products = False
+        product_count = 0
+        ui_tree_count = 0
 
         # The request-scoped `db` session is closed when this generator starts
         # streaming, so the streaming turn needs its own session with a
@@ -295,6 +318,23 @@ async def agent_turn(
                     db=stream_db,
                     mode=mode,
                 ):
+                    # Sniff ui_tree events to attribute product surface counts
+                    # without coupling the loop to the router.
+                    if isinstance(chunk, str) and '"ui_tree"' in chunk:
+                        try:
+                            parsed = _json.loads(chunk)
+                            if parsed.get("type") == "ui_tree":
+                                ui_tree_count += 1
+                                comps = parsed.get("components") or []
+                                pc = sum(
+                                    1 for c in comps
+                                    if isinstance(c, dict) and c.get("type") == "product_card"
+                                )
+                                if pc:
+                                    had_products = True
+                                    product_count += pc
+                        except Exception:
+                            pass
                     yield chunk
             except Exception:
                 logger.exception("agent_turn stream crashed for session %s", session_id)
@@ -310,5 +350,20 @@ async def agent_turn(
                     await stream_db.commit()
                 except Exception:
                     logger.exception("Failed to clear processing flag for session %s", session_id)
+                try:
+                    capture(
+                        "mason_response_sent",
+                        properties={
+                            "session_id": session_id,
+                            "session_type": session_type,
+                            "mode": mode,
+                            "total_latency_ms": int((_time.perf_counter() - stream_started_at) * 1000),
+                            "had_products": had_products,
+                            "product_count": product_count,
+                            "ui_tree_count": ui_tree_count,
+                        },
+                    )
+                except Exception:
+                    logger.debug("posthog capture failed for mason_response_sent", exc_info=True)
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
