@@ -1,19 +1,29 @@
+import asyncio
+import json as _json
 import logging
-import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 import posthog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from posthog import capture
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
 from db.database import get_db, AsyncSessionLocal
-from db.models import AgentSession, AgentPlan, User
+from db.models import (
+    AgentPlan,
+    AgentSession,
+    AgentTurnEvent,
+    AgentTurnRun,
+    User,
+)
 from db.schemas import SessionOut, SessionCreate, TurnIn, PlanOut
 from auth import get_current_user, get_optional_user
-from agent.loop import run_agent_turn
-from agent.router_classifier import classify_intent
+from agent.runner import (
+    MAX_BACKGROUND_RUNS,
+    cancel_run,
+    start_turn_run,
+)
 from agent.suggestions import get_suggestions
 from utils.db_helpers import get_owned_or_404, verify_session_ownership
 from routers.auth import limiter
@@ -35,10 +45,17 @@ async def welcome_suggestions(
 @router.get("/sessions", response_model=list[SessionOut])
 async def list_sessions(
     session_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     from db.models import AgentTurn
+
+    # Offset paging (not a cursor) because the updated_at ordering reshuffles
+    # whenever a session gets a new turn, which would invalidate cursors.
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
 
     # Hide sessions that were created but never received a user query — they
     # show up as empty "New conversation" entries cluttering history.
@@ -53,7 +70,8 @@ async def list_sessions(
         .where(AgentSession.user_id == current_user.id)
         .where(has_user_turn)
         .order_by(AgentSession.updated_at.desc())
-        .limit(50)
+        .limit(limit)
+        .offset(offset)
     )
     if session_type in ("shop", "mason"):
         stmt = stmt.where(AgentSession.session_type == session_type)
@@ -197,16 +215,12 @@ async def get_plan(
     return plan
 
 
-@router.post("/turn")
-@limiter.limit("30/minute")
-async def agent_turn(
-    request: Request,
-    body: TurnIn,
-    db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user),
-):
-    # For authenticated users: verify session ownership.
-    # For anonymous: verify session belongs to the shared guest user.
+async def _resolve_session_for_turn(
+    db: AsyncSession,
+    session_id: int,
+    current_user: Optional[User],
+) -> AgentSession:
+    """Verify the session belongs to the current user (or the guest user)."""
     if current_user:
         owner_filter = (AgentSession.user_id == current_user.id)
     else:
@@ -217,177 +231,200 @@ async def agent_turn(
         owner_filter = (AgentSession.user_id == guest_user.id)
 
     result = await db.execute(
-        select(AgentSession).where(
-            AgentSession.id == body.session_id,
-            owner_filter,
-        )
+        select(AgentSession).where(AgentSession.id == session_id, owner_filter)
     )
     session = result.scalars().first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    return session
 
-    if session.processing:
-        # A prior turn that crashed or was cancelled before the stream's
-        # finally block ran can leave processing=True forever. Treat the
-        # lock as stale if the row hasn't been touched in 2 minutes.
-        stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
-        last_touched = session.updated_at
-        if last_touched is not None and last_touched.tzinfo is None:
-            last_touched = last_touched.replace(tzinfo=timezone.utc)
-        if last_touched is None or last_touched > stale_cutoff:
-            raise HTTPException(status_code=429, detail="A turn is already in progress for this session")
-        logger.warning("Clearing stale processing lock for session %s", body.session_id)
 
-    await db.execute(
-        update(AgentSession).where(AgentSession.id == body.session_id).values(processing=True)
-    )
-    await db.commit()
+@router.post("/turn", status_code=202)
+@limiter.limit("30/minute")
+async def agent_turn(
+    request: Request,
+    body: TurnIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Start a background Mason turn.
 
+    The turn runs detached from this HTTP request. Returns the ``run_id``
+    immediately; the client should attach via ``GET /api/agent/runs/{run_id}/stream``
+    to consume events.
+    """
+    session = await _resolve_session_for_turn(db, body.session_id, current_user)
     user_id = current_user.id if current_user else None
-    if user_id is not None:
-        capture(
-            "agent_turn_sent",
-            properties={
-                "session_type": getattr(session, "session_type", "shop") or "shop",
-                "message_length": len(body.message),
-            },
-        )
-    session_id = body.session_id
-    message = body.message
-    question_card_id = body.question_card_id
-    session_type = getattr(session, "session_type", "shop") or "shop"
+
     raw_override = (body.mode_override or "").strip().lower() or None
     mode_override = raw_override if raw_override in ("fast", "full") else None
 
-    # Check for an active plan up-front so the classifier can stay on the
-    # `full` path for in-flight multi-step work.
-    has_active_plan = False
-    if session_type != "mason":
-        plan_row = (
-            await db.execute(
-                select(AgentPlan).where(AgentPlan.session_id == session_id).limit(1)
-            )
-        ).scalars().first()
-        has_active_plan = plan_row is not None
+    run = await start_turn_run(
+        db,
+        session=session,
+        user_id=user_id,
+        message=body.message,
+        question_card_id=body.question_card_id,
+        mode_override=mode_override,
+    )
 
-    async def stream():
-        import json as _json
-        import time as _time
-
-        stream_started_at = _time.perf_counter()
-
-        # Decide fast vs full BEFORE opening the streaming DB session so the
-        # classifier latency overlaps cleanly with the HTTP response start.
-        # /mason memory sessions always run on the full memory prompt.
-        # User override (Thinking/Fast toggle) skips the classifier entirely.
-        if session_type == "mason":
-            mode = "full"
-            classify_ms = 0
-            decided_by = "session_type"
-        elif mode_override is not None:
-            mode = mode_override
-            classify_ms = 0
-            decided_by = "user_override"
-        else:
-            mode, classify_ms = await classify_intent(
-                message,
-                {
-                    "has_active_plan": has_active_plan,
-                    "has_active_questionnaire": bool(question_card_id),
-                    "last_assistant_action": None,
-                },
-            )
-            decided_by = "classifier"
-
+    if user_id is not None:
         try:
             capture(
-                "mason_classifier_decided",
+                "agent_turn_sent",
                 properties={
-                    "session_id": session_id,
-                    "session_type": session_type,
-                    "chosen_mode": mode,
-                    "classify_ms": classify_ms,
-                    "decided_by": decided_by,
-                    "had_active_plan": has_active_plan,
-                    "had_active_questionnaire": bool(question_card_id),
+                    "session_type": getattr(session, "session_type", "shop") or "shop",
+                    "message_length": len(body.message),
+                    "run_id": run.id,
                 },
             )
         except Exception:
-            logger.debug("posthog capture failed for mason_classifier_decided", exc_info=True)
+            logger.debug("posthog capture failed for agent_turn_sent", exc_info=True)
 
-        # Emit a meta event up-front so the frontend (and ops logs) know
-        # which path is running.
-        yield _json.dumps({
-            "type": "meta",
-            "mode": mode,
-            "classify_ms": classify_ms,
-            "decided_by": decided_by,
-        }) + "\n"
+    return {"run_id": run.id, "session_id": session.id, "status": run.status}
 
-        had_products = False
-        product_count = 0
-        ui_tree_count = 0
 
-        # The request-scoped `db` session is closed when this generator starts
-        # streaming, so the streaming turn needs its own session with a
-        # lifetime tied to the generator. Without this, the connection leaks
-        # back into the pool in a broken state and exhausts it.
-        async with AsyncSessionLocal() as stream_db:
-            try:
-                async for chunk in run_agent_turn(
-                    user_message=message,
-                    session_id=session_id,
-                    user_id=user_id,
-                    question_card_id=question_card_id,
-                    db=stream_db,
-                    mode=mode,
-                ):
-                    # Sniff ui_tree events to attribute product surface counts
-                    # without coupling the loop to the router.
-                    if isinstance(chunk, str) and '"ui_tree"' in chunk:
-                        try:
-                            parsed = _json.loads(chunk)
-                            if parsed.get("type") == "ui_tree":
-                                ui_tree_count += 1
-                                comps = parsed.get("components") or []
-                                pc = sum(
-                                    1 for c in comps
-                                    if isinstance(c, dict) and c.get("type") == "product_card"
-                                )
-                                if pc:
-                                    had_products = True
-                                    product_count += pc
-                        except Exception:
-                            pass
-                    yield chunk
-            except Exception:
-                logger.exception("agent_turn stream crashed for session %s", session_id)
-                yield _json.dumps({
-                    "type": "error",
-                    "error": "Agent failed. Please retry.",
-                }) + "\n"
-            finally:
-                try:
-                    await stream_db.execute(
-                        update(AgentSession).where(AgentSession.id == session_id).values(processing=False)
+async def _verify_run_owned(
+    db: AsyncSession,
+    run_id: int,
+    current_user: Optional[User],
+) -> AgentTurnRun:
+    run = (await db.execute(
+        select(AgentTurnRun).where(AgentTurnRun.id == run_id)
+    )).scalars().first()
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    # Re-use the session ownership check — runs inherit their session's owner.
+    await _resolve_session_for_turn(db, run.session_id, current_user)
+    return run
+
+
+@router.get("/runs/{run_id}/stream")
+async def stream_run(
+    run_id: int,
+    after_seq: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Replay then tail events for a run.
+
+    Emits NDJSON, oldest-first. Closes when the run is no longer ``running``
+    and all known events have been flushed. Safe to reconnect by passing the
+    last ``seq`` seen as ``after_seq``.
+    """
+    await _verify_run_owned(db, run_id, current_user)
+
+    async def gen():
+        last_seq = after_seq
+        # Use a dedicated session so the request session isn't tied up while
+        # we poll. ``expire_on_commit=False`` is already configured globally.
+        async with AsyncSessionLocal() as poll_db:
+            poll_interval = 0.25
+            idle_iters = 0
+            while True:
+                rows = (await poll_db.execute(
+                    select(AgentTurnEvent)
+                    .where(
+                        AgentTurnEvent.run_id == run_id,
+                        AgentTurnEvent.seq > last_seq,
                     )
-                    await stream_db.commit()
-                except Exception:
-                    logger.exception("Failed to clear processing flag for session %s", session_id)
-                try:
-                    capture(
-                        "mason_response_sent",
-                        properties={
-                            "session_id": session_id,
-                            "session_type": session_type,
-                            "mode": mode,
-                            "total_latency_ms": int((_time.perf_counter() - stream_started_at) * 1000),
-                            "had_products": had_products,
-                            "product_count": product_count,
-                            "ui_tree_count": ui_tree_count,
-                        },
-                    )
-                except Exception:
-                    logger.debug("posthog capture failed for mason_response_sent", exc_info=True)
+                    .order_by(AgentTurnEvent.seq.asc())
+                )).scalars().all()
 
-    return StreamingResponse(stream(), media_type="application/x-ndjson")
+                if rows:
+                    for ev in rows:
+                        last_seq = ev.seq
+                        yield _json.dumps(ev.payload) + "\n"
+                    idle_iters = 0
+                else:
+                    idle_iters += 1
+
+                run = (await poll_db.execute(
+                    select(AgentTurnRun.status).where(AgentTurnRun.id == run_id)
+                )).scalar()
+                if run != "running":
+                    # Drain anything written between the last fetch and the
+                    # status flip before closing.
+                    tail = (await poll_db.execute(
+                        select(AgentTurnEvent)
+                        .where(
+                            AgentTurnEvent.run_id == run_id,
+                            AgentTurnEvent.seq > last_seq,
+                        )
+                        .order_by(AgentTurnEvent.seq.asc())
+                    )).scalars().all()
+                    for ev in tail:
+                        last_seq = ev.seq
+                        yield _json.dumps(ev.payload) + "\n"
+                    return
+
+                # Back off slightly when idle to keep DB load low on long thinks.
+                await asyncio.sleep(min(poll_interval * (1 + idle_iters * 0.1), 1.0))
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")
+
+
+@router.get("/runs/active")
+async def list_active_runs(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """All in-flight runs for the current user. Drives sidebar status dots."""
+    rows = (await db.execute(
+        select(
+            AgentTurnRun.id,
+            AgentTurnRun.session_id,
+            AgentTurnRun.status,
+            AgentTurnRun.created_at,
+        )
+        .where(
+            AgentTurnRun.user_id == current_user.id,
+            AgentTurnRun.status == "running",
+        )
+        .order_by(AgentTurnRun.created_at.desc())
+    )).all()
+    return {
+        "runs": [
+            {
+                "run_id": r.id,
+                "session_id": r.session_id,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+        "limit": MAX_BACKGROUND_RUNS,
+    }
+
+
+@router.get("/sessions/{session_id}/active_run")
+async def get_active_run_for_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Used when opening a session to know whether to auto-attach."""
+    await _resolve_session_for_turn(db, session_id, current_user)
+    row = (await db.execute(
+        select(AgentTurnRun.id, AgentTurnRun.status)
+        .where(
+            AgentTurnRun.session_id == session_id,
+            AgentTurnRun.status == "running",
+        )
+        .order_by(AgentTurnRun.created_at.desc())
+        .limit(1)
+    )).first()
+    if row is None:
+        return None
+    return {"run_id": row.id, "status": row.status}
+
+
+@router.post("/runs/{run_id}/cancel", status_code=202)
+async def cancel_run_endpoint(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _verify_run_owned(db, run_id, current_user)
+    cancelled = await cancel_run(run_id)
+    return {"cancelled": cancelled}

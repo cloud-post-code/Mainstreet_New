@@ -586,20 +586,51 @@ async def execute_tool(
         )
 
 
-_HYBRID_SQL = sql_text("""
+def _filter_where_sql(params: dict) -> tuple[str, dict]:
+    """Translate agent filters (shop / price / stock) into SQL fragments bound
+    into the candidate queries, so ranking and RRF only ever see eligible
+    products. Filtering after fusion silently dropped top-ranked hits and
+    wasted candidate-pool slots. Fragments are hardcoded; values are binds."""
+    clauses: list[str] = []
+    binds: dict = {}
+    if params.get("shop_id"):
+        clauses.append("p.shop_id = :f_shop_id")
+        binds["f_shop_id"] = int(params["shop_id"])
+    min_p = params.get("min_price")
+    max_p = params.get("max_price")
+    in_stock_only = params.get("in_stock_only")
+    if min_p is not None or max_p is not None or in_stock_only:
+        v_conds: list[str] = []
+        if min_p is not None:
+            v_conds.append("v.price >= :f_min_price")
+            binds["f_min_price"] = Decimal(str(min_p))
+        if max_p is not None:
+            v_conds.append("v.price <= :f_max_price")
+            binds["f_max_price"] = Decimal(str(max_p))
+        if in_stock_only:
+            v_conds.append("v.quantity > 0")
+        clauses.append(
+            "EXISTS (SELECT 1 FROM product_variants v"
+            " WHERE v.product_id = p.id AND " + " AND ".join(v_conds) + ")"
+        )
+    return "".join(f" AND {c}" for c in clauses), binds
+
+
+def _hybrid_sql(filter_sql: str):
+    return sql_text(f"""
 WITH lex AS (
-    SELECT id,
-           row_number() OVER (ORDER BY ts_rank(search_vector, q) DESC) AS rank
-    FROM products, websearch_to_tsquery('english', :q) q
-    WHERE search_vector @@ q OR name % :q
+    SELECT p.id,
+           row_number() OVER (ORDER BY ts_rank(p.search_vector, q) DESC) AS rank
+    FROM products p, websearch_to_tsquery('english', :q) q
+    WHERE (p.search_vector @@ q OR p.name % :q){filter_sql}
     LIMIT 50
 ),
 sem AS (
-    SELECT id,
-           row_number() OVER (ORDER BY embedding <=> CAST(:qvec AS vector)) AS rank
-    FROM products
-    WHERE embedding IS NOT NULL
-    ORDER BY embedding <=> CAST(:qvec AS vector)
+    SELECT p.id,
+           row_number() OVER (ORDER BY p.embedding <=> CAST(:qvec AS vector)) AS rank
+    FROM products p
+    WHERE p.embedding IS NOT NULL{filter_sql}
+    ORDER BY p.embedding <=> CAST(:qvec AS vector)
     LIMIT 50
 )
 SELECT 'lex' AS src, id, rank FROM lex
@@ -607,11 +638,13 @@ UNION ALL
 SELECT 'sem' AS src, id, rank FROM sem
 """)
 
-_LEX_ONLY_SQL = sql_text("""
-SELECT id,
-       row_number() OVER (ORDER BY ts_rank(search_vector, q) DESC) AS rank
-FROM products, websearch_to_tsquery('english', :q) q
-WHERE search_vector @@ q OR name % :q
+
+def _lex_only_sql(filter_sql: str):
+    return sql_text(f"""
+SELECT p.id,
+       row_number() OVER (ORDER BY ts_rank(p.search_vector, q) DESC) AS rank
+FROM products p, websearch_to_tsquery('english', :q) q
+WHERE (p.search_vector @@ q OR p.name % :q){filter_sql}
 LIMIT 50
 """)
 
@@ -641,16 +674,21 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
     # Rung 2: embed variants. Empty list / all-None means no semantic branch.
     vectors = await embed_texts(variants)
 
+    filter_sql, filter_binds = _filter_where_sql(params)
+    hybrid_stmt = _hybrid_sql(filter_sql)
+    lex_stmt = _lex_only_sql(filter_sql)
+
     # Per-variant hybrid CTE → ranked id lists for RRF.
     ranked_lists: list[list[int]] = []
     for variant, vec in zip(variants, vectors):
         if vec is not None:
             rows = (await db.execute(
-                _HYBRID_SQL, {"q": variant, "qvec": vector_literal(vec)},
+                hybrid_stmt,
+                {"q": variant, "qvec": vector_literal(vec), **filter_binds},
             )).all()
         else:
             rows = [("lex", *r) for r in (await db.execute(
-                _LEX_ONLY_SQL, {"q": variant},
+                lex_stmt, {"q": variant, **filter_binds},
             )).all()]
         lex_ranked: list[tuple[int, int]] = []
         sem_ranked: list[tuple[int, int]] = []
@@ -678,17 +716,19 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
     rerank_on = _settings.zeroentropy_rerank_enabled and bool(_settings.zeroentropy_api_key)
     pool_cap = _settings.zeroentropy_rerank_pool if rerank_on else limit
 
+    # Filters already applied inside the candidate queries, so nothing gets
+    # dropped at hydrate time — only the top pool_cap ids are needed.
+    pool_ids = fused_ids[:pool_cap]
     hydrate_stmt = (
         select(Product, Shop.name.label("shop_name"))
         .join(Shop, Shop.id == Product.shop_id)
-        .where(Product.id.in_(fused_ids))
+        .where(Product.id.in_(pool_ids))
     )
-    hydrate_stmt = _apply_filters(hydrate_stmt, params)
     rows = (await db.execute(hydrate_stmt)).all()
     by_id = {p.id: (p, sn) for p, sn in rows}
 
     ordered = []
-    for pid in fused_ids:
+    for pid in pool_ids:
         hit = by_id.get(pid)
         if hit is not None:
             ordered.append(hit)
@@ -835,6 +875,7 @@ async def _search_shops(params: dict, db: AsyncSession) -> dict:
         .outerjoin(Product, Product.shop_id == Shop.id)
         .group_by(Shop.id)
         .order_by(Shop.name)
+        .limit(50)
     )
     if q:
         stmt = stmt.where(Shop.name.ilike(f"%{q}%") | Shop.description.ilike(f"%{q}%"))

@@ -426,6 +426,22 @@
   flex-direction: column;
   gap: 4px;
 }
+.loadMoreBtn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid rgba(15, 24, 5, 0.15);
+  border-radius: 8px;
+  font-family: 'Lora', serif;
+  font-size: 12px;
+  color: var(--ms-dark, #0f1805);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.loadMoreBtn:hover:not(:disabled) { background: rgba(15, 24, 5, 0.06); }
+.loadMoreBtn:disabled { opacity: 0.6; cursor: default; }
+
 .sessionItem {
   width: 100%;
   text-align: left;
@@ -449,6 +465,20 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.runningDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ms-green, #015237);
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: msRunningPulse 1.2s ease-in-out infinite;
+}
+@keyframes msRunningPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
 }
 .sessionMeta {
   display: flex;

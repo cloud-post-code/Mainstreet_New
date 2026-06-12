@@ -36,9 +36,13 @@ interface NodeProps {
 }
 
 function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
+  if (!id || typeof id !== 'string') return null
   const node = tree.get(id)
   if (!node) return <div style={{ color: '#c0392b' }}>Missing component: {id}</div>
-  const p = node.props as Record<string, unknown>
+  if (!node.type || typeof node.type !== 'string') {
+    return <div style={{ color: '#c0392b' }}>Invalid component: {id}</div>
+  }
+  const p = (node.props && typeof node.props === 'object' ? node.props : {}) as Record<string, unknown>
   const childLayout =
     node.type === 'product_grid' ? (p.layout as string | undefined) : undefined
   const children = (node.children ?? []).map(cid => (
@@ -97,8 +101,16 @@ export default function Renderer({ tree, onIntent }: { tree: A2uiTree; onIntent:
   const map = useMemo(() => {
     const m = new Map<string, A2uiComponent>()
     const components = Array.isArray(tree?.components) ? tree.components : []
-    for (const c of components) m.set(c.id, c)
+    for (const c of components) {
+      if (c && typeof c.id === 'string') m.set(c.id, c)
+    }
     return m
   }, [tree])
+  if (!tree || !tree.root || typeof tree.root !== 'string') {
+    if (import.meta.env.DEV) {
+      console.warn('[a2ui Renderer] tree missing root', tree)
+    }
+    return null
+  }
   return <Node tree={map} id={tree.root} onIntent={onIntent} />
 }

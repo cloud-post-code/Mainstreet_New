@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from './useAuth'
 import { A2uiComponent } from '../a2ui/types'
 
@@ -25,43 +25,63 @@ export interface Message {
   questionCardId?: string
 }
 
+interface TurnStartResponse {
+  run_id: number
+  session_id: number
+  status: string
+}
+
+export class MaxBackgroundRunsError extends Error {
+  constructor() {
+    super('max_background_turns')
+    this.name = 'MaxBackgroundRunsError'
+  }
+}
+
+/**
+ * Mason turns are now durable jobs: POST /api/agent/turn returns a `run_id` and
+ * the backend runs the turn detached from this socket. We attach to it via
+ * GET /api/agent/runs/{run_id}/stream, which replays already-emitted events and
+ * then tails the live stream. Leaving the page (unmount) just drops the reader;
+ * the run keeps going server-side until we re-attach (or it finishes on its own).
+ */
 export function useAgentStream(sessionId: number | null) {
   const { token } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [streaming, setStreaming] = useState(false)
   const [plan, setPlan] = useState<Array<{ step: number; description: string; done: boolean }>>([])
+  const [activeRunId, setActiveRunId] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // Highest seq applied to the current agent message — lets a reconnect skip
+  // past events we've already rendered.
+  const lastSeqRef = useRef(0)
+  // Mirror sessionId in a ref so sendMessage always sees the latest value
+  // without needing the callback to be re-created. Callers can also pass an
+  // explicit override (used when sending the first message in a fresh session
+  // before React has flushed the state update).
+  const sessionIdRef = useRef(sessionId)
+  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
+  const streamingRef = useRef(streaming)
+  useEffect(() => { streamingRef.current = streaming }, [streaming])
 
-  const sendMessage = useCallback(async (text: string, questionCardId?: string, mode: MasonMode = 'auto') => {
-    if (!sessionId || streaming) return
-
-    const userMsg: Message = { id: Date.now().toString(), from: 'user', text }
-    setMessages(prev => [...prev, userMsg])
-
-    const agentMsgId = (Date.now() + 1).toString()
-    const agentMsg: Message = { id: agentMsgId, from: 'agent', events: [] }
-    setMessages(prev => [...prev, agentMsg])
-
-    setStreaming(true)
+  const consumeStream = useCallback(async (
+    runId: number,
+    agentMsgId: string,
+    afterSeq: number,
+  ) => {
+    abortRef.current?.abort()
     abortRef.current = new AbortController()
+    setStreaming(true)
+    setActiveRunId(runId)
 
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    const headers: Record<string, string> = {}
     if (token) headers['Authorization'] = `Bearer ${token}`
 
     try {
-      const res = await fetch(`${BASE}/api/agent/turn`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          session_id: sessionId,
-          message: text,
-          question_card_id: questionCardId,
-          // 'auto' => let the classifier decide; 'fast'/'thinking' override.
-          mode_override: mode === 'auto' ? null : mode === 'thinking' ? 'full' : 'fast',
-        }),
-        signal: abortRef.current.signal,
-      })
-
+      const res = await fetch(
+        `${BASE}/api/agent/runs/${runId}/stream?after_seq=${afterSeq}`,
+        { headers, signal: abortRef.current.signal },
+      )
       if (!res.ok || !res.body) throw new Error('Stream failed')
 
       const reader = res.body.getReader()
@@ -79,6 +99,7 @@ export function useAgentStream(sessionId: number | null) {
           if (!line.trim()) continue
           try {
             const event: StreamEvent = JSON.parse(line)
+            lastSeqRef.current += 1
             if (event.type === 'plan_update') {
               setPlan(event.steps)
             }
@@ -93,8 +114,8 @@ export function useAgentStream(sessionId: number | null) {
               prev.map(m =>
                 m.id === agentMsgId
                   ? { ...m, events: [...(m.events ?? []), ...visibleEvents] }
-                  : m
-              )
+                  : m,
+              ),
             )
           } catch (err) {
             if (import.meta.env.DEV) {
@@ -109,14 +130,97 @@ export function useAgentStream(sessionId: number | null) {
           prev.map(m =>
             m.id === agentMsgId
               ? { ...m, events: [...(m.events ?? []), { type: 'text', content: 'Something went wrong. Please try again.' }] }
-              : m
-          )
+              : m,
+          ),
         )
       }
     } finally {
       setStreaming(false)
+      setActiveRunId(null)
     }
-  }, [sessionId, token, streaming])
+  }, [token])
+
+  const sendMessage = useCallback(async (
+    text: string,
+    questionCardId?: string,
+    mode: MasonMode = 'auto',
+    overrideSessionId?: number,
+  ) => {
+    const sessionId = overrideSessionId ?? sessionIdRef.current
+    if (!sessionId || streamingRef.current) return
+
+    const userMsg: Message = { id: Date.now().toString(), from: 'user', text }
+    setMessages(prev => [...prev, userMsg])
+
+    const agentMsgId = (Date.now() + 1).toString()
+    const agentMsg: Message = { id: agentMsgId, from: 'agent', events: [] }
+    setMessages(prev => [...prev, agentMsg])
+    lastSeqRef.current = 0
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    let runId: number
+    try {
+      const res = await fetch(`${BASE}/api/agent/turn`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          session_id: sessionId,
+          message: text,
+          question_card_id: questionCardId,
+          mode_override: mode === 'auto' ? null : mode === 'thinking' ? 'full' : 'fast',
+        }),
+      })
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}))
+        if (body?.detail === 'max_background_turns') throw new MaxBackgroundRunsError()
+        throw new Error(typeof body?.detail === 'string' ? body.detail : 'Rate limited')
+      }
+      if (!res.ok) throw new Error('Failed to start turn')
+      const body = (await res.json()) as TurnStartResponse
+      runId = body.run_id
+    } catch (e) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === agentMsgId
+            ? {
+                ...m,
+                events: [
+                  ...(m.events ?? []),
+                  {
+                    type: 'text',
+                    content: e instanceof MaxBackgroundRunsError
+                      ? "You've got 3 Mason chats running already — finish or cancel one before starting another."
+                      : 'Something went wrong. Please try again.',
+                  },
+                ],
+              }
+            : m,
+        ),
+      )
+      return
+    }
+
+    await consumeStream(runId, agentMsgId, 0)
+  }, [token, consumeStream])
+
+  /**
+   * Re-attach to an in-flight run for the current session. Used when the user
+   * opens a chat that's still working in the background.
+   */
+  const attachToRun = useCallback(async (runId: number) => {
+    // Tear down any in-flight reader from a previous session before attaching.
+    // Without this, switching from one streaming chat into another would
+    // silently no-op (streamingRef still true) and leave the new chat blank.
+    abortRef.current?.abort()
+    abortRef.current = null
+    // Insert a fresh empty agent bubble — the replay will populate it.
+    const agentMsgId = (Date.now() + 1).toString()
+    setMessages(prev => [...prev, { id: agentMsgId, from: 'agent', events: [] }])
+    lastSeqRef.current = 0
+    await consumeStream(runId, agentMsgId, 0)
+  }, [consumeStream])
 
   const reset = useCallback(() => {
     abortRef.current?.abort()
@@ -124,7 +228,18 @@ export function useAgentStream(sessionId: number | null) {
     setMessages([])
     setPlan([])
     setStreaming(false)
+    setActiveRunId(null)
+    lastSeqRef.current = 0
   }, [])
 
-  return { messages, streaming, plan, setPlan, sendMessage, reset }
+  // Drop the reader on unmount so we don't keep a stranded fetch open. The
+  // server-side run keeps going on its own.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+    }
+  }, [])
+
+  return { messages, setMessages, streaming, plan, setPlan, sendMessage, attachToRun, reset, activeRunId }
 }

@@ -195,12 +195,16 @@ async def discover_count(
 
 
 @router.get("/tags")
-async def list_tags(db: AsyncSession = Depends(get_db)):
+async def list_tags(
+    limit: int = Query(default=200, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(
         text(
             "SELECT DISTINCT jsonb_array_elements_text(description->'tags') AS tag "
-            "FROM products WHERE description ? 'tags' ORDER BY tag"
-        )
+            "FROM products WHERE description ? 'tags' ORDER BY tag LIMIT :limit"
+        ),
+        {"limit": limit},
     )
     return [row.tag for row in result.all() if row.tag]
 

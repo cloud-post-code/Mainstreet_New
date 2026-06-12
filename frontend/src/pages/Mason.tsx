@@ -13,6 +13,8 @@ import MasonFeedback from '../components/MasonFeedback'
 
 type TabKey = 'shipping' | 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
 
+const SESSIONS_PAGE_SIZE = 50
+
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'inbox', label: 'Inbox' },
   { key: 'history', label: 'History' },
@@ -35,6 +37,8 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
   const [tab, setTab] = useState<TabKey>('inbox')
   const [newNote, setNewNote] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
+  const [sessionsHasMore, setSessionsHasMore] = useState(false)
+  const [sessionsLoadingMore, setSessionsLoadingMore] = useState(false)
   const [masonSessionId, setMasonSessionId] = useState<number | null>(null)
   const [chatOpen, setChatOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true
@@ -55,6 +59,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
     api.getSessions(token).then(all => {
       if (cancelled) return
       setSessions(all)
+      setSessionsHasMore(all.length === SESSIONS_PAGE_SIZE)
     })
     // Always start a fresh Mason chat session on page load — prior turns from
     // earlier conversations shouldn't be replayed to the model. Durable
@@ -72,6 +77,24 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
     () => memory.inbox.filter(m => !m.read).length,
     [memory.inbox],
   )
+
+  async function loadMoreSessions() {
+    if (sessionsLoadingMore) return
+    setSessionsLoadingMore(true)
+    try {
+      const older = await api.getSessions(token, undefined, {
+        limit: SESSIONS_PAGE_SIZE,
+        offset: sessions.length,
+      })
+      setSessions(prev => {
+        const seen = new Set(prev.map(s => s.id))
+        return [...prev, ...older.filter(s => !seen.has(s.id))]
+      })
+      setSessionsHasMore(older.length === SESSIONS_PAGE_SIZE)
+    } finally {
+      setSessionsLoadingMore(false)
+    }
+  }
 
   async function addNoteFromInput() {
     const t = newNote.trim()
@@ -185,6 +208,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
             sessions.length === 0 ? (
               <p className={styles.empty}>No past conversations yet.</p>
             ) : (
+              <>
               <ul className={styles.sessionList}>
                 {sessions.map(s => (
                   <li key={s.id}>
@@ -200,6 +224,16 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
                   </li>
                 ))}
               </ul>
+              {sessionsHasMore && (
+                <button
+                  className={styles.loadMoreBtn}
+                  onClick={loadMoreSessions}
+                  disabled={sessionsLoadingMore}
+                >
+                  {sessionsLoadingMore ? 'Loading…' : 'Load older conversations'}
+                </button>
+              )}
+              </>
             )
           )}
 

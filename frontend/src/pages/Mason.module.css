@@ -247,6 +247,21 @@
 .sessionTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sessionMeta { color: #8a7f6c; font-size: 12px; }
 
+.loadMoreBtn {
+  appearance: none;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #ece3cf;
+  border-radius: 8px;
+  background: #fff;
+  color: #8a7f6c;
+  font-size: 12px;
+  cursor: pointer;
+}
+.loadMoreBtn:hover:not(:disabled) { background: #f9f3e3; }
+.loadMoreBtn:disabled { opacity: 0.6; cursor: default; }
+
 .inboxItem {
   cursor: pointer;
 }

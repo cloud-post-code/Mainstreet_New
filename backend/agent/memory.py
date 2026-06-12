@@ -10,6 +10,8 @@ from db.models import AgentTurn, UserMemory, SavedProduct, Product, UserPreferen
 MAX_SHORT_TERM_TURNS = 20   # last N turns loaded into context
 MAX_LONG_TERM_KEYS = 50     # cap per user
 MAX_MEMORY_VALUE_CHARS = 500
+MAX_SAVED_PRODUCTS = 200    # cap per user
+MAX_PROMPT_SAVED_PRODUCTS = 50  # newest N surfaced in the system prompt
 
 # Reserved key prefixes / names inside user_memory so the same table can host
 # multiple kinds of long-term memory without colliding.
@@ -144,7 +146,7 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     prefs = await get_prefs(user_id, db)
     pref_block = _format_prefs_for_prompt(prefs)
 
-    saved = await list_saved_products(user_id, db)
+    saved = await list_saved_products(user_id, db, limit=MAX_PROMPT_SAVED_PRODUCTS)
 
     if not notes and not pref_block and not legacy_prefs and not saved and not other:
         return ""
@@ -469,14 +471,23 @@ def _format_prefs_for_prompt(p: dict) -> str:
 
 # ── Saved products ──────────────────────────────────────────────────────────
 
-async def list_saved_products(user_id: int, db: AsyncSession) -> list[dict]:
+async def list_saved_products(
+    user_id: int,
+    db: AsyncSession,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
     from db.models import Shop, ProductVariant
+    limit = max(1, min(limit, MAX_SAVED_PRODUCTS))
+    offset = max(0, offset)
     result = await db.execute(
         select(SavedProduct, Product, Shop.name.label("shop_name"))
         .join(Product, Product.id == SavedProduct.product_id)
         .join(Shop, Shop.id == Product.shop_id)
         .where(SavedProduct.user_id == user_id)
         .order_by(SavedProduct.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     rows = result.all()
     pids = [p.id for _, p, _ in rows]
@@ -523,6 +534,13 @@ async def save_product(user_id: int, product_id: int, db: AsyncSession) -> bool:
     product = await db.execute(select(Product).where(Product.id == product_id))
     if not product.scalars().first():
         raise ValueError(f"product {product_id} not found")
+    count = (await db.execute(
+        select(func.count(SavedProduct.id)).where(SavedProduct.user_id == user_id)
+    )).scalar() or 0
+    if count >= MAX_SAVED_PRODUCTS:
+        raise ValueError(
+            f"saved products limit reached ({MAX_SAVED_PRODUCTS}); remove some before saving more"
+        )
     db.add(SavedProduct(user_id=user_id, product_id=product_id))
     await db.flush()
     return True

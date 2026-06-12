@@ -9,17 +9,35 @@ interface Props {
   onOpenSession: (sessionId: number) => void
 }
 
+const PAGE_SIZE = 50
+
 export default function InboxPanel({ token, onClose, onOpenSession }: Props) {
   const [messages, setMessages] = useState<InboxMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [openingId, setOpeningId] = useState<number | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
-    api.getInbox(token).then(msgs => {
+    api.getInbox(token, { limit: PAGE_SIZE }).then(msgs => {
       setMessages(msgs)
+      setHasMore(msgs.length === PAGE_SIZE)
       setLoading(false)
     })
   }, [token])
+
+  async function loadMore() {
+    if (loadingMore || messages.length === 0) return
+    setLoadingMore(true)
+    try {
+      const oldest = messages[messages.length - 1]
+      const older = await api.getInbox(token, { before: oldest.id, limit: PAGE_SIZE })
+      setMessages(prev => [...prev, ...older])
+      setHasMore(older.length === PAGE_SIZE)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   async function handleOpen(msg: InboxMessage) {
     if (openingId !== null) return
@@ -66,6 +84,12 @@ export default function InboxPanel({ token, onClose, onOpenSession }: Props) {
             </li>
           ))}
         </ul>
+
+        {!loading && hasMore && (
+          <button className={styles.loadMoreBtn} onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load older messages'}
+          </button>
+        )}
       </div>
     </div>
   )

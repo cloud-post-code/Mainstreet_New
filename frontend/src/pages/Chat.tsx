@@ -94,12 +94,16 @@ function deriveAgentState(events: StreamEvent[], streaming: boolean): AgentState
   return 'thinking'
 }
 
+const SESSIONS_PAGE_SIZE = 50
+
 export default function Chat() {
   const { token, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const mason = useMason()
   const [sessions, setSessions] = useState<Session[]>([])
+  const [sessionsHasMore, setSessionsHasMore] = useState(false)
+  const [sessionsLoadingMore, setSessionsLoadingMore] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [input, setInput] = useState('')
   const [loadedMessages, setLoadedMessages] = useState<import('../hooks/useAgentStream').Message[]>([])
@@ -115,7 +119,8 @@ export default function Chat() {
   const selectTokenRef = useRef(0)
   const skipNextScrollRef = useRef(false)
 
-  const { messages: liveMessages, streaming, plan, sendMessage, reset } = useAgentStream(activeSessionId)
+  const { messages: liveMessages, streaming, plan, sendMessage, attachToRun, reset } = useAgentStream(activeSessionId)
+  const [runningSessionIds, setRunningSessionIds] = useState<Set<number>>(new Set())
   const cart = useCart()
   const masonMemory = useMasonMemory(token)
   const prevStreamingRef = useRef(streaming)
@@ -134,9 +139,17 @@ export default function Chat() {
           : null,
       })
       sentAtRef.current = null
+      // A finished run may have updated this session's title — refresh the
+      // sidebar so background-completed chats reflect their first message.
+      if (token) {
+        api.getSessions(token, 'shop').then(s => {
+          setSessions(s)
+          setSessionsHasMore(s.length === SESSIONS_PAGE_SIZE)
+        }).catch(() => { /* ignore */ })
+      }
     }
     prevStreamingRef.current = streaming
-  }, [streaming, cart, masonMemory, activeSessionId, mode])
+  }, [streaming, cart, masonMemory, activeSessionId, mode, token])
 
   const messages = useMemo(
     () => [...loadedMessages, ...liveMessages],
@@ -174,10 +187,13 @@ export default function Chat() {
     const requested = params.get('session')
     api.getSessions(token, 'shop').then(async s => {
       setSessions(s)
+      setSessionsHasMore(s.length === SESSIONS_PAGE_SIZE)
       if (requested) {
         const id = Number(requested)
         if (Number.isFinite(id) && s.some(x => x.id === id)) {
-          setActiveSessionId(id)
+          // Use selectSession so we also auto-attach if the chat is still
+          // running in the background.
+          selectSession(id)
           return
         }
       }
@@ -198,6 +214,25 @@ export default function Chat() {
       .catch(() => { /* fallback chips remain */ })
     return () => { cancelled = true }
   }, [token])
+
+  // Poll background runs so the sidebar dot reflects what's still working
+  // across chats. Cheap query (indexed by user_id+status). 5s feels live enough.
+  useEffect(() => {
+    if (!token) { setRunningSessionIds(new Set()); return }
+    let cancelled = false
+    async function refresh() {
+      try {
+        const r = await api.getActiveRuns(token as string)
+        if (cancelled) return
+        setRunningSessionIds(new Set(r.runs.map(x => x.session_id)))
+      } catch {
+        /* transient — leave previous set in place */
+      }
+    }
+    refresh()
+    const id = window.setInterval(refresh, 5000)
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [token, streaming])
 
   useEffect(() => {
     if (!modeMenuOpen) return
@@ -260,6 +295,16 @@ export default function Chat() {
       setLoadedMessages(msgs)
       setHistoryHasMore(res.has_more)
       setHistoryCursor(res.next_cursor)
+      // If this session has an in-flight background turn, re-attach to it so
+      // the user sees the live response continue from wherever it is.
+      try {
+        const active = await api.getActiveRunForSession(id, token)
+        if (myToken === selectTokenRef.current && active?.run_id) {
+          await attachToRun(active.run_id)
+        }
+      } catch {
+        /* no active run, or transient — ignore */
+      }
     } catch (e) {
       console.error('[selectSession] failed to load turns for', id, e)
     }
@@ -311,7 +356,7 @@ export default function Chat() {
         : await api.createGuestSession()
       if (token) setSessions(prev => [s, ...prev])
       setActiveSessionId(s.id)
-      setTimeout(() => sendMessage(text, undefined, mode), 50)
+      await sendMessage(text, undefined, mode, s.id)
       return
     }
     await sendMessage(text, undefined, mode)
@@ -444,6 +489,26 @@ export default function Chat() {
     }
   }, [sendMessage])
 
+  async function loadMoreSessions() {
+    if (!token || sessionsLoadingMore) return
+    setSessionsLoadingMore(true)
+    try {
+      const older = await api.getSessions(token, 'shop', {
+        limit: SESSIONS_PAGE_SIZE,
+        offset: sessions.length,
+      })
+      setSessions(prev => {
+        const seen = new Set(prev.map(s => s.id))
+        return [...prev, ...older.filter(s => !seen.has(s.id))]
+      })
+      setSessionsHasMore(older.length === SESSIONS_PAGE_SIZE)
+    } catch {
+      /* ignore */
+    } finally {
+      setSessionsLoadingMore(false)
+    }
+  }
+
   async function handleDeleteSession(e: MouseEvent, id: number) {
     e.stopPropagation()
     if (!token || !confirm('Delete this conversation?')) return
@@ -495,7 +560,7 @@ export default function Chat() {
                     setHistoryCursor(null)
                     setHistoryHasMore(false)
                     reset()
-                    setTimeout(() => sendMessage(s), 50)
+                    await sendMessage(s, undefined, 'auto', sess.id)
                   }}
                 >
                   {s}
@@ -639,6 +704,10 @@ export default function Chat() {
         token={token}
         onSignIn={() => navigate('/login')}
         memory={masonMemory}
+        runningSessionIds={runningSessionIds}
+        hasMoreSessions={sessionsHasMore}
+        loadingMoreSessions={sessionsLoadingMore}
+        onLoadMoreSessions={loadMoreSessions}
       />
 
       {modalProduct && (

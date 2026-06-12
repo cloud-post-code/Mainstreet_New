@@ -514,6 +514,11 @@ async def _run_agent_turn_inner(
         db.add(session_row)
         session_type = getattr(session_row, "session_type", "shop") or "shop"
 
+    # Commit the user turn + title up front so a client that re-attaches mid-run
+    # (e.g. navigated away and back) sees the question they asked, not just the
+    # assistant's reply-in-progress.
+    await db.commit()
+
     # Build message list
     messages = history + [{"role": "user", "content": user_content}]
     # Cache the tail of prior history so it can be re-read on the next turn.
@@ -641,11 +646,19 @@ async def _run_agent_turn_inner(
 
         # Process response blocks
         tool_use_blocks = []
+        has_tool_use = any(b.type == "tool_use" for b in response.content)
 
         for block in response.content:
             if block.type == "text":
                 accumulated_content.append({"type": "text", "text": block.text})
-                yield _event({"type": "text", "content": block.text})
+                # Mid-loop text blocks (when the model is still calling tools)
+                # are reasoning narration — route them to the reasoning panel,
+                # not the chat bubble. Only the final iteration's text is the
+                # user-facing reply.
+                if has_tool_use:
+                    yield _event({"type": "thinking", "content": block.text})
+                else:
+                    yield _event({"type": "text", "content": block.text})
             elif block.type == "tool_use":
                 tool_use_blocks.append(block)
                 tc = {

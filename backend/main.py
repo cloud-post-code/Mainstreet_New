@@ -16,6 +16,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 import auth as _auth_module
 from config import settings
 from db.database import create_tables
+from agent.runner import sweep_zombie_runs
 from agent.uploads import upload_root
 from posthog_middleware import PostHogMiddleware
 from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart, mason_memory
@@ -44,6 +45,9 @@ async def lifespan(app: FastAPI):
         )
     upload_root().mkdir(parents=True, exist_ok=True)
     asyncio.create_task(_run_migrations())
+    # Clear any runs left in 'running' status from a previous process so the
+    # per-user concurrency cap isn't permanently exhausted across redeploys.
+    asyncio.create_task(sweep_zombie_runs())
 
     if not settings.posthog_disabled:
         _posthog.api_key = settings.posthog_project_token

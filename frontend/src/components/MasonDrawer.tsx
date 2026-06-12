@@ -27,6 +27,11 @@ interface MasonDrawerProps {
   token: string | null
   onSignIn: () => void
   memory: MasonMemory
+  /** session IDs that currently have a background turn running */
+  runningSessionIds?: Set<number>
+  hasMoreSessions?: boolean
+  loadingMoreSessions?: boolean
+  onLoadMoreSessions?: () => void
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
@@ -261,6 +266,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                 props.sessions.length === 0 ? (
                   <p className={styles.empty}>No past tasks yet.</p>
                 ) : (
+                  <>
                   <ul className={styles.sessionList}>
                     {props.sessions.map(s => (
                       <li key={s.id}>
@@ -268,7 +274,16 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                           className={`${styles.sessionItem} ${s.id === props.activeSessionId ? styles.sessionActive : ''}`}
                           onClick={() => { props.onSelectSession(s.id); closeDrawer() }}
                         >
-                          <span className={styles.sessionTitle}>{s.title}</span>
+                          <span className={styles.sessionTitle}>
+                            {props.runningSessionIds?.has(s.id) && (
+                              <span
+                                className={styles.runningDot}
+                                title="Mason is working on this chat"
+                                aria-label="Running"
+                              />
+                            )}
+                            {s.title}
+                          </span>
                           <span className={styles.sessionMeta}>
                             <span className={styles.sessionDate}>{formatDate(s.updated_at)}</span>
                             <button
@@ -290,6 +305,16 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                       </li>
                     ))}
                   </ul>
+                  {props.hasMoreSessions && props.onLoadMoreSessions && (
+                    <button
+                      className={styles.loadMoreBtn}
+                      onClick={props.onLoadMoreSessions}
+                      disabled={props.loadingMoreSessions}
+                    >
+                      {props.loadingMoreSessions ? 'Loading…' : 'Load older conversations'}
+                    </button>
+                  )}
+                  </>
                 )
               ) : (
                 <GuestNotice message="Sign in to save tasks, notes, and preferences so Mason remembers you next time." />

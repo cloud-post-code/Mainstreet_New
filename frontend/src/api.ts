@@ -192,9 +192,17 @@ export const api = {
   login: (email: string, password: string) =>
     request<Token>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-  getSessions: (token: string, sessionType?: 'shop' | 'mason') => {
-    const qs = sessionType ? `?session_type=${sessionType}` : ''
-    return request<Session[]>(`/api/agent/sessions${qs}`, {}, token)
+  getSessions: (
+    token: string,
+    sessionType?: 'shop' | 'mason',
+    opts: { limit?: number; offset?: number } = {},
+  ) => {
+    const params = new URLSearchParams()
+    if (sessionType) params.set('session_type', sessionType)
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    if (opts.offset != null) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request<Session[]>(`/api/agent/sessions${qs ? `?${qs}` : ''}`, {}, token)
   },
 
   getSuggestions: (token: string) =>
@@ -246,6 +254,22 @@ export const api = {
 
   deleteSession: (id: number, token: string) =>
     request<void>(`/api/agent/sessions/${id}`, { method: 'DELETE' }, token),
+
+  getActiveRuns: (token: string) =>
+    request<{
+      runs: Array<{ run_id: number; session_id: number; status: string; created_at: string | null }>
+      limit: number
+    }>(`/api/agent/runs/active`, {}, token),
+
+  getActiveRunForSession: (sessionId: number, token: string) =>
+    request<{ run_id: number; status: string } | null>(
+      `/api/agent/sessions/${sessionId}/active_run`,
+      {},
+      token,
+    ),
+
+  cancelRun: (runId: number, token: string) =>
+    request<{ cancelled: boolean }>(`/api/agent/runs/${runId}/cancel`, { method: 'POST' }, token),
 
   importShopsCsv: async (file: File, token: string) => {
     const fd = new FormData()
@@ -387,8 +411,13 @@ export const api = {
   unsaveMasonProduct: (product_id: number, token: string) =>
     request<void>(`/api/mason/saved-products/${product_id}`, { method: 'DELETE' }, token),
 
-  getInbox: (token: string) =>
-    request<InboxMessage[]>('/api/inbox', {}, token),
+  getInbox: (token: string, opts: { before?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.before != null) params.set('before', String(opts.before))
+    if (opts.limit != null) params.set('limit', String(opts.limit))
+    const qs = params.toString()
+    return request<InboxMessage[]>(`/api/inbox${qs ? `?${qs}` : ''}`, {}, token)
+  },
 
   markRead: (id: number, token: string) =>
     request<InboxMessage>(`/api/inbox/${id}/read`, { method: 'PATCH' }, token),

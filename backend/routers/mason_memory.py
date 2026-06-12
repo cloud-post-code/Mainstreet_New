@@ -6,7 +6,7 @@ data on each turn via `agent.memory.load_long_term`, so anything written here
 shows up in Mason's context next turn.
 """
 from typing import Optional, Any, List, Dict
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -133,10 +133,12 @@ class SavedProductIn(BaseModel):
 
 @router.get("/saved-products")
 async def list_saved(
+    limit: int = Query(default=100, ge=1, le=mem.MAX_SAVED_PRODUCTS),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await mem.list_saved_products(current_user.id, db)
+    return await mem.list_saved_products(current_user.id, db, limit=limit, offset=offset)
 
 
 @router.post("/saved-products", status_code=201)
@@ -148,7 +150,8 @@ async def save_product_route(
     try:
         created = await mem.save_product(current_user.id, body.product_id, db)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        status = 400 if "limit reached" in str(e) else 404
+        raise HTTPException(status_code=status, detail=str(e))
     await db.commit()
     return {"product_id": body.product_id, "newly_saved": created}
 

@@ -15,7 +15,7 @@ export default class AgentErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[AgentErrorBoundary] render failed:', error, info)
+    console.error('[AgentErrorBoundary] render failed:', error, info.componentStack)
   }
 
   render() {
@@ -29,7 +29,11 @@ export default class AgentErrorBoundary extends React.Component<Props, State> {
           color: '#7a2e22',
           fontSize: 14,
         }}>
-          ⚠️ Couldn't render this part of the response. The agent sent something I didn't understand.
+          ⚠️ Couldn't render this card. {import.meta.env.DEV && this.state.error.message ? (
+            <span style={{ display: 'block', marginTop: 6, fontSize: 12, opacity: 0.8 }}>
+              {this.state.error.message}
+            </span>
+          ) : null}
         </div>
       )
     }

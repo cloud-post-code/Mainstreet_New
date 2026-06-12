@@ -11,14 +11,24 @@ router = APIRouter(prefix="/api/shops", tags=["shops"])
 
 
 @router.get("/public")
-async def list_shops_public(db: AsyncSession = Depends(get_db)):
+async def list_shops_public(
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
     """Lightweight unauthenticated list of shops for filter UIs."""
-    result = await db.execute(select(Shop.id, Shop.name).order_by(Shop.name))
+    result = await db.execute(
+        select(Shop.id, Shop.name).order_by(Shop.name).limit(limit).offset(offset)
+    )
     return [{"id": row.id, "name": row.name} for row in result.all()]
 
 
 @router.get("/public/full")
-async def list_shops_public_full(db: AsyncSession = Depends(get_db)):
+async def list_shops_public_full(
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
     """Unauthenticated list of shops with details + product counts for the
     public Discover "Shop by shop" view."""
     stmt = (
@@ -33,6 +43,8 @@ async def list_shops_public_full(db: AsyncSession = Depends(get_db)):
         .outerjoin(Product, Product.shop_id == Shop.id)
         .group_by(Shop.id)
         .order_by(Shop.name)
+        .limit(limit)
+        .offset(offset)
     )
     result = await db.execute(stmt)
     return [
@@ -51,6 +63,8 @@ async def list_shops_public_full(db: AsyncSession = Depends(get_db)):
 @router.get("", response_model=list[ShopOut])
 async def list_shops(
     q: str = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -62,6 +76,8 @@ async def list_shops(
         .outerjoin(Product, Product.shop_id == Shop.id)
         .group_by(Shop.id)
         .order_by(Shop.name)
+        .limit(limit)
+        .offset(offset)
     )
     if q:
         stmt = stmt.where(Shop.name.ilike(f"%{q}%") | Shop.description.ilike(f"%{q}%"))

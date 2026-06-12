@@ -92,7 +92,11 @@ def _get_anthropic_client():
         return None
     try:
         import anthropic
-        _anthropic_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        # Async client: the sync one blocks the event loop for the full Haiku
+        # round-trip, stalling every other in-flight request on this worker.
+        _anthropic_client = anthropic.AsyncAnthropic(
+            api_key=settings.anthropic_api_key, timeout=10.0,
+        )
     except Exception:
         logger.exception("Failed to init Anthropic client")
         return None
@@ -247,8 +251,7 @@ async def rewrite_query(query: str, db: AsyncSession | None = None) -> list[str]
     if client is None:
         return [q]
     try:
-        # Anthropic SDK is sync; this is a fast Haiku call (~100ms).
-        msg = client.messages.create(
+        msg = await client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=200,
             system=_REWRITE_PROMPT,

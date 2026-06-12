@@ -427,13 +427,22 @@ async def export_shops_csv(
 
 
 @router.get("/shops", response_model=list[ShopOut])
-async def admin_list_shops(db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
+async def admin_list_shops(
+    limit: int = 200,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
     from sqlalchemy import func
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
     result = await db.execute(
         select(Shop, func.count(Product.id).label("product_count"))
         .outerjoin(Product, Product.shop_id == Shop.id)
         .group_by(Shop.id)
         .order_by(Shop.name)
+        .limit(limit)
+        .offset(offset)
     )
     shops = []
     for shop, count in result.all():

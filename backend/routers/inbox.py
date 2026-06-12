@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.database import get_db
@@ -12,15 +12,20 @@ router = APIRouter(prefix="/api/inbox", tags=["inbox"])
 
 @router.get("", response_model=list[InboxMessageOut])
 async def list_inbox(
+    before: int | None = Query(default=None, description="Return messages with id < before (cursor)"),
+    limit: int = Query(default=50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
+    stmt = (
         select(InboxMessage)
         .where(InboxMessage.user_id == current_user.id)
-        .order_by(InboxMessage.created_at.desc())
-        .limit(50)
+        .order_by(InboxMessage.id.desc())
+        .limit(limit)
     )
+    if before is not None:
+        stmt = stmt.where(InboxMessage.id < before)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 

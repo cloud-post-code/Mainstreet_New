@@ -149,6 +149,54 @@ class AgentPlan(Base):
     session = relationship("AgentSession", back_populates="plans")
 
 
+class AgentTurnRun(Base):
+    """A durable, background-executable Mason turn.
+
+    Decouples the work of running a turn from the HTTP request that started it:
+    the runner streams events into AgentTurnEvent rows so any subsequent client
+    can replay + tail the live response without keeping the original socket open.
+    """
+    __tablename__ = "agent_turn_runs"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    status = Column(String(20), nullable=False, default="running", server_default="running")
+    user_message = Column(Text, nullable=False)
+    question_card_id = Column(String(100), nullable=True)
+    mode = Column(String(20), nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    events = relationship("AgentTurnEvent", back_populates="run", cascade="all, delete-orphan", order_by="AgentTurnEvent.seq")
+
+    __table_args__ = (
+        Index("ix_turn_runs_user_status", "user_id", "status"),
+        Index("ix_turn_runs_session_status", "session_id", "status"),
+    )
+
+
+class AgentTurnEvent(Base):
+    """One NDJSON event emitted by the runner for a given AgentTurnRun.
+
+    `seq` is monotonic per run and used as the resume cursor on /runs/{id}/stream.
+    """
+    __tablename__ = "agent_turn_events"
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("agent_turn_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    payload = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("AgentTurnRun", back_populates="events")
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "seq", name="uq_turn_events_run_seq"),
+    )
+
+
 class InboxMessage(Base):
     __tablename__ = "inbox_messages"
 
