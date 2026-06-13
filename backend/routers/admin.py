@@ -583,6 +583,97 @@ async def reindex_search(
     }
 
 
+@router.get("/stats")
+async def admin_stats(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Return aggregate statistics about the inventory database."""
+    from sqlalchemy import text as sa_text
+
+    total_shops = int((await db.execute(select(func.count(Shop.id)))).scalar() or 0)
+    total_products = int((await db.execute(select(func.count(Product.id)))).scalar() or 0)
+    total_variants = int((await db.execute(select(func.count(ProductVariant.id)))).scalar() or 0)
+
+    embedded_count = int(
+        (await db.execute(
+            select(func.count(Product.id)).where(Product.embedding.is_not(None))
+        )).scalar() or 0
+    )
+
+    in_stock_count = int(
+        (await db.execute(
+            select(func.count(func.distinct(ProductVariant.product_id)))
+            .where(ProductVariant.quantity > 0)
+        )).scalar() or 0
+    )
+
+    # Products with website_url set (serves as "parent shops" proxy since shops
+    # with a website_url were imported from external storefronts).
+    shops_with_website = int(
+        (await db.execute(
+            select(func.count(Shop.id)).where(Shop.website_url.is_not(None))
+        )).scalar() or 0
+    )
+
+    # Shops that have at least one product.
+    shops_with_products = int(
+        (await db.execute(
+            select(func.count(func.distinct(Product.shop_id)))
+        )).scalar() or 0
+    )
+
+    # Per-shop product counts for bar chart (top 15 by count).
+    top_shops_result = await db.execute(
+        select(Shop.name, func.count(Product.id).label("cnt"))
+        .outerjoin(Product, Product.shop_id == Shop.id)
+        .group_by(Shop.id, Shop.name)
+        .order_by(func.count(Product.id).desc())
+        .limit(15)
+    )
+    top_shops = [{"name": row.name, "count": row.cnt} for row in top_shops_result.all()]
+
+    # Variant option diversity — collect all distinct option_names.
+    option_result = await db.execute(
+        sa_text(
+            "SELECT DISTINCT unnest(option_names) AS opt FROM product_variants "
+            "WHERE option_names IS NOT NULL AND array_length(option_names, 1) > 0"
+        )
+    )
+    distinct_option_types = [row[0] for row in option_result.all() if row[0]]
+
+    # Price distribution buckets.
+    price_result = await db.execute(
+        select(ProductVariant.price).where(ProductVariant.price.is_not(None))
+    )
+    prices = [float(r[0]) for r in price_result.all() if r[0] is not None]
+    price_buckets = {"under_25": 0, "25_to_50": 0, "50_to_100": 0, "over_100": 0}
+    for p in prices:
+        if p < 25:
+            price_buckets["under_25"] += 1
+        elif p < 50:
+            price_buckets["25_to_50"] += 1
+        elif p <= 100:
+            price_buckets["50_to_100"] += 1
+        else:
+            price_buckets["over_100"] += 1
+
+    return {
+        "total_shops": total_shops,
+        "total_products": total_products,
+        "total_variants": total_variants,
+        "shops_with_website": shops_with_website,
+        "shops_with_products": shops_with_products,
+        "embedded_count": embedded_count,
+        "pct_embedded": round(embedded_count / total_products * 100, 1) if total_products else 0,
+        "in_stock_count": in_stock_count,
+        "pct_in_stock": round(in_stock_count / total_products * 100, 1) if total_products else 0,
+        "top_shops": top_shops,
+        "distinct_option_types": distinct_option_types,
+        "price_buckets": price_buckets,
+    }
+
+
 @router.post("/create-vector-index", status_code=200)
 async def create_vector_index(
     concurrently: bool = False,

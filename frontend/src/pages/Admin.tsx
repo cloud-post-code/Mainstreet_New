@@ -1,7 +1,7 @@
 import { useEffect, useState, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { api, Shop, Product, ListingDraft, ListingStage } from '../api'
+import { api, Shop, Product, ListingDraft, ListingStage, AdminStats } from '../api'
 import { safeHref } from '../lib/safeHref'
 import styles from './Admin.module.css'
 import { formatCurrency } from '../lib/format'
@@ -43,11 +43,19 @@ export default function Admin() {
   const [addingShop, setAddingShop] = useState(false)
   const [addShopError, setAddShopError] = useState<string | null>(null)
   const [showAddProduct, setShowAddProduct] = useState(false)
-  const [tab, setTab] = useState<'shops' | 'products'>('shops')
+  const [tab, setTab] = useState<'shops' | 'products' | 'stats'>('stats')
+  const [stats, setStats] = useState<AdminStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
 
   useEffect(() => {
     if (!token) return
     api.adminShops(token).then(setShops)
+  }, [token])
+
+  useEffect(() => {
+    if (!token) return
+    setStatsLoading(true)
+    api.adminStats(token).then(s => { setStats(s); setStatsLoading(false) }).catch(() => setStatsLoading(false))
   }, [token])
 
   useEffect(() => {
@@ -439,6 +447,9 @@ export default function Admin() {
 
       {/* Tabs */}
       <div className={styles.tabs}>
+        <button className={`${styles.tab} ${tab === 'stats' ? styles.activeTab : ''}`} onClick={() => setTab('stats')}>
+          Overview
+        </button>
         <button className={`${styles.tab} ${tab === 'shops' ? styles.activeTab : ''}`} onClick={() => setTab('shops')}>
           Shops ({shops.length})
         </button>
@@ -446,6 +457,10 @@ export default function Admin() {
           Products ({productsTotal})
         </button>
       </div>
+
+      {tab === 'stats' && (
+        <StatsPanel stats={stats} loading={statsLoading} />
+      )}
 
       {tab === 'shops' && (
         <div className={styles.tableWrapper}>
@@ -580,6 +595,133 @@ export default function Admin() {
             </div>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ── Stats Panel ───────────────────────────────────────────────────────────
+
+function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div className={styles.statCard}>
+      <div className={styles.statValue}>{value}</div>
+      <div className={styles.statLabel}>{label}</div>
+      {sub && <div className={styles.statSub}>{sub}</div>}
+    </div>
+  )
+}
+
+function ProgressBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className={styles.progressTrack}>
+      <div className={styles.progressFill} style={{ width: `${Math.min(100, pct)}%`, background: color }} />
+    </div>
+  )
+}
+
+function StatsPanel({ stats, loading }: { stats: AdminStats | null; loading: boolean }) {
+  if (loading) return <div className={styles.statsLoading}>Loading statistics…</div>
+  if (!stats) return <div className={styles.statsLoading}>No statistics available.</div>
+
+  const maxShopCount = Math.max(...stats.top_shops.map(s => s.count), 1)
+  const priceBuckets = [
+    { label: 'Under $25', count: stats.price_buckets.under_25, color: '#7a9e7e' },
+    { label: '$25–$50', count: stats.price_buckets['25_to_50'], color: '#015237' },
+    { label: '$50–$100', count: stats.price_buckets['50_to_100'], color: '#be6e46' },
+    { label: 'Over $100', count: stats.price_buckets.over_100, color: '#b8928a' },
+  ]
+  const totalPriceVariants = priceBuckets.reduce((s, b) => s + b.count, 0) || 1
+
+  return (
+    <div className={styles.statsPanel}>
+      {/* Key metrics */}
+      <section className={styles.statsSection}>
+        <h2 className={styles.sectionTitle}>Database Overview</h2>
+        <div className={styles.statGrid}>
+          <StatCard label="Total Shops" value={stats.total_shops.toLocaleString()} />
+          <StatCard label="Shops with Products" value={stats.shops_with_products.toLocaleString()} sub={`${stats.total_shops - stats.shops_with_products} empty`} />
+          <StatCard label="Shops with Website" value={stats.shops_with_website.toLocaleString()} sub="external storefronts" />
+          <StatCard label="Total Products" value={stats.total_products.toLocaleString()} />
+          <StatCard label="Total Variants" value={stats.total_variants.toLocaleString()} sub={`avg ${stats.total_products ? (stats.total_variants / stats.total_products).toFixed(1) : 0} per product`} />
+        </div>
+      </section>
+
+      {/* Health indicators */}
+      <section className={styles.statsSection}>
+        <h2 className={styles.sectionTitle}>Product Health</h2>
+        <div className={styles.healthGrid}>
+          <div className={styles.healthCard}>
+            <div className={styles.healthHeader}>
+              <span className={styles.healthLabel}>Embedding coverage</span>
+              <span className={styles.healthPct}>{stats.pct_embedded}%</span>
+            </div>
+            <ProgressBar pct={stats.pct_embedded} color="var(--ms-primary)" />
+            <div className={styles.healthSub}>{stats.embedded_count.toLocaleString()} of {stats.total_products.toLocaleString()} products have semantic embeddings</div>
+          </div>
+          <div className={styles.healthCard}>
+            <div className={styles.healthHeader}>
+              <span className={styles.healthLabel}>In-stock rate</span>
+              <span className={styles.healthPct}>{stats.pct_in_stock}%</span>
+            </div>
+            <ProgressBar pct={stats.pct_in_stock} color="#7a9e7e" />
+            <div className={styles.healthSub}>{stats.in_stock_count.toLocaleString()} of {stats.total_products.toLocaleString()} products have stock available</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Price distribution */}
+      <section className={styles.statsSection}>
+        <h2 className={styles.sectionTitle}>Price Distribution</h2>
+        <div className={styles.priceGrid}>
+          {priceBuckets.map(b => (
+            <div key={b.label} className={styles.priceBucket}>
+              <div className={styles.priceBucketBar}>
+                <div
+                  className={styles.priceBucketFill}
+                  style={{ height: `${Math.round(b.count / totalPriceVariants * 100)}%`, background: b.color }}
+                  title={`${b.count} variants`}
+                />
+              </div>
+              <div className={styles.priceBucketLabel}>{b.label}</div>
+              <div className={styles.priceBucketCount}>{b.count.toLocaleString()}</div>
+              <div className={styles.priceBucketPct}>{Math.round(b.count / totalPriceVariants * 100)}%</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Top shops bar chart */}
+      {stats.top_shops.length > 0 && (
+        <section className={styles.statsSection}>
+          <h2 className={styles.sectionTitle}>Top Shops by Product Count</h2>
+          <div className={styles.shopBars}>
+            {stats.top_shops.map(s => (
+              <div key={s.name} className={styles.shopBarRow}>
+                <div className={styles.shopBarName} title={s.name}>{s.name}</div>
+                <div className={styles.shopBarTrack}>
+                  <div
+                    className={styles.shopBarFill}
+                    style={{ width: `${Math.round(s.count / maxShopCount * 100)}%` }}
+                  />
+                </div>
+                <div className={styles.shopBarCount}>{s.count}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Option types */}
+      {stats.distinct_option_types.length > 0 && (
+        <section className={styles.statsSection}>
+          <h2 className={styles.sectionTitle}>Variant Option Types</h2>
+          <div className={styles.optionChips}>
+            {stats.distinct_option_types.map(opt => (
+              <span key={opt} className={styles.optionChip}>{opt}</span>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )

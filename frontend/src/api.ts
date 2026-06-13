@@ -81,6 +81,20 @@ export interface Product {
   image_url: string | null
 }
 export interface AdminProductsPage { items: Product[]; total: number; limit: number; offset: number }
+export interface AdminStats {
+  total_shops: number
+  total_products: number
+  total_variants: number
+  shops_with_website: number
+  shops_with_products: number
+  embedded_count: number
+  pct_embedded: number
+  in_stock_count: number
+  pct_in_stock: number
+  top_shops: Array<{ name: string; count: number }>
+  distinct_option_types: string[]
+  price_buckets: { under_25: number; '25_to_50': number; '50_to_100': number; over_100: number }
+}
 export interface Session { id: number; title: string; session_type?: string; created_at: string; updated_at: string }
 export interface InboxMessage { id: number; user_id: number; session_id: number | null; title: string; preview: string; body: string; read: boolean; created_at: string }
 export interface PlanStep { step: number; description: string; done: boolean }
@@ -371,6 +385,7 @@ export const api = {
       token,
     ),
 
+  adminStats: (token: string) => request<AdminStats>('/api/admin/stats', {}, token),
   adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
   createShop: (
     body: { name: string; logo_url?: string; description?: string; website_url?: string },
