@@ -1,4 +1,3 @@
-import posthog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from posthog import capture, identify_context, new_context
 from slowapi import Limiter
@@ -45,8 +44,7 @@ async def register(request: Request, body: UserRegister, db: AsyncSession = Depe
 
     with new_context():
         identify_context(str(user.id))
-        posthog.identify(str(user.id), {"display_name": user.display_name})
-        capture("user_registered", properties={"signup_method": "form"})
+        capture("user_registered", properties={"signup_method": "form", "display_name": user.display_name})
 
     return Token(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
 
