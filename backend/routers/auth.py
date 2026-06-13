@@ -45,7 +45,7 @@ async def register(request: Request, body: UserRegister, db: AsyncSession = Depe
 
     with new_context():
         identify_context(str(user.id))
-        posthog.set(str(user.id), {"display_name": user.display_name})
+        posthog.identify(str(user.id), {"display_name": user.display_name})
         capture("user_registered", properties={"signup_method": "form"})
 
     return Token(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
