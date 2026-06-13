@@ -69,6 +69,61 @@
 .button:disabled { opacity: 0.6; cursor: not-allowed; }
 .button:not(:disabled):hover { opacity: 0.85; }
 
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inputError {
+  border-color: #c0392b !important;
+}
+
+.fieldError {
+  color: #c0392b;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  text-align: left;
+  margin: 0;
+}
+
+.passwordHint {
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  text-align: left;
+  margin: 0;
+  transition: color 0.2s;
+}
+
+.errorBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #fdf0ee;
+  border: 1px solid #e8b4b0;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  color: #a93226;
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  text-align: left;
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  background: #c0392b;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.05rem;
+}
+
 .error {
   color: #c0392b;
   font-size: 0.875rem;

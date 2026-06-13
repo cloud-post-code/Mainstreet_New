@@ -27,11 +27,22 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
     }
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     const detail = err.detail
-    const message = typeof detail === 'string'
-      ? detail
-      : (detail && typeof detail === 'object' && typeof detail.message === 'string')
-        ? detail.message
-        : 'Request failed'
+    let message: string
+    if (typeof detail === 'string') {
+      message = detail
+    } else if (Array.isArray(detail)) {
+      // Pydantic 422 validation errors: [{loc, msg, type}, ...]
+      message = detail
+        .map((e: { loc?: (string | number)[]; msg?: string }) => {
+          const field = e.loc ? e.loc.filter(s => s !== 'body').join('.') : ''
+          return field ? `${field}: ${e.msg ?? 'invalid'}` : (e.msg ?? 'invalid')
+        })
+        .join('; ')
+    } else if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+      message = detail.message
+    } else {
+      message = `Request failed (${res.status})`
+    }
     throw new Error(message)
   }
   if (res.status === 204) return undefined as T

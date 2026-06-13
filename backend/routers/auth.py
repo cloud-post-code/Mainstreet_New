@@ -29,9 +29,10 @@ limiter = Limiter(
 async def register(request: Request, body: UserRegister, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalars().first():
-        # Generic message — don't confirm to the client whether the address
-        # already exists. (Email enumeration defense.)
-        raise HTTPException(status_code=400, detail="Registration failed")
+        raise HTTPException(
+            status_code=400,
+            detail="An account with that email already exists. Try signing in instead.",
+        )
 
     user = User(
         email=body.email,

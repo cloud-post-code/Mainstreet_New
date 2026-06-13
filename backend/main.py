@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 
 import posthog as _posthog
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
@@ -60,6 +62,27 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Personal Shopper API", version="1.0.0", lifespan=lifespan)
+
+def _human_field(loc: list) -> str:
+    """Convert Pydantic loc tuple to a readable field name, skipping 'body'."""
+    parts = [str(p) for p in loc if p != "body"]
+    return ".".join(parts) if parts else "field"
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return 422 errors as a flat human-readable detail string instead of the
+    raw Pydantic error list, so frontend error handling stays simple."""
+    messages = []
+    for err in exc.errors():
+        field = _human_field(list(err.get("loc", [])))
+        msg = err.get("msg", "invalid value")
+        # Strip the Pydantic "Value error, " prefix added to @field_validator messages
+        msg = msg.removeprefix("Value error, ")
+        messages.append(f"{field}: {msg}")
+    detail = "; ".join(messages) if messages else "Invalid request"
+    return JSONResponse(status_code=422, content={"detail": detail})
+
 
 # Rate-limit exceeded → 429. The Limiter instance lives in routers.auth and is
 # referenced via decorators; this just registers the handler at the app level.
