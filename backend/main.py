@@ -63,55 +63,85 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Personal Shopper API", version="1.0.0", lifespan=lifespan)
 
-def _human_field(loc: list) -> str:
-    """Convert Pydantic loc tuple to a readable field name, skipping 'body'."""
-    parts = [str(p) for p in loc if p != "body"]
-    return ".".join(parts) if parts else "field"
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Return 422 errors as a flat human-readable detail string instead of the
-    raw Pydantic error list, so frontend error handling stays simple."""
-    messages = []
-    for err in exc.errors():
-        field = _human_field(list(err.get("loc", [])))
-        msg = err.get("msg", "invalid value")
-        # Strip the Pydantic "Value error, " prefix added to @field_validator messages
-        msg = msg.removeprefix("Value error, ")
-        messages.append(f"{field}: {msg}")
-    detail = "; ".join(messages) if messages else "Invalid request"
-    return JSONResponse(status_code=422, content={"detail": detail})
-
-
-# Rate-limit exceeded → 429. The Limiter instance lives in routers.auth and is
-# referenced via decorators; this just registers the handler at the app level.
-app.state.limiter = auth.limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# Enforce the limiter's default_limits across every route (not just decorated ones).
-app.add_middleware(SlowAPIMiddleware)
-# Railway terminates TLS at its proxy, so the client IP arrives in
-# X-Forwarded-For. Without this, get_remote_address returns the proxy's
-# internal IP for every request and the limiter buckets all traffic together.
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
-app.add_middleware(PostHogMiddleware)
-
-# Allow multiple frontend origins via comma-separated FRONTEND_URL, plus
-# localhost dev and any *.up.railway.app preview/production URL. The regex
-# catches Railway-managed domain changes without requiring an env var update.
+# --- CORS config (used both by middleware and error handlers) ---
 _explicit_origins = [
     o.strip()
     for o in settings.frontend_url.split(",")
     if o.strip()
 ] + ["http://localhost:5173"]
 
+_CORS_ORIGIN_REGEX = r"^https://(frontend|mainstreet)[a-z0-9-]*\.up\.railway\.app$"
+
+import re as _re
+
+def _cors_origin(request: Request) -> str | None:
+    """Return the request Origin if it's allowed, else None."""
+    origin = request.headers.get("origin", "")
+    if not origin:
+        return None
+    if origin in _explicit_origins:
+        return origin
+    if _re.match(_CORS_ORIGIN_REGEX, origin):
+        return origin
+    return None
+
+def _cors_headers(request: Request) -> dict:
+    origin = _cors_origin(request)
+    if not origin:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin",
+    }
+
+
+def _human_field(loc: list) -> str:
+    parts = [str(p) for p in loc if p != "body"]
+    return ".".join(parts) if parts else "field"
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return 422 errors as a flat human-readable detail string with CORS headers."""
+    messages = []
+    for err in exc.errors():
+        field = _human_field(list(err.get("loc", [])))
+        msg = err.get("msg", "invalid value")
+        msg = msg.removeprefix("Value error, ")
+        messages.append(f"{field}: {msg}")
+    detail = "; ".join(messages) if messages else "Invalid request"
+    return JSONResponse(status_code=422, content={"detail": detail}, headers=_cors_headers(request))
+
+
+from fastapi import HTTPException as _HTTPException
+from fastapi.exception_handlers import http_exception_handler as _default_http_handler
+
+@app.exception_handler(_HTTPException)
+async def http_exception_cors_handler(request: Request, exc: _HTTPException):
+    """Re-use FastAPI's default HTTP exception response but add CORS headers."""
+    response = await _default_http_handler(request, exc)
+    for k, v in _cors_headers(request).items():
+        response.headers[k] = v
+    return response
+
+
+# Rate-limit exceeded → 429.
+app.state.limiter = auth.limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+# Railway terminates TLS at its proxy — X-Forwarded-For carries the real client IP.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+app.add_middleware(PostHogMiddleware)
+
+# CORSMiddleware is registered last so it is outermost among add_middleware calls.
+# The @app.middleware("http") decorator below sits outside even this, so the
+# explicit _cors_headers() calls on exception handlers above are needed for
+# error responses that bypass the normal response path.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_explicit_origins,
-    # Only match this project's Railway-managed subdomains (frontend-*), not every
-    # tenant on *.up.railway.app. Adjust the prefix list if new Railway services
-    # are added to this project.
-    allow_origin_regex=r"^https://(frontend|mainstreet)[a-z0-9-]*\.up\.railway\.app$",
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
