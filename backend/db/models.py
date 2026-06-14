@@ -317,3 +317,37 @@ class CartItem(Base):
             name="cart_owner_required",
         ),
     )
+
+
+class ScraperScript(Base):
+    __tablename__ = "scraper_scripts"
+
+    id              = Column(Integer, primary_key=True)
+    shop_id         = Column(Integer, ForeignKey("shops.id", ondelete="SET NULL"), nullable=True)
+    url             = Column(Text, nullable=False)
+    script_code     = Column(Text, nullable=False)
+    seller_type     = Column(String(10), nullable=True)
+    verified        = Column(Boolean, default=False, nullable=False)
+    last_run_at     = Column(DateTime(timezone=True), nullable=True)
+    last_run_status = Column(String(20), nullable=True)
+    last_error      = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ScraperJob(Base):
+    __tablename__ = "scraper_jobs"
+
+    id              = Column(Integer, primary_key=True)
+    shop_id         = Column(Integer, ForeignKey("shops.id", ondelete="SET NULL"), nullable=True)
+    script_id       = Column(Integer, ForeignKey("scraper_scripts.id", ondelete="SET NULL"), nullable=True)
+    url             = Column(Text, nullable=False)
+    shop_name       = Column(String(200), nullable=True)
+    seller_type     = Column(String(10), nullable=True)
+    status          = Column(String(20), nullable=False, default="pending", server_default="pending")
+    attempts        = Column(Integer, nullable=False, default=0)
+    result_summary  = Column(JSONB, nullable=True)
+    failure_reason  = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at     = Column(DateTime(timezone=True), nullable=True)
+
+    script = relationship("ScraperScript", foreign_keys=[script_id])

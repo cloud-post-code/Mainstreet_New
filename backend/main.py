@@ -21,7 +21,7 @@ from db.database import create_tables
 from agent.runner import sweep_zombie_runs
 from agent.uploads import upload_root
 from posthog_middleware import PostHogMiddleware
-from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart, mason_memory
+from routers import auth, shops, products, agent, admin, inbox, listing_agent, cart, mason_memory, scrapers
 
 log = logging.getLogger("uvicorn.error")
 
@@ -204,6 +204,7 @@ app.include_router(inbox.router)
 app.include_router(listing_agent.router)
 app.include_router(cart.router)
 app.include_router(mason_memory.router)
+app.include_router(scrapers.router)
 
 app.mount("/uploads", StaticFiles(directory=str(upload_root())), name="uploads")
 

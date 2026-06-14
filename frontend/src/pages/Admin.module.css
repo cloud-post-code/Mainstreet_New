@@ -740,3 +740,193 @@
   color: var(--ms-primary);
 }
 
+
+/* ── Scrapers tab ──────────────────────────────────────────────────────── */
+
+.scrapersPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.scraperFormSection,
+.scraperProgressSection,
+.scraperJobsSection {
+  background: white;
+  border: 1px solid rgba(1,82,55,0.15);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+
+.scraperForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.scraperLog {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  background: #0f1a14;
+  color: #b0c4b8;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  min-height: 80px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 0.75rem;
+}
+
+.scraperLogLine {
+  padding: 0.1rem 0;
+  line-height: 1.5;
+}
+
+.scraperLogTime {
+  color: #5a7a64;
+  margin-right: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.scraperLog_info { color: #b0c4b8; }
+.scraperLog_success { color: #5fd87e; }
+.scraperLog_warn { color: #f0b429; }
+.scraperLog_error { color: #ff6b6b; }
+
+.cannotScrapeBox {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  background: #fff5f5;
+  border: 1px solid #ff6b6b;
+  border-radius: 8px;
+  color: #c0392b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.cannotScrapeDetail {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: #7a3030;
+  white-space: pre-wrap;
+}
+
+.verificationReport {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  background: #f4faf6;
+  border: 1px solid rgba(1,82,55,0.2);
+  border-radius: 8px;
+}
+
+.reportHeader {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.confidenceBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.sellerTypeBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(1,82,55,0.1);
+  color: #015237;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.reportStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.reportStats span::before {
+  content: '• ';
+  color: #015237;
+}
+
+.reportWarning {
+  font-size: 0.8rem;
+  color: #be6e46;
+  margin-top: 0.4rem;
+}
+
+.sampleProducts {
+  margin-top: 1rem;
+}
+
+.sampleTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.6rem;
+}
+
+.sampleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.sampleCard {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.78rem;
+}
+
+.sampleImg {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.sampleName {
+  padding: 0.4rem 0.5rem 0.1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sampleMeta {
+  padding: 0 0.5rem 0.4rem;
+  color: #666;
+  font-size: 0.72rem;
+}
+
+.scraperUrlCell {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: #444;
+}
+
+/* Status badges */
+.status_pending  { color: #888; }
+.status_running  { color: #be6e46; font-weight: 600; }
+.status_success  { color: #015237; font-weight: 600; }
+.status_failed   { color: #c0392b; font-weight: 600; }
+.status_cannot_scrape { color: #a0522d; font-weight: 600; }

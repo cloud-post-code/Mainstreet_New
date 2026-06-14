@@ -520,7 +520,92 @@ export const api = {
     description?: Record<string, unknown>
   }, token: string) =>
     request<Product>('/api/admin/listing/approve', { method: 'POST', body: JSON.stringify(body) }, token),
+
+  // Scraper jobs
+  startScraperJob: (url: string, shopName: string | null, token: string) =>
+    request<ScraperJobOut>('/api/admin/scrapers', {
+      method: 'POST',
+      body: JSON.stringify({ url, shop_name: shopName || null }),
+    }, token),
+
+  listScraperJobs: (token: string) =>
+    request<ScraperJobOut[]>('/api/admin/scrapers', {}, token),
+
+  getScraperJob: (id: number, token: string) =>
+    request<ScraperJobOut>(`/api/admin/scrapers/${id}`, {}, token),
+
+  rerunScraperJob: (id: number, token: string) =>
+    request<ScraperJobOut>(`/api/admin/scrapers/${id}/rerun`, { method: 'POST' }, token),
+
+  deleteScraperJob: (id: number, token: string) =>
+    request<void>(`/api/admin/scrapers/${id}`, { method: 'DELETE' }, token),
+
+  scraperJobStreamUrl: (id: number) => `/api/admin/scrapers/${id}/stream`,
 }
+
+// --- Scraper types ---
+
+export interface SampleProduct {
+  name: string
+  price: string
+  image_url: string
+  shop_name: string
+}
+
+export interface ScraperVerificationReport {
+  seller_type: string
+  shops_created: number
+  shops_updated: number
+  products_ingested: number
+  products_updated: number
+  variants_ingested: number
+  fields_found: string[]
+  fields_missing: string[]
+  sample_products: SampleProduct[]
+  sample_verification: Record<string, unknown> | null
+  errors: Record<string, unknown>[]
+  confidence: 'high' | 'medium' | 'low'
+  attempts_used: number
+}
+
+export interface ScraperScriptOut {
+  id: number
+  shop_id: number | null
+  url: string
+  seller_type: string | null
+  verified: boolean
+  last_run_at: string | null
+  last_run_status: string | null
+  last_error: string | null
+  created_at: string
+}
+
+export interface ScraperJobOut {
+  id: number
+  shop_id: number | null
+  script_id: number | null
+  url: string
+  shop_name: string | null
+  seller_type: string | null
+  status: 'pending' | 'running' | 'success' | 'failed' | 'cannot_scrape'
+  attempts: number
+  result_summary: ScraperVerificationReport | null
+  failure_reason: string | null
+  created_at: string
+  finished_at: string | null
+  script: ScraperScriptOut | null
+}
+
+export type ScraperSSEEvent =
+  | { type: 'stage'; stage: string; message?: string; seller_type?: string }
+  | { type: 'attempt_result'; attempt: number; errors: string[] }
+  | { type: 'sample_check'; result: Record<string, unknown> }
+  | { type: 'script_ready'; script_code: string; rows: Record<string, unknown>[]; attempt: number }
+  | { type: 'cannot_scrape'; message: string; detail?: string }
+  | { type: 'success'; report: ScraperVerificationReport }
+  | { type: 'error'; message: string }
+  | { type: 'done'; status: string }
+  | { type: 'heartbeat' }
 
 export type ListingStage = 'vision' | 'market' | 'writer' | 'verify' | 'image_enhance'
 export type ListingEvent =

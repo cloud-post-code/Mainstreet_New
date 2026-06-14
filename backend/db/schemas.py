@@ -166,6 +166,72 @@ class AdminProductsPage(BaseModel):
     offset: int
 
 
+# --- Scraper ---
+
+class ScraperJobCreate(BaseModel):
+    url: str
+    shop_name: Optional[str] = None  # optional override; auto-detected if absent
+
+
+class SampleProduct(BaseModel):
+    name: str
+    price: str
+    image_url: str
+    shop_name: str
+
+
+class SampleVerificationResult(BaseModel):
+    passed: bool
+    sample_results: list[dict]
+    mismatch_reason: Optional[str] = None
+
+
+class ScraperVerificationReport(BaseModel):
+    seller_type: str = ""
+    shops_created: int = 0
+    shops_updated: int = 0
+    products_ingested: int = 0
+    products_updated: int = 0
+    variants_ingested: int = 0
+    fields_found: list[str] = []
+    fields_missing: list[str] = []
+    sample_products: list[SampleProduct] = []
+    sample_verification: Optional[dict] = None
+    errors: list[dict] = []
+    confidence: str = "low"  # "high" | "medium" | "low"
+    attempts_used: int = 1
+
+
+class ScraperScriptOut(BaseModel):
+    id: int
+    shop_id: Optional[int]
+    url: str
+    seller_type: Optional[str]
+    verified: bool
+    last_run_at: Optional[datetime]
+    last_run_status: Optional[str]
+    last_error: Optional[str]
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ScraperJobOut(BaseModel):
+    id: int
+    shop_id: Optional[int]
+    script_id: Optional[int]
+    url: str
+    shop_name: Optional[str]
+    seller_type: Optional[str]
+    status: str
+    attempts: int
+    result_summary: Optional[dict] = None
+    failure_reason: Optional[str]
+    created_at: datetime
+    finished_at: Optional[datetime]
+    script: Optional[ScraperScriptOut] = None
+    model_config = {"from_attributes": True}
+
+
 # --- Inbox ---
 
 class InboxMessageOut(BaseModel):

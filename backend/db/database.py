@@ -178,3 +178,22 @@ async def create_tables():
             AFTER INSERT OR UPDATE OR DELETE ON product_variants
             FOR EACH ROW EXECUTE FUNCTION variants_touch_parent()
         """))
+        # Scraper tables
+        await conn.execute(text(
+            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS seller_type varchar(10)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_run_at timestamptz"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_run_status varchar(20)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_error text"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS seller_type varchar(10)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS shop_name varchar(200)"
+        ))

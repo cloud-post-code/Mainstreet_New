@@ -1,7 +1,7 @@
-import { useEffect, useState, ChangeEvent, FormEvent } from 'react'
+import { useEffect, useState, useRef, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { api, Shop, Product, ListingDraft, ListingStage, AdminStats } from '../api'
+import { api, Shop, Product, ListingDraft, ListingStage, AdminStats, ScraperJobOut, ScraperVerificationReport, ScraperSSEEvent } from '../api'
 import { safeHref } from '../lib/safeHref'
 import styles from './Admin.module.css'
 import { formatCurrency } from '../lib/format'
@@ -43,7 +43,7 @@ export default function Admin() {
   const [addingShop, setAddingShop] = useState(false)
   const [addShopError, setAddShopError] = useState<string | null>(null)
   const [showAddProduct, setShowAddProduct] = useState(false)
-  const [tab, setTab] = useState<'shops' | 'products' | 'stats'>('stats')
+  const [tab, setTab] = useState<'shops' | 'products' | 'stats' | 'scrapers'>('stats')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
 
@@ -456,6 +456,9 @@ export default function Admin() {
         <button className={`${styles.tab} ${tab === 'products' ? styles.activeTab : ''}`} onClick={() => setTab('products')}>
           Products ({productsTotal})
         </button>
+        <button className={`${styles.tab} ${tab === 'scrapers' ? styles.activeTab : ''}`} onClick={() => setTab('scrapers')}>
+          Scrapers
+        </button>
       </div>
 
       {tab === 'stats' && (
@@ -596,6 +599,338 @@ export default function Admin() {
           </div>
         </>
       )}
+
+      {tab === 'scrapers' && token && (
+        <ScrapersPanel token={token} shops={shops} />
+      )}
+    </div>
+  )
+}
+
+// ── Scrapers Panel ────────────────────────────────────────────────────────
+
+type ScraperLogLine = { time: string; text: string; kind: 'info' | 'error' | 'success' | 'warn' }
+
+function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
+  const [url, setUrl] = useState('')
+  const [shopNameOverride, setShopNameOverride] = useState('')
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [activeJobId, setActiveJobId] = useState<number | null>(null)
+  const [activeStatus, setActiveStatus] = useState<'running' | 'success' | 'failed' | 'cannot_scrape' | null>(null)
+  const [log, setLog] = useState<ScraperLogLine[]>([])
+  const [report, setReport] = useState<ScraperVerificationReport | null>(null)
+  const [cannotScrapeMsg, setCannotScrapeMsg] = useState<string | null>(null)
+  const [jobs, setJobs] = useState<ScraperJobOut[]>([])
+  const [jobsLoading, setJobsLoading] = useState(true)
+  const [rerunning, setRerunning] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<number | null>(null)
+  const esRef = useRef<EventSource | null>(null)
+
+  function pushLog(text: string, kind: ScraperLogLine['kind'] = 'info') {
+    const time = new Date().toLocaleTimeString()
+    setLog(prev => [...prev, { time, text, kind }])
+  }
+
+  useEffect(() => {
+    setJobsLoading(true)
+    api.listScraperJobs(token)
+      .then(setJobs)
+      .catch(() => {})
+      .finally(() => setJobsLoading(false))
+  }, [token])
+
+  function refreshJobs() {
+    api.listScraperJobs(token).then(setJobs).catch(() => {})
+  }
+
+  function connectSSE(jobId: number) {
+    if (esRef.current) esRef.current.close()
+    const es = new EventSource(`${api.scraperJobStreamUrl(jobId)}?token=${encodeURIComponent(token)}`)
+    esRef.current = es
+
+    es.onmessage = (e) => {
+      let event: ScraperSSEEvent
+      try { event = JSON.parse(e.data) } catch { return }
+
+      if (event.type === 'heartbeat') return
+
+      if (event.type === 'stage') {
+        const msg = event.message || `Stage: ${event.stage}`
+        const extra = event.seller_type ? ` (${event.seller_type})` : ''
+        pushLog(msg + extra, 'info')
+      } else if (event.type === 'attempt_result') {
+        pushLog(`Attempt ${event.attempt} failed: ${event.errors.join('; ')}`, 'warn')
+      } else if (event.type === 'sample_check') {
+        const r = event.result as { passed?: boolean; mismatch_reason?: string }
+        pushLog(r.passed ? 'Sample check: 3/3 products verified' : `Sample check failed: ${r.mismatch_reason}`, r.passed ? 'success' : 'warn')
+      } else if (event.type === 'script_ready') {
+        pushLog(`Script ready on attempt ${event.attempt}`, 'success')
+      } else if (event.type === 'cannot_scrape') {
+        pushLog(event.message, 'error')
+        if (event.detail) pushLog(`Detail: ${event.detail}`, 'error')
+        setCannotScrapeMsg(event.message + (event.detail ? `\n\n${event.detail}` : ''))
+        setActiveStatus('cannot_scrape')
+      } else if (event.type === 'success') {
+        pushLog(`Done — ${event.report.products_ingested} products, ${event.report.variants_ingested} variants`, 'success')
+        setReport(event.report)
+        setActiveStatus('success')
+        refreshJobs()
+      } else if (event.type === 'error') {
+        pushLog(`Error: ${event.message}`, 'error')
+        setActiveStatus('failed')
+        refreshJobs()
+      } else if (event.type === 'done') {
+        setActiveStatus(event.status as typeof activeStatus)
+        refreshJobs()
+        es.close()
+      }
+    }
+    es.onerror = () => {
+      es.close()
+      esRef.current = null
+    }
+  }
+
+  async function handleStart(e: React.FormEvent) {
+    e.preventDefault()
+    if (!url.trim()) return
+    setStarting(true)
+    setStartError(null)
+    setLog([])
+    setReport(null)
+    setCannotScrapeMsg(null)
+    setActiveStatus(null)
+    try {
+      const job = await api.startScraperJob(url.trim(), shopNameOverride.trim() || null, token)
+      setActiveJobId(job.id)
+      setActiveStatus('running')
+      pushLog(`Job #${job.id} started`, 'info')
+      connectSSE(job.id)
+      setUrl('')
+      setShopNameOverride('')
+    } catch (err: unknown) {
+      setStartError(err instanceof Error ? err.message : 'Failed to start scraper')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  async function handleRerun(jobId: number) {
+    setRerunning(jobId)
+    try {
+      await api.rerunScraperJob(jobId, token)
+      setActiveJobId(jobId)
+      setLog([])
+      setReport(null)
+      setCannotScrapeMsg(null)
+      setActiveStatus('running')
+      pushLog(`Rerun started for job #${jobId}`, 'info')
+      connectSSE(jobId)
+      refreshJobs()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Rerun failed')
+    } finally {
+      setRerunning(null)
+    }
+  }
+
+  async function handleDelete(jobId: number) {
+    if (!confirm('Delete this scraper job and its saved script?')) return
+    setDeleting(jobId)
+    try {
+      await api.deleteScraperJob(jobId, token)
+      setJobs(prev => prev.filter(j => j.id !== jobId))
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const confidenceColor = (c: string) =>
+    c === 'high' ? '#015237' : c === 'medium' ? '#be6e46' : '#c0392b'
+
+  const statusIcon = (s: ScraperJobOut['status']) =>
+    ({ pending: '⏳', running: '⟳', success: '✓', failed: '✗', cannot_scrape: '⚠' })[s] ?? '?'
+
+  return (
+    <div className={styles.scrapersPanel}>
+      {/* Start new scrape form */}
+      <section className={styles.scraperFormSection}>
+        <h2 className={styles.sectionTitle}>Build a New Scraper</h2>
+        <form onSubmit={handleStart} className={styles.scraperForm}>
+          <input
+            className={styles.input}
+            type="url"
+            placeholder="https://shop.example.com/products"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            required
+          />
+          <input
+            className={styles.input}
+            type="text"
+            placeholder="Shop name override (optional — auto-detected if blank)"
+            value={shopNameOverride}
+            onChange={e => setShopNameOverride(e.target.value)}
+          />
+          <button type="submit" className={styles.uploadBtn} disabled={starting || !url.trim()}>
+            {starting ? 'Starting…' : 'Build Scraper'}
+          </button>
+        </form>
+        {startError && <div className={styles.errorText}>{startError}</div>}
+      </section>
+
+      {/* Live progress panel */}
+      {activeJobId !== null && (
+        <section className={styles.scraperProgressSection}>
+          <h2 className={styles.sectionTitle}>
+            Job #{activeJobId} —{' '}
+            {activeStatus === 'running' ? 'Running…'
+              : activeStatus === 'success' ? '✓ Success'
+              : activeStatus === 'cannot_scrape' ? '⚠ Cannot Scrape'
+              : activeStatus === 'failed' ? '✗ Failed'
+              : 'Pending'}
+          </h2>
+
+          <div className={styles.scraperLog}>
+            {log.map((l, i) => (
+              <div key={i} className={`${styles.scraperLogLine} ${styles[`scraperLog_${l.kind}`]}`}>
+                <span className={styles.scraperLogTime}>{l.time}</span>
+                {l.text}
+              </div>
+            ))}
+            {activeStatus === 'running' && <div className={styles.scraperLogLine}>…</div>}
+          </div>
+
+          {/* Cannot scrape failure */}
+          {cannotScrapeMsg && (
+            <div className={styles.cannotScrapeBox}>
+              <strong>I cannot build the correct scraping script to gather the necessary information from this site.</strong>
+              {cannotScrapeMsg.includes('\n') && (
+                <p className={styles.cannotScrapeDetail}>{cannotScrapeMsg.split('\n').slice(2).join('\n')}</p>
+              )}
+            </div>
+          )}
+
+          {/* Verification report */}
+          {report && (
+            <div className={styles.verificationReport}>
+              <div className={styles.reportHeader}>
+                <span className={styles.confidenceBadge} style={{ background: confidenceColor(report.confidence) }}>
+                  {report.confidence.toUpperCase()} confidence
+                </span>
+                <span className={styles.sellerTypeBadge}>{report.seller_type} seller</span>
+              </div>
+              <div className={styles.reportStats}>
+                <span>{report.shops_created} shops created</span>
+                <span>{report.shops_updated} updated</span>
+                <span>{report.products_ingested} products</span>
+                <span>{report.products_updated} updated</span>
+                <span>{report.variants_ingested} variants</span>
+                <span>{report.attempts_used} attempt{report.attempts_used !== 1 ? 's' : ''}</span>
+              </div>
+              {report.fields_missing.length > 0 && (
+                <div className={styles.reportWarning}>
+                  Optional fields not found: {report.fields_missing.join(', ')}
+                </div>
+              )}
+              {report.errors.length > 0 && (
+                <div className={styles.reportWarning}>
+                  {report.errors.length} row error{report.errors.length !== 1 ? 's' : ''} during ingest
+                </div>
+              )}
+              {report.sample_products.length > 0 && (
+                <div className={styles.sampleProducts}>
+                  <div className={styles.sampleTitle}>Sample products</div>
+                  <div className={styles.sampleGrid}>
+                    {report.sample_products.map((p, i) => (
+                      <div key={i} className={styles.sampleCard}>
+                        {p.image_url && (
+                          <img src={p.image_url} alt={p.name} className={styles.sampleImg} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        )}
+                        <div className={styles.sampleName}>{p.name}</div>
+                        <div className={styles.sampleMeta}>{p.shop_name} · ${p.price}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Saved scraper jobs table */}
+      <section className={styles.scraperJobsSection}>
+        <h2 className={styles.sectionTitle}>Scraper Jobs</h2>
+        {jobsLoading ? (
+          <div className={styles.statsLoading}>Loading jobs…</div>
+        ) : jobs.length === 0 ? (
+          <div className={styles.statsLoading}>No scraper jobs yet. Start one above.</div>
+        ) : (
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>URL</th>
+                  <th>Seller</th>
+                  <th>Status</th>
+                  <th>Products</th>
+                  <th>Started</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map(job => (
+                  <tr key={job.id}>
+                    <td>{job.id}</td>
+                    <td className={styles.scraperUrlCell} title={job.url}>
+                      {job.url.replace(/^https?:\/\//, '').substring(0, 50)}
+                      {job.url.replace(/^https?:\/\//, '').length > 50 ? '…' : ''}
+                    </td>
+                    <td>{job.seller_type || '—'}</td>
+                    <td>
+                      <span className={styles[`status_${job.status}`]}>
+                        {statusIcon(job.status)} {job.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td>
+                      {job.result_summary
+                        ? `${job.result_summary.products_ingested}p / ${job.result_summary.variants_ingested}v`
+                        : '—'}
+                    </td>
+                    <td>{new Date(job.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {job.script_id && (
+                          <button
+                            className={styles.uploadBtn}
+                            onClick={() => handleRerun(job.id)}
+                            disabled={rerunning === job.id || job.status === 'running'}
+                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}
+                          >
+                            {rerunning === job.id ? '…' : 'Re-run'}
+                          </button>
+                        )}
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => handleDelete(job.id)}
+                          disabled={deleting === job.id}
+                        >
+                          {deleting === job.id ? '…' : 'Delete'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
