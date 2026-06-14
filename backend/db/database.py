@@ -178,22 +178,22 @@ async def create_tables():
             AFTER INSERT OR UPDATE OR DELETE ON product_variants
             FOR EACH ROW EXECUTE FUNCTION variants_touch_parent()
         """))
-        # Scraper tables
-        await conn.execute(text(
-            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS seller_type varchar(10)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_run_at timestamptz"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_run_status varchar(20)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_error text"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS seller_type varchar(10)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS shop_name varchar(200)"
-        ))
+        # Scraper tables — only add columns if the table already existed before
+        # create_all ran (i.e. this is an upgrade on an older deployment).
+        # On fresh deployments create_all builds the full schema above and these
+        # are safe no-ops thanks to IF NOT EXISTS on both table and column.
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scraper_scripts') THEN
+                    EXECUTE 'ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS seller_type varchar(10)';
+                    EXECUTE 'ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_run_at timestamptz';
+                    EXECUTE 'ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_run_status varchar(20)';
+                    EXECUTE 'ALTER TABLE scraper_scripts ADD COLUMN IF NOT EXISTS last_error text';
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scraper_jobs') THEN
+                    EXECUTE 'ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS seller_type varchar(10)';
+                    EXECUTE 'ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS shop_name varchar(200)';
+                END IF;
+            END$$;
+        """))
