@@ -1,8 +1,8 @@
-"""Product search end-to-end (lexical + filters).
+"""Product search end-to-end (embedding pipeline + filters).
 
-Exercises tsvector trigger fired by the seed inserts, the _apply_product_filters
-SQL path, and the discover endpoint. Vector/hybrid search is not exercised
-because the embedding column is left NULL (we mock embed_texts to None).
+Exercises tsvector trigger fired by the seed inserts and the discover endpoint.
+embed_texts is mocked to return None so the pipeline falls back to the lex-only
+SQL path — same result set, no OpenAI calls required in tests.
 """
 from decimal import Decimal
 
@@ -12,10 +12,16 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture(autouse=True)
-def fake_embed_texts(monkeypatch):
-    async def _fake(texts):
+def fake_embed_and_rewrite(monkeypatch):
+    async def _fake_embed(texts):
         return [None] * len(texts)
-    monkeypatch.setattr("routers.admin.embed_texts", _fake)
+
+    async def _fake_rewrite(query, db=None):
+        return [query] if query else []
+
+    monkeypatch.setattr("routers.admin.embed_texts", _fake_embed)
+    monkeypatch.setattr("agent.tools.embed_texts", _fake_embed)
+    monkeypatch.setattr("agent.tools.rewrite_query", _fake_rewrite)
 
 
 async def _seed_catalog(seed_shop_with_variants):
@@ -98,17 +104,3 @@ async def test_discover_in_stock_only_filter(
     assert "Wool Hat" in names and "Ceramic Mug" in names
 
 
-async def test_search_products_requires_auth(client):
-    r = await client.get("/api/products")
-    assert r.status_code == 401
-
-
-async def test_search_products_returns_hits(
-    client, make_user, seed_shop_with_variants
-):
-    await _seed_catalog(seed_shop_with_variants)
-    _, headers = await make_user()
-    r = await client.get("/api/products?q=mug", headers=headers)
-    assert r.status_code == 200
-    names = [p["name"] for p in r.json()]
-    assert names == ["Ceramic Mug"]

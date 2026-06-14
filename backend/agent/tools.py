@@ -587,8 +587,8 @@ async def execute_tool(
 
 
 def _filter_where_sql(params: dict) -> tuple[str, dict]:
-    """Translate agent filters (shop / price / stock) into SQL fragments bound
-    into the candidate queries, so ranking and RRF only ever see eligible
+    """Translate agent filters (shop / price / stock / tags) into SQL fragments
+    bound into the candidate queries, so ranking and RRF only ever see eligible
     products. Filtering after fusion silently dropped top-ranked hits and
     wasted candidate-pool slots. Fragments are hardcoded; values are binds."""
     clauses: list[str] = []
@@ -596,6 +596,14 @@ def _filter_where_sql(params: dict) -> tuple[str, dict]:
     if params.get("shop_id"):
         clauses.append("p.shop_id = :f_shop_id")
         binds["f_shop_id"] = int(params["shop_id"])
+    shop_ids = params.get("shop_ids")
+    if shop_ids:
+        clauses.append("p.shop_id = ANY(:f_shop_ids)")
+        binds["f_shop_ids"] = list(shop_ids)
+    tags = params.get("tags")
+    if tags:
+        clauses.append("(p.description->'tags') ?| :f_tags")
+        binds["f_tags"] = list(tags)
     min_p = params.get("min_price")
     max_p = params.get("max_price")
     in_stock_only = params.get("in_stock_only")

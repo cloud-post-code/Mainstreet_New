@@ -117,9 +117,9 @@ async def create_tables():
                 NEW.search_vector :=
                     setweight(to_tsvector('english', coalesce(NEW.name, '')), 'A') ||
                     setweight(to_tsvector('english', coalesce(NEW.shop_name_cached, '')), 'A') ||
-                    setweight(to_tsvector('english', coalesce(NEW.description->>'summary', '')), 'B') ||
-                    setweight(to_tsvector('english', coalesce(tags_text, '')), 'B') ||
-                    setweight(to_tsvector('english', coalesce(option_text, '')), 'B') ||
+                    setweight(to_tsvector('english', coalesce(NEW.description->>'summary', '')), 'A') ||
+                    setweight(to_tsvector('english', coalesce(tags_text, '')), 'A') ||
+                    setweight(to_tsvector('english', coalesce(option_text, '')), 'A') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'long', '')), 'C') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'materials', '')), 'C') ||
                     setweight(to_tsvector('english', coalesce(NEW.description->>'made_in', '')), 'D');
