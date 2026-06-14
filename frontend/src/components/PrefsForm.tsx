@@ -40,62 +40,6 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
         />
       </Section>
 
-      <Section title="Personal budget">
-        <Field label="Max for a single item ($)">
-          <input
-            type="number"
-            inputMode="numeric"
-            value={prefs.personal_budget ?? ''}
-            onChange={e => onPatch({ personal_budget: numOrNull(e.target.value) })}
-            placeholder="e.g. 150"
-          />
-        </Field>
-      </Section>
-
-      <Section title="Gift budget">
-        <Row>
-          <Field label="Default ($)">
-            <input
-              type="number"
-              value={gb.default ?? ''}
-              onChange={e => patchGift({ default: numOrNull(e.target.value) ?? undefined })}
-              placeholder="e.g. 50"
-            />
-          </Field>
-          <Field label="Birthday ($)">
-            <input
-              type="number"
-              value={gb.birthday ?? ''}
-              onChange={e => patchGift({ birthday: numOrNull(e.target.value) ?? undefined })}
-            />
-          </Field>
-        </Row>
-        <Row>
-          <Field label="Holiday ($)">
-            <input
-              type="number"
-              value={gb.holiday ?? ''}
-              onChange={e => patchGift({ holiday: numOrNull(e.target.value) ?? undefined })}
-            />
-          </Field>
-          <Field label="Anniversary ($)">
-            <input
-              type="number"
-              value={gb.anniversary ?? ''}
-              onChange={e => patchGift({ anniversary: numOrNull(e.target.value) ?? undefined })}
-            />
-          </Field>
-        </Row>
-        <Field label="Notes">
-          <input
-            type="text"
-            value={gb.freeform ?? ''}
-            onChange={e => patchGift({ freeform: e.target.value })}
-            placeholder="Any context on how you approach gift budgets…"
-          />
-        </Field>
-      </Section>
-
       <Section title="Likes" defaultOpen>
         <ChipInput
           values={prefs.likes ?? []}
@@ -253,6 +197,62 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
             value={prefs.sizes?.freeform ?? ''}
             onChange={e => onPatch({ sizes: { freeform: e.target.value } })}
             placeholder="Anything else about fit or sizing…"
+          />
+        </Field>
+      </Section>
+
+      <Section title="Personal budget">
+        <Field label="Max for a single item ($)">
+          <input
+            type="number"
+            inputMode="numeric"
+            value={prefs.personal_budget ?? ''}
+            onChange={e => onPatch({ personal_budget: numOrNull(e.target.value) })}
+            placeholder="e.g. 150"
+          />
+        </Field>
+      </Section>
+
+      <Section title="Gift budget">
+        <Row>
+          <Field label="Default ($)">
+            <input
+              type="number"
+              value={gb.default ?? ''}
+              onChange={e => patchGift({ default: numOrNull(e.target.value) ?? undefined })}
+              placeholder="e.g. 50"
+            />
+          </Field>
+          <Field label="Birthday ($)">
+            <input
+              type="number"
+              value={gb.birthday ?? ''}
+              onChange={e => patchGift({ birthday: numOrNull(e.target.value) ?? undefined })}
+            />
+          </Field>
+        </Row>
+        <Row>
+          <Field label="Holiday ($)">
+            <input
+              type="number"
+              value={gb.holiday ?? ''}
+              onChange={e => patchGift({ holiday: numOrNull(e.target.value) ?? undefined })}
+            />
+          </Field>
+          <Field label="Anniversary ($)">
+            <input
+              type="number"
+              value={gb.anniversary ?? ''}
+              onChange={e => patchGift({ anniversary: numOrNull(e.target.value) ?? undefined })}
+            />
+          </Field>
+        </Row>
+        <Field label="Notes">
+          <input
+            type="text"
+            value={gb.freeform ?? ''}
+            onChange={e => patchGift({ freeform: e.target.value })}
+            placeholder="Any context on how you approach gift budgets…"
           />
         </Field>
       </Section>
