@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { MasonPrefs, MasonPrefsPatch } from '../api'
 import PrefsForm from './PrefsForm'
-import PrefsInterview from './PrefsInterview'
+import MasonOnboarding from './MasonOnboarding'
 import styles from './PrefsInterview.module.css'
 
 interface Props {
@@ -66,7 +66,7 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
 
   if (view === 'interview') {
     return (
-      <PrefsInterview
+      <MasonOnboarding
         onComplete={handleInterviewComplete}
         onSkip={() => setView('form')}
       />
@@ -79,23 +79,23 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
       <div className={styles.setupIcon}>
         <img src="/mason/mason-1.png" alt="Mason" />
       </div>
-      <h2 className={styles.setupTitle}>Let Mason get to know you</h2>
+      <h2 className={styles.setupTitle}>Let's chat for a minute</h2>
       <p className={styles.setupDesc}>
-        Answer 10 quick questions and Mason will automatically build your preference profile — so every shopping recommendation is tailored to you from the start.
+        Mason wants to get to know your style — tap through a few quick questions and every recommendation becomes yours.
       </p>
       <button
         type="button"
         className={styles.setupBtn}
         onClick={() => setView('interview')}
       >
-        Set up with a quick interview
+        Let's do it →
       </button>
       <button
         type="button"
         className={styles.setupSkip}
         onClick={() => setView('form')}
       >
-        Skip — I'll fill it in myself
+        Skip — I'll set it up myself
       </button>
     </div>
   )

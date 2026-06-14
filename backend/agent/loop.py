@@ -182,6 +182,7 @@ Every response is a single render_ui(payload) call after any necessary searches.
 - `shop_card` — shop card. Props: {shop_id, name, logo_url?, description?, website_url?, product_count?}. No children.
 - `plan` — plan dropdown (rarely emitted directly; generate_plan handles it). Props: {steps}.
 - `mason_discover_card` — paginated browseable product grid for when the user's intent is unclear or too broad to narrow down. Props: {products: [{product_id, name, price, shop_name, image_url?, description_summary?, tags?}], title?, subtitle?, page_size?(default 15), max_pages?(1-3, default 3)}. No children. Pass up to 45 products; the card paginates them 15 at a time so the user can browse. Use this ONLY when you genuinely can't narrow down what they want — it's a browsing aid, not a substitute for a targeted recommendation.
+- `style_question_card` — visual taste-calibration card. Shows 6 product images mid-session; user taps "Select" on one to say "like this." Use instead of question_card or multiple_choice when the user's need is fundamentally visual and words won't capture it ("cozy", "farmhouse vibe", "modern", "earthy", "I'll know it when I see it"). Props: {question_id (stable string e.g. 'style_q_1'), products: exactly 6 objects each with {product_id, name, price, shop_name, image_url, tags, variants?, default_variant_id?}, question?(string), hint?(string)}. No children. ALWAYS call search_products first — the card is useless without image_url on all 6 products. Include tags on every product. When the user's reply says "I selected ...", call search_products using that product's name + tags and return a product_grid(showcase, 6 cards) plus a text_block. Do NOT show another style_question_card after a selection.
 
 ### Standard response structure
 
@@ -205,6 +206,7 @@ The root is always a `stack`. Children appear in this order:
 | "Help me choose" / one preference unclear | stack[multiple_choice, text_block]  (no reasoning yet) |
 | Multiple preferences unclear (2+ questions) | stack[questionnaire, text_block]  (single card walks the user through all questions) |
 | Ambiguous / too-broad request — user needs to browse | stack[mason_discover_card, text_block] — fetch up to 45 products (limit=45), pass all in products[]; the card paginates them 15 at a time |
+| Intent is visual/aesthetic and hard to verbalize ("cozy", "modern", "I'll know it when I see it") | stack[style_question_card, text_block] — search 6 products with image_url and pass them as options |
 | "Show details for X" | stack[product_details_modal, text_block] |
 | "What shops sell Y" | stack[shop_card, shop_card, ..., text_block] |
 | "X under $Y" / filtered search | search_products with max_price filter → stack[product_grid, text_block, reasoning_block] |
@@ -224,6 +226,8 @@ The root is always a `stack`. Children appear in this order:
 10. All conversational prose belongs inside the `text_block` of your single `render_ui` call. Do NOT narrate before tool calls. Pre-tool text is limited to at most one short status line (e.g. "Checking your cart…"). Never repeat the same intro twice — if you wrote a sentence before a tool call, do not paraphrase it again in the final `text_block`. Each idea is stated once, in `text_block` only.
 11. When the user sends a new search or intent (e.g. "Find Eco Home Goods"), answer that intent only. Do NOT open by recapping or summarizing prior topics from earlier in the conversation unless the user explicitly asks. Skip phrases like "You've already got…" or "I also know you've been eyeing…" — go straight to the new ask.
 12. Proofread every `question` and `text_block` string before emitting. No typos, no truncated words ("fr partner"), no half-sentences.
+13. When using `style_question_card`: (a) always call search_products first and ensure image_url is populated on all 6 products; (b) include tags on every product so the follow-up similarity search can use them; (c) do not use this card in fast-mode contexts — aesthetic calibration is full-path only.
+14. When you receive a message beginning with "I selected" (response from a style_question_card): do NOT emit another style_question_card. Immediately call search_products using the product name and tags from the message, then render a product_grid(layout="showcase", 6 cards) plus a text_block explaining the visual connection. Optionally call save_preference if the selection reveals a durable aesthetic preference (e.g. "natural materials", "minimalist", "farmhouse").
 
 ### Example payload — questionnaire (preferences unclear, asking 3 things)
 
