@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { api, Shop, Product, ListingDraft, ListingStage, AdminStats, ScraperJobOut, ScraperVerificationReport, ScraperLogEntry } from '../api'
+import { api, Shop, Product, ListingDraft, ListingStage, AdminStats, ScraperJobOut, ScraperVerificationReport, ScraperLogEntry, ScraperPreview } from '../api'
 import { safeHref } from '../lib/safeHref'
 import styles from './Admin.module.css'
 import { formatCurrency } from '../lib/format'
@@ -620,6 +620,10 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
   const [jobsLoading, setJobsLoading] = useState(true)
   const [rerunning, setRerunning] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [previewJobId, setPreviewJobId] = useState<number | null>(null)
+  const [preview, setPreview] = useState<ScraperPreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [deletingIngested, setDeletingIngested] = useState<number | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -685,6 +689,39 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
       alert(err instanceof Error ? err.message : 'Rerun failed')
     } finally {
       setRerunning(null)
+    }
+  }
+
+  async function handlePreview(jobId: number) {
+    if (previewJobId === jobId) { setPreviewJobId(null); setPreview(null); return }
+    setPreviewJobId(jobId)
+    setPreview(null)
+    setPreviewLoading(true)
+    try {
+      const p = await api.previewScraperJob(jobId, token)
+      setPreview(p)
+    } catch { setPreview(null) }
+    finally { setPreviewLoading(false) }
+  }
+
+  async function handleDeleteIngested(jobId: number) {
+    const job = jobs.find(j => j.id === jobId)
+    const summary = job?.result_summary
+    const pCount = summary?.products_ingested ?? 0
+    const sCount = summary?.shops_created ?? 0
+    if (!confirm(`Delete ${pCount} products and ${sCount} shops ingested by job #${jobId}? This cannot be undone.`)) return
+    setDeletingIngested(jobId)
+    try {
+      const result = await api.deleteIngestedByJob(jobId, token)
+      alert(`Deleted ${result.products_deleted} products and ${result.shops_deleted} shops.`)
+      setPreview(null)
+      setPreviewJobId(null)
+      // Refresh jobs list
+      api.listScraperJobs(token).then(setJobs).catch(() => {})
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeletingIngested(null)
     }
   }
 
@@ -851,6 +888,7 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
               </thead>
               <tbody>
                 {jobs.map(job => (
+                  <>
                   <tr key={job.id} style={{ cursor: 'pointer' }} onClick={() => setActiveJob(job)}>
                     <td>{job.id}</td>
                     <td className={styles.scraperUrlCell} title={job.url}>
@@ -861,18 +899,68 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
                     <td>{job.result_summary ? `${job.result_summary.products_ingested}p / ${job.result_summary.variants_ingested}v` : '—'}</td>
                     <td>{new Date(job.created_at).toLocaleDateString()}</td>
                     <td onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {job.status === 'success' && (
+                          <button className={styles.previewBtn} onClick={() => handlePreview(job.id)}>
+                            {previewJobId === job.id ? '▲ Hide' : '▼ Preview'}
+                          </button>
+                        )}
                         {job.script_id && (
                           <button className={styles.rerunBtn} onClick={() => handleRerun(job.id)} disabled={rerunning === job.id || job.status === 'running'}>
                             {rerunning === job.id ? '…' : '↺ Re-run'}
                           </button>
                         )}
-                        <button className={styles.deleteBtn} onClick={() => handleDelete(job.id)} disabled={deleting === job.id}>
+                        {job.status === 'success' && (job.result_summary?.ingested_product_ids?.length ?? 0) > 0 && (
+                          <button className={styles.deleteBtn} onClick={() => handleDeleteIngested(job.id)} disabled={deletingIngested === job.id} title="Delete all products/shops ingested by this job">
+                            {deletingIngested === job.id ? '…' : '🗑 Rollback'}
+                          </button>
+                        )}
+                        <button className={styles.deleteBtn} onClick={() => handleDelete(job.id)} disabled={deleting === job.id} title="Delete job record and saved script">
                           {deleting === job.id ? '…' : 'Delete'}
                         </button>
                       </div>
                     </td>
                   </tr>
+                  {previewJobId === job.id && (
+                    <tr key={`preview-${job.id}`}>
+                      <td colSpan={7} style={{ padding: 0 }}>
+                        <div className={styles.previewPanel}>
+                          {previewLoading ? (
+                            <div className={styles.statsLoading}>Loading preview…</div>
+                          ) : preview ? (
+                            <>
+                              <div className={styles.previewSummary}>
+                                <strong>{preview.shop_count}</strong> shop{preview.shop_count !== 1 ? 's' : ''} ·{' '}
+                                <strong>{preview.product_count}</strong> product{preview.product_count !== 1 ? 's' : ''}
+                                {' '}ingested by this job
+                              </div>
+                              {preview.shops.length > 0 && (
+                                <div className={styles.previewShops}>
+                                  {preview.shops.map(s => (
+                                    <span key={s.id} className={styles.previewShopChip}>
+                                      {s.name} <span className={styles.shopSearchCount}>{s.product_count}p</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {preview.products.length > 0 && (
+                                <div className={styles.previewGrid}>
+                                  {preview.products.map(p => (
+                                    <div key={p.id} className={styles.sampleCard}>
+                                      {p.image_url && <img src={p.image_url} alt={p.name} className={styles.sampleImg} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                                      <div className={styles.sampleName}>{p.name}</div>
+                                      <div className={styles.sampleMeta}>{p.shop_name} · ${p.price}{p.variant_count > 1 ? ` · ${p.variant_count}v` : ''}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          ) : <div className={styles.statsLoading}>No preview data available.</div>}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 ))}
               </tbody>
             </table>

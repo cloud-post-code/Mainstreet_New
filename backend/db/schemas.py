@@ -200,6 +200,9 @@ class ScraperVerificationReport(BaseModel):
     errors: list[dict] = []
     confidence: str = "low"  # "high" | "medium" | "low"
     attempts_used: int = 1
+    # IDs created by this job — used for preview and rollback delete
+    ingested_shop_ids: list[int] = []
+    ingested_product_ids: list[int] = []
 
 
 class ScraperScriptOut(BaseModel):

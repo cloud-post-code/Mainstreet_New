@@ -362,6 +362,139 @@ async def rerun_scraper_job(
     return ScraperJobOut.model_validate(refreshed_result.scalars().first())
 
 
+@router.get("/{job_id}/preview")
+async def preview_scraper_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+) -> dict:
+    """Return the shops and products that were created by this job."""
+    from db.models import Product, ProductVariant, Shop
+    from db.schemas import ShopOut, ProductOut
+
+    job = await db.get(ScraperJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    summary = job.result_summary or {}
+    shop_ids: list[int] = summary.get("ingested_shop_ids") or []
+    product_ids: list[int] = summary.get("ingested_product_ids") or []
+
+    shops: list[dict] = []
+    if shop_ids:
+        from sqlalchemy import func as sqlfunc
+        res = await db.execute(
+            select(Shop, sqlfunc.count(Product.id).label("product_count"))
+            .outerjoin(Product, Product.shop_id == Shop.id)
+            .where(Shop.id.in_(shop_ids))
+            .group_by(Shop.id)
+            .order_by(Shop.name)
+        )
+        for shop, cnt in res.all():
+            out = ShopOut.model_validate(shop)
+            out.product_count = cnt
+            shops.append(out.model_dump())
+
+    products: list[dict] = []
+    if product_ids:
+        from db.schemas import VariantOut, PriceRange
+        p_res = await db.execute(
+            select(Product, Shop.name.label("shop_name"))
+            .join(Shop, Shop.id == Product.shop_id)
+            .where(Product.id.in_(product_ids))
+            .order_by(Shop.name, Product.name)
+        )
+        p_rows = p_res.all()
+        pid_list = [p.id for p, _ in p_rows]
+        v_res = await db.execute(
+            select(ProductVariant)
+            .where(ProductVariant.product_id.in_(pid_list))
+            .order_by(ProductVariant.variant_index)
+        )
+        variants_by_pid: dict[int, list] = {}
+        for v in v_res.scalars().all():
+            variants_by_pid.setdefault(v.product_id, []).append(v)
+
+        for product, shop_name in p_rows:
+            variants = variants_by_pid.get(product.id, [])
+            default_v = next((v for v in variants if v.id == product.default_variant_id), None) or (variants[0] if variants else None)
+            prices = [v.price for v in variants if v.price is not None]
+            products.append({
+                "id": product.id,
+                "name": product.name,
+                "shop_name": shop_name,
+                "handle": product.handle,
+                "image_url": default_v.image_url if default_v else None,
+                "price": str(min(prices)) if prices else "0",
+                "variant_count": len(variants),
+                "in_stock": any((v.quantity or 0) > 0 for v in variants),
+            })
+
+    return {
+        "job_id": job_id,
+        "shops": shops,
+        "products": products,
+        "shop_count": len(shops),
+        "product_count": len(products),
+    }
+
+
+@router.delete("/{job_id}/ingested", status_code=200, response_model=None)
+async def delete_ingested_by_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+) -> dict:
+    """Delete all shops and products that were created by this job.
+
+    Only deletes rows that were CREATED (not updated) by the job.
+    Shops are only deleted if they have no remaining products after the product delete.
+    """
+    from db.models import Product, Shop
+    from sqlalchemy import delete as sqldel, func as sqlfunc
+
+    job = await db.get(ScraperJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    summary = job.result_summary or {}
+    product_ids: list[int] = summary.get("ingested_product_ids") or []
+    shop_ids: list[int] = summary.get("ingested_shop_ids") or []
+
+    products_deleted = 0
+    shops_deleted = 0
+
+    if product_ids:
+        res = await db.execute(
+            sqldel(Product).where(Product.id.in_(product_ids))
+        )
+        products_deleted = res.rowcount
+
+    # Only delete shops that now have zero products (safe — don't blow away existing data)
+    if shop_ids:
+        for shop_id in shop_ids:
+            count_res = await db.execute(
+                select(sqlfunc.count(Product.id)).where(Product.shop_id == shop_id)
+            )
+            remaining = count_res.scalar() or 0
+            if remaining == 0:
+                shop = await db.get(Shop, shop_id)
+                if shop:
+                    await db.delete(shop)
+                    shops_deleted += 1
+
+    # Clear the ingested IDs from the job so it can't be double-deleted
+    if job.result_summary:
+        updated_summary = dict(job.result_summary)
+        updated_summary["ingested_product_ids"] = []
+        updated_summary["ingested_shop_ids"] = []
+        job.result_summary = updated_summary
+
+    await db.commit()
+
+    return {"products_deleted": products_deleted, "shops_deleted": shops_deleted}
+
+
 @router.delete("/{job_id}", status_code=204, response_model=None)
 async def delete_scraper_job(
     job_id: int,

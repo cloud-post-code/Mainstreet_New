@@ -542,6 +542,15 @@ export const api = {
   deleteScraperJob: (id: number, token: string) =>
     request<void>(`/api/admin/scrapers/${id}`, { method: 'DELETE' }, token),
 
+  previewScraperJob: (id: number, token: string) =>
+    request<ScraperPreview>(`/api/admin/scrapers/${id}/preview`, {}, token),
+
+  deleteIngestedByJob: (id: number, token: string) =>
+    request<{ products_deleted: number; shops_deleted: number }>(
+      `/api/admin/scrapers/${id}/ingested`,
+      { method: 'DELETE' },
+      token,
+    ),
 }
 
 // --- Scraper types ---
@@ -567,6 +576,27 @@ export interface ScraperVerificationReport {
   errors: Record<string, unknown>[]
   confidence: 'high' | 'medium' | 'low'
   attempts_used: number
+  ingested_shop_ids: number[]
+  ingested_product_ids: number[]
+}
+
+export interface ScraperPreviewProduct {
+  id: number
+  name: string
+  shop_name: string
+  handle: string
+  image_url: string | null
+  price: string
+  variant_count: number
+  in_stock: boolean
+}
+
+export interface ScraperPreview {
+  job_id: number
+  shops: Shop[]
+  products: ScraperPreviewProduct[]
+  shop_count: number
+  product_count: number
 }
 
 export interface ScraperScriptOut {

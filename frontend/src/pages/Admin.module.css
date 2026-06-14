@@ -1057,3 +1057,56 @@
   color: #888;
   font-family: var(--font-heading);
 }
+
+/* ── Scraper preview panel ─────────────────────────────────────────────── */
+.previewBtn {
+  background: rgba(1,82,55,0.08);
+  color: #015237;
+  border: 1px solid rgba(1,82,55,0.25);
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.previewBtn:hover { background: rgba(1,82,55,0.15); }
+
+.previewPanel {
+  background: #f9f6f0;
+  border-top: 1px solid rgba(1,82,55,0.1);
+  padding: 1rem 1.25rem;
+}
+
+.previewSummary {
+  font-size: 0.82rem;
+  color: #555;
+  margin-bottom: 0.75rem;
+}
+
+.previewShops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.previewShopChip {
+  background: white;
+  border: 1px solid rgba(1,82,55,0.2);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #015237;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.6rem;
+  max-height: 400px;
+  overflow-y: auto;
+}

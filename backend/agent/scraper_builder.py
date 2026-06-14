@@ -69,9 +69,12 @@ single self-contained Python script that retrieves ALL products from the site an
 array to stdout.
 
 SELLER TYPE: {seller_type}
-  - "single": one brand sells everything. Use that brand/shop name for every product's shop_name.
-  - "multi": marketplace with multiple sellers. Extract the per-product seller name for shop_name.
-  - "unknown": treat as single seller; do your best.
+  - "single": one brand/store sells everything. Every product row must have the SAME shop_name
+              (the store name, e.g. "Imogene + Willie"). Do NOT use product.vendor — it varies
+              per product and will create multiple shops. Also set parent_store = shop_name.
+  - "multi":  marketplace — multiple sellers. Use the per-product seller name for shop_name.
+              Set parent_store to the marketplace name (e.g. "Etsy").
+  - "unknown": treat as single seller.
 
 ═══════════════════════════════════════════════════════════════
 STEP 1 — DETECT THE PLATFORM AND USE ITS API IF POSSIBLE
@@ -87,7 +90,12 @@ SHOPIFY (most common)
   API:    GET {{base_url}}/products.json?limit=250&page=N
           Paginate: keep incrementing ?page= until you get an empty products array.
           Each product has variants[]. Map like this:
-            shop_name         = product.vendor  (or the store name from the page title)
+            shop_name         = STORE NAME (NOT product.vendor).
+                                For single seller: extract the store name from the page <title>,
+                                <h1>, or the domain (e.g. "imogeneandwillie.com" → "Imogene + Willie").
+                                Use the SAME shop_name string on every product row.
+                                product.vendor varies per product and must NOT be used for single sellers.
+                                For multi seller: use product.vendor per product.
             product_handle    = product.handle  ← USE THIS DIRECTLY, do not re-slugify it
             base_product_name = product.title
             product_name      = variant.title (use product.title if "Default Title")

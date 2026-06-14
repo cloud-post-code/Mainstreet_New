@@ -91,6 +91,8 @@ async def ingest_scraper_output(
     products_updated: int = 0
     variants_ingested: int = 0
     errors: list[str] = []
+    ingested_shop_ids: list[int] = []
+    ingested_product_ids: list[int] = []
 
     # ── Step 1: collect unique shop names ───────────────────────────────────
     unique_shop_names: list[str] = []
@@ -109,6 +111,7 @@ async def ingest_scraper_output(
             shop_cache[shop_name] = shop
             if created:
                 shops_created += 1
+                ingested_shop_ids.append(shop.id)
             else:
                 shops_updated += 1
         except Exception as exc:
@@ -142,6 +145,7 @@ async def ingest_scraper_output(
             )
             if created:
                 products_ingested += 1
+                ingested_product_ids.append(product.id)
             else:
                 products_updated += 1
             variants_ingested += len(variants)
@@ -197,4 +201,6 @@ async def ingest_scraper_output(
         sample_products=sample_products,
         confidence=confidence,
         errors=errors,
+        ingested_shop_ids=ingested_shop_ids,
+        ingested_product_ids=ingested_product_ids,
     )
