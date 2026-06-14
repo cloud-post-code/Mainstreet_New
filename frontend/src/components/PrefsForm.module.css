@@ -1,167 +1,202 @@
+/* ── Prefs Form ────────────────────────────────────────────────────────────
+   Design system:
+   - Font: Lora (body), --font-heading (labels/summaries)
+   - Palette: ms-primary #015237 · ms-cream #f1e9d8 · ms-dark #0f1805
+              ms-terra #be6e46 · ms-sage #7a9e7e
+   - Border radius: 12px sections · 8px inputs/chips
+   - All spacing in multiples of 4px
+──────────────────────────────────────────────────────────────────────────── */
+
 .form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .helpText {
   font-family: 'Lora', serif;
   font-size: 13px;
-  margin: 0 0 4px;
-  opacity: 0.7;
-  line-height: 1.4;
+  color: #6b6456;
+  margin: 0 0 8px;
+  line-height: 1.55;
+}
+
+/* ── Section (collapsible) ───────────────────────────────────────────────── */
+
+.section {
+  background: #fff;
+  border: 1px solid rgba(1, 82, 55, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.section[open] {
+  box-shadow: 0 2px 8px rgba(1, 82, 55, 0.07);
+}
+
+.sectionSummary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  font-family: 'Lora', serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ms-primary, #015237);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  transition: background 0.1s;
+}
+.sectionSummary::-webkit-details-marker { display: none; }
+.sectionSummary:hover { background: rgba(1, 82, 55, 0.03); }
+
+.sectionSummary::after {
+  content: '+';
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--ms-primary, #015237);
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.section[open] .sectionSummary::after {
+  content: '−';
+  opacity: 0.8;
+}
+
+.sectionBody {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid rgba(1, 82, 55, 0.08);
 }
 
 .sectionHint {
   font-family: 'Lora', serif;
   font-size: 12px;
   color: #8a7f6c;
-  margin: 0 0 6px;
+  margin: 4px 0 0;
   font-style: italic;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
-.section {
-  background: #fff;
-  border: 1px solid rgba(15, 24, 5, 0.08);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.section[open] {
-  box-shadow: 0 1px 2px rgba(15, 24, 5, 0.04);
-}
-.sectionSummary {
-  list-style: none;
-  cursor: pointer;
-  padding: 12px 14px;
-  font-family: 'Lora', serif;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ms-dark, #0f1805);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  user-select: none;
-}
-.sectionSummary::-webkit-details-marker { display: none; }
-.sectionSummary::after {
-  content: '+';
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 400;
-  opacity: 0.6;
-}
-.section[open] .sectionSummary::after {
-  content: '–';
-}
-.sectionBody {
-  padding: 4px 14px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  border-top: 1px solid rgba(15, 24, 5, 0.06);
-}
+/* ── Layout helpers ──────────────────────────────────────────────────────── */
 
 .row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
-@media (max-width: 420px) {
+@media (max-width: 440px) {
   .row { grid-template-columns: 1fr; }
 }
+
+/* ── Field (label + input) ───────────────────────────────────────────────── */
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-family: 'Lora', serif;
 }
+
 .fieldLabel {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  opacity: 0.7;
+  color: #6b6456;
 }
+
 .field input,
 .field select {
-  padding: 8px 10px;
+  padding: 9px 11px;
   font-family: 'Lora', serif;
-  font-size: 13px;
-  border: 1px solid rgba(15, 24, 5, 0.18);
+  font-size: 13.5px;
+  border: 1px solid rgba(1, 82, 55, 0.18);
   border-radius: 8px;
-  background: #fff;
+  background: #fafaf8;
   outline: none;
   color: var(--ms-dark, #0f1805);
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
 }
 .field input:focus,
 .field select:focus {
   border-color: var(--ms-primary, #015237);
-}
-
-.inlineInput {
-  width: 100%;
-  margin-top: 6px;
-  padding: 8px 10px;
-  font-family: 'Lora', serif;
-  font-size: 13px;
-  border: 1px solid rgba(15, 24, 5, 0.18);
-  border-radius: 8px;
   background: #fff;
-  outline: none;
 }
-.inlineInput:focus { border-color: var(--ms-primary, #015237); }
+.field input::placeholder {
+  color: #bbb5a8;
+}
 
-/* Toggle chips for multi-select tag groups */
+/* Number inputs get a slightly tinted background so they read differently */
+.field input[type="number"] {
+  background: #f6f9f7;
+}
+.field input[type="number"]:focus {
+  background: #fff;
+}
+
+/* ── Toggle chips ────────────────────────────────────────────────────────── */
+
 .toggleRow {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
+
 .toggleChip {
-  padding: 6px 10px;
+  padding: 6px 12px;
   font-family: 'Lora', serif;
-  font-size: 12px;
-  background: rgba(15, 24, 5, 0.04);
+  font-size: 12.5px;
+  background: rgba(1, 82, 55, 0.04);
   color: var(--ms-dark, #0f1805);
-  border: 1px solid rgba(15, 24, 5, 0.14);
+  border: 1px solid rgba(1, 82, 55, 0.16);
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .toggleChip:hover {
-  background: rgba(15, 24, 5, 0.08);
+  background: rgba(1, 82, 55, 0.09);
+  border-color: rgba(1, 82, 55, 0.28);
 }
 .toggleChipOn {
   background: var(--ms-primary, #015237);
-  color: var(--ms-cream, #f1e9d8);
+  color: #fff;
   border-color: var(--ms-primary, #015237);
 }
 .toggleChipOn:hover {
   background: #013d29;
 }
 
-/* Radios styled as pills */
+/* ── Radio pills ─────────────────────────────────────────────────────────── */
+
 .radioRow {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
+
 .radioChip {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 6px 10px;
+  padding: 6px 12px;
   font-family: 'Lora', serif;
-  font-size: 12px;
-  background: rgba(15, 24, 5, 0.04);
+  font-size: 12.5px;
+  background: rgba(1, 82, 55, 0.04);
   color: var(--ms-dark, #0f1805);
-  border: 1px solid rgba(15, 24, 5, 0.14);
+  border: 1px solid rgba(1, 82, 55, 0.16);
   border-radius: 999px;
   cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .radioChip input {
   position: absolute;
@@ -174,11 +209,12 @@
 }
 .radioChipOn {
   background: var(--ms-primary, #015237);
-  color: var(--ms-cream, #f1e9d8);
+  color: #fff;
   border-color: var(--ms-primary, #015237);
 }
 
-/* Sliders */
+/* ── Sliders ─────────────────────────────────────────────────────────────── */
+
 .sliderWrap {
   display: flex;
   flex-direction: column;
@@ -189,22 +225,20 @@
   justify-content: space-between;
   font-family: 'Lora', serif;
   font-size: 11px;
-  opacity: 0.65;
+  color: #8a7f6c;
 }
 .sliderWrap input[type="range"] {
   width: 100%;
   accent-color: var(--ms-primary, #015237);
 }
-.sliderUnset {
-  opacity: 0.45;
-}
+.sliderUnset { opacity: 0.4; }
 .sliderMeta {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: 'Lora', serif;
   font-size: 12px;
-  opacity: 0.75;
+  color: #6b6456;
 }
 .sliderClear {
   background: transparent;
@@ -217,12 +251,14 @@
   text-decoration: underline;
 }
 
-/* Chip input (Likes / Dislikes / Hobbies) */
+/* ── Chip input (Likes / Dislikes / Tags) ────────────────────────────────── */
+
 .chipInputWrap {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
+
 .chipRow {
   display: flex;
   flex-wrap: wrap;
@@ -230,69 +266,114 @@
   min-height: 0;
 }
 .chipRow:empty { display: none; }
+
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 4px 4px 10px;
+  gap: 4px;
+  padding: 5px 5px 5px 11px;
   background: var(--ms-cream, #f1e9d8);
   color: var(--ms-dark, #0f1805);
-  border: 1px solid rgba(15, 24, 5, 0.18);
+  border: 1px solid rgba(1, 82, 55, 0.15);
   border-radius: 999px;
   font-family: 'Lora', serif;
-  font-size: 12px;
+  font-size: 12.5px;
 }
+
 .chipRemove {
   background: transparent;
   border: none;
-  color: var(--ms-terra, #be6e46);
-  font-size: 15px;
+  color: #a07860;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  transition: color 0.12s, background 0.12s;
 }
+.chipRemove:hover {
+  color: var(--ms-terra, #be6e46);
+  background: rgba(190, 110, 70, 0.1);
+}
+
 .chipInputRow {
   display: flex;
   gap: 6px;
 }
+
 .chipInput {
   flex: 1;
-  padding: 8px 10px;
+  padding: 9px 11px;
   font-family: 'Lora', serif;
-  font-size: 13px;
-  border: 1px solid rgba(15, 24, 5, 0.18);
+  font-size: 13.5px;
+  border: 1px solid rgba(1, 82, 55, 0.18);
   border-radius: 8px;
-  background: #fff;
+  background: #fafaf8;
   outline: none;
+  color: var(--ms-dark, #0f1805);
+  transition: border-color 0.15s, background 0.15s;
 }
-.chipInput:focus { border-color: var(--ms-primary, #015237); }
+.chipInput:focus {
+  border-color: var(--ms-primary, #015237);
+  background: #fff;
+}
+.chipInput::placeholder { color: #bbb5a8; }
+
 .chipAddBtn {
-  padding: 8px 14px;
-  background: var(--ms-sage, #7a9e7e);
+  padding: 9px 16px;
+  background: var(--ms-primary, #015237);
   color: #fff;
   border: none;
   border-radius: 8px;
   font-family: 'Lora', serif;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
 }
-.chipAddBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.chipAddBtn:hover { background: #013d29; }
+.chipAddBtn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .chipSuggestRow {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
+
 .chipSuggest {
   background: transparent;
-  border: 1px dashed rgba(15, 24, 5, 0.25);
-  color: var(--ms-dark, #0f1805);
-  opacity: 0.7;
-  padding: 4px 8px;
+  border: 1px dashed rgba(1, 82, 55, 0.28);
+  color: #6b6456;
+  padding: 4px 10px;
   border-radius: 999px;
   font-family: 'Lora', serif;
-  font-size: 11px;
+  font-size: 11.5px;
   cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
-.chipSuggest:hover { opacity: 1; }
+.chipSuggest:hover {
+  border-color: var(--ms-primary, #015237);
+  color: var(--ms-primary, #015237);
+  background: rgba(1, 82, 55, 0.04);
+}
+
+/* ── Inline input (fallback) ─────────────────────────────────────────────── */
+
+.inlineInput {
+  width: 100%;
+  padding: 9px 11px;
+  font-family: 'Lora', serif;
+  font-size: 13.5px;
+  border: 1px solid rgba(1, 82, 55, 0.18);
+  border-radius: 8px;
+  background: #fafaf8;
+  outline: none;
+  color: var(--ms-dark, #0f1805);
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+}
+.inlineInput:focus {
+  border-color: var(--ms-primary, #015237);
+  background: #fff;
+}
