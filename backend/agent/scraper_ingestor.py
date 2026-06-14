@@ -52,18 +52,15 @@ def _score_confidence(
     errors: list[str],
     products_ingested: int,
     fields_found: list[str],
+    fields_missing: list[str],
 ) -> str:
     """Return "high", "medium", or "low" based on ingestion quality signals."""
     required_all_found = all(f in fields_found for f in _REQUIRED_FIELDS)
 
-    if not errors and products_ingested >= 5 and required_all_found:
+    if not errors and products_ingested >= 5 and required_all_found and not fields_missing:
         return "high"
 
-    if (
-        len(errors) <= 3
-        or (not all(f in fields_found for f in _OPTIONAL_FIELDS))
-        or (3 <= products_ingested <= 4)
-    ):
+    if len(errors) <= 3 and products_ingested >= 3 and required_all_found:
         return "medium"
 
     return "low"
@@ -177,11 +174,17 @@ async def ingest_scraper_output(
         if any((row.get(field) or "").strip() for row in rows):
             fields_found.append(field)
 
+    # parent_store is only meaningful for multi-seller marketplaces — don't
+    # flag it as missing on single-seller sites.
+    optional_to_check = [
+        f for f in _OPTIONAL_FIELDS
+        if not (f == "parent_store" and seller_type in ("single", "unknown"))
+    ]
     fields_missing: list[str] = [
-        f for f in _OPTIONAL_FIELDS if f not in fields_found
+        f for f in optional_to_check if f not in fields_found
     ]
 
-    confidence = _score_confidence(errors, products_ingested, fields_found)
+    confidence = _score_confidence(errors, products_ingested, fields_found, fields_missing)
 
     return ScraperVerificationReport(
         shops_created=shops_created,

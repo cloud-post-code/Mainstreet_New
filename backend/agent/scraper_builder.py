@@ -88,7 +88,7 @@ SHOPIFY (most common)
           Paginate: keep incrementing ?page= until you get an empty products array.
           Each product has variants[]. Map like this:
             shop_name         = product.vendor  (or the store name from the page title)
-            product_handle    = product.handle
+            product_handle    = product.handle  ← USE THIS DIRECTLY, do not re-slugify it
             base_product_name = product.title
             product_name      = variant.title (use product.title if "Default Title")
             price             = variant.price  (already a string like "29.99")
@@ -144,9 +144,12 @@ Each element is one product VARIANT. Single-variant products get exactly one ele
 
 REQUIRED FIELDS — every element must have ALL of these (missing any = the script fails):
   shop_name         (string) — seller or brand name
-  product_handle    (string) — URL-safe slug, lowercase, hyphens only, unique per parent product
-                               Derive from product title. e.g. "blue-canvas-tote"
-                               NOT "Blue Canvas Tote", NOT a numeric ID like "12345"
+  product_handle    (string) — URL-safe slug, lowercase, unique per parent product.
+                               Allowed chars: letters, digits, hyphens, underscores. No spaces.
+                               For Shopify: use product.handle directly (already correct format).
+                               For other platforms: slugify the product title.
+                               e.g. "blue-canvas-tote" or "blue_canvas_tote" — NOT "Blue Canvas Tote",
+                               NOT a bare numeric ID like "12345"
   base_product_name (string) — parent product title, IDENTICAL across all variants of one product
   product_name      (string) — variant display name; same as base_product_name if no variants
   price             (string) — decimal string e.g. "29.99"; use "0.00" only if truly free
@@ -210,8 +213,8 @@ def _extract_python(text: str) -> str:
 
 
 def _is_valid_handle(value: str) -> bool:
-    """product_handle must be lowercase, hyphens/digits/letters only, no spaces."""
-    return bool(re.fullmatch(r"[a-z0-9][a-z0-9\-]*", value))
+    """product_handle: lowercase, letters/digits/hyphens/underscores, no spaces."""
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9\-_]*", value))
 
 
 def _is_absolute_image_url(value: str) -> bool:
@@ -368,7 +371,7 @@ def _validate_output(rows: list[dict]) -> list[str]:
         elif not _is_valid_handle(handle):
             errors.append(
                 f"{prefix}: product_handle {handle!r} is not URL-safe "
-                "(must be lowercase, letters/digits/hyphens only)"
+                "(must be lowercase, letters/digits/hyphens/underscores only — no spaces or special chars)"
             )
 
         # --- base_product_name ---
