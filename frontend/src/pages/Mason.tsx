@@ -4,7 +4,7 @@ import { api, Session, ShippingAddress, ShippingAddressPatch } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { useMasonMemory } from '../mason/useMasonMemory'
-import PrefsForm from '../components/PrefsForm'
+import PrefsSetup from '../components/PrefsSetup'
 import styles from './Mason.module.css'
 import { formatDate } from '../lib/format'
 import SavedProductItem from '../components/SavedProductItem'
@@ -175,7 +175,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
           )}
 
           {tab === 'preferences' && (
-            <PrefsForm prefs={memory.prefs} onPatch={memory.patchPrefs} />
+            <PrefsSetup prefs={memory.prefs} onPatch={memory.patchPrefs} />
           )}
 
           {tab === 'saved' && (
