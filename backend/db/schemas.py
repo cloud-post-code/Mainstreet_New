@@ -226,6 +226,7 @@ class ScraperJobOut(BaseModel):
     attempts: int
     result_summary: Optional[dict] = None
     failure_reason: Optional[str]
+    event_log: Optional[list] = None
     created_at: datetime
     finished_at: Optional[datetime]
     script: Optional[ScraperScriptOut] = None

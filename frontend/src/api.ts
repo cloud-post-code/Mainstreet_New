@@ -540,7 +540,6 @@ export const api = {
   deleteScraperJob: (id: number, token: string) =>
     request<void>(`/api/admin/scrapers/${id}`, { method: 'DELETE' }, token),
 
-  scraperJobStreamUrl: (id: number) => `/api/admin/scrapers/${id}/stream`,
 }
 
 // --- Scraper types ---
@@ -580,6 +579,12 @@ export interface ScraperScriptOut {
   created_at: string
 }
 
+export interface ScraperLogEntry {
+  ts: string
+  msg: string
+  kind: 'info' | 'success' | 'warn' | 'error' | 'thinking'
+}
+
 export interface ScraperJobOut {
   id: number
   shop_id: number | null
@@ -591,6 +596,7 @@ export interface ScraperJobOut {
   attempts: number
   result_summary: ScraperVerificationReport | null
   failure_reason: string | null
+  event_log: ScraperLogEntry[] | null
   created_at: string
   finished_at: string | null
   script: ScraperScriptOut | null

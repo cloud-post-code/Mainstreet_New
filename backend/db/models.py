@@ -347,6 +347,7 @@ class ScraperJob(Base):
     attempts        = Column(Integer, nullable=False, default=0)
     result_summary  = Column(JSONB, nullable=True)
     failure_reason  = Column(Text, nullable=True)
+    event_log       = Column(JSONB, nullable=True, server_default="'[]'::jsonb")
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     finished_at     = Column(DateTime(timezone=True), nullable=True)
 

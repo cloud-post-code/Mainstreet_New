@@ -194,6 +194,7 @@ async def create_tables():
                 IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scraper_jobs') THEN
                     EXECUTE 'ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS seller_type varchar(10)';
                     EXECUTE 'ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS shop_name varchar(200)';
+                    EXECUTE 'ALTER TABLE scraper_jobs ADD COLUMN IF NOT EXISTS event_log jsonb DEFAULT ''[]''::jsonb';
                 END IF;
             END$$;
         """))
