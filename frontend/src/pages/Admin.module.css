@@ -612,6 +612,27 @@
   color: #888;
 }
 
+.embedBtn {
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.9rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ms-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.embedBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.embedBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Price distribution */
 .priceGrid {
   display: flex;

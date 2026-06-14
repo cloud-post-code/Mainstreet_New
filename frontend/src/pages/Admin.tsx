@@ -46,6 +46,8 @@ export default function Admin() {
   const [tab, setTab] = useState<'shops' | 'products' | 'stats' | 'scrapers'>('stats')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
+  const [embeddingRunning, setEmbeddingRunning] = useState(false)
+  const [embeddingProgress, setEmbeddingProgress] = useState<{ done: number; total: number; errors: number } | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -57,6 +59,45 @@ export default function Admin() {
     setStatsLoading(true)
     api.adminStats(token).then(s => { setStats(s); setStatsLoading(false) }).catch(() => setStatsLoading(false))
   }, [token])
+
+  const handleGenerateEmbeddings = async () => {
+    if (!token || embeddingRunning) return
+    setEmbeddingRunning(true)
+    setEmbeddingProgress(null)
+    try {
+      const resp = await fetch('/api/admin/generate-embeddings', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!resp.ok || !resp.body) throw new Error('Request failed')
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const payload = JSON.parse(line.slice(6))
+              setEmbeddingProgress({ done: payload.done, total: payload.total, errors: payload.errors })
+              if (payload.finished) {
+                // Refresh stats after completion
+                api.adminStats(token).then(setStats)
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Embedding generation failed', e)
+    } finally {
+      setEmbeddingRunning(false)
+    }
+  }
 
   useEffect(() => {
     if (!token) return
@@ -462,7 +503,13 @@ export default function Admin() {
       </div>
 
       {tab === 'stats' && (
-        <StatsPanel stats={stats} loading={statsLoading} />
+        <StatsPanel
+          stats={stats}
+          loading={statsLoading}
+          embeddingRunning={embeddingRunning}
+          embeddingProgress={embeddingProgress}
+          onGenerateEmbeddings={handleGenerateEmbeddings}
+        />
       )}
 
       {tab === 'shops' && (
@@ -1087,7 +1134,13 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
   )
 }
 
-function StatsPanel({ stats, loading }: { stats: AdminStats | null; loading: boolean }) {
+function StatsPanel({ stats, loading, embeddingRunning, embeddingProgress, onGenerateEmbeddings }: {
+  stats: AdminStats | null
+  loading: boolean
+  embeddingRunning: boolean
+  embeddingProgress: { done: number; total: number; errors: number } | null
+  onGenerateEmbeddings: () => void
+}) {
   if (loading) return <div className={styles.statsLoading}>Loading statistics…</div>
   if (!stats) return <div className={styles.statsLoading}>No statistics available.</div>
 
@@ -1123,8 +1176,19 @@ function StatsPanel({ stats, loading }: { stats: AdminStats | null; loading: boo
               <span className={styles.healthLabel}>Embedding coverage</span>
               <span className={styles.healthPct}>{stats.pct_embedded}%</span>
             </div>
-            <ProgressBar pct={stats.pct_embedded} color="var(--ms-primary)" />
-            <div className={styles.healthSub}>{stats.embedded_count.toLocaleString()} of {stats.total_products.toLocaleString()} products have semantic embeddings</div>
+            <ProgressBar pct={embeddingRunning && embeddingProgress ? Math.round(embeddingProgress.done / (embeddingProgress.total || 1) * 100) : stats.pct_embedded} color="var(--ms-primary)" />
+            <div className={styles.healthSub}>
+              {embeddingRunning && embeddingProgress
+                ? `Embedding… ${embeddingProgress.done} / ${embeddingProgress.total}${embeddingProgress.errors > 0 ? ` (${embeddingProgress.errors} errors)` : ''}`
+                : `${stats.embedded_count.toLocaleString()} of ${stats.total_products.toLocaleString()} products have semantic embeddings`}
+            </div>
+            <button
+              className={styles.embedBtn}
+              onClick={onGenerateEmbeddings}
+              disabled={embeddingRunning || stats.pct_embedded === 100}
+            >
+              {embeddingRunning ? 'Embedding…' : stats.pct_embedded === 100 ? 'All embedded' : `Generate embeddings (${(stats.total_products - stats.embedded_count).toLocaleString()} missing)`}
+            </button>
           </div>
           <div className={styles.healthCard}>
             <div className={styles.healthHeader}>

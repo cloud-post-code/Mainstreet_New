@@ -580,6 +580,59 @@ async def clear_all_products(db: AsyncSession = Depends(get_db), _: User = Depen
     return ClearProductsResponse(deleted=total)
 
 
+@router.post("/generate-embeddings", status_code=200)
+async def generate_embeddings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Generate embeddings for all products that are missing them.
+
+    Streams SSE progress events: data: {"done": N, "total": N, "errors": N}
+    Final event: data: {"done": N, "total": N, "errors": N, "finished": true}
+    """
+    from fastapi.responses import StreamingResponse as _StreamingResponse
+    from sqlalchemy import text as sql_text
+    from agent.embeddings import vector_literal
+    import json as _json
+
+    _BATCH = 100
+
+    async def _stream():
+        rows = (await db.execute(
+            select(Product.id, Product.name, Product.shop_name_cached, Product.description)
+            .where(Product.embedding.is_(None))
+        )).all()
+
+        total = len(rows)
+        done = 0
+        errors = 0
+
+        yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors})}\n\n"
+
+        for start in range(0, total, _BATCH):
+            chunk = rows[start:start + _BATCH]
+            texts = [
+                build_canonical_text(name=r.name, shop_name=r.shop_name_cached, description=r.description)
+                for r in chunk
+            ]
+            vectors = await embed_texts(texts)
+            for r, vec in zip(chunk, vectors):
+                if vec is None:
+                    errors += 1
+                    continue
+                await db.execute(
+                    sql_text("UPDATE products SET embedding = CAST(:v AS vector) WHERE id = :id"),
+                    {"v": vector_literal(vec), "id": r.id},
+                )
+                done += 1
+            await db.commit()
+            yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors})}\n\n"
+
+        yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'finished': True})}\n\n"
+
+    return _StreamingResponse(_stream(), media_type="text/event-stream")
+
+
 @router.post("/reindex-search", status_code=200)
 async def reindex_search(
     db: AsyncSession = Depends(get_db),
