@@ -67,49 +67,41 @@ export default function Admin() {
     try {
       const resp = await fetch('/api/admin/generate-embeddings', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!resp.ok) {
-        const text = await resp.text()
-        console.error('Embedding request failed:', resp.status, text)
+        console.error('Embedding start failed:', resp.status, await resp.text())
+        setEmbeddingRunning(false)
         return
       }
-      if (!resp.body) {
-        console.error('No response body for SSE stream')
-        return
-      }
-      const reader = resp.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const payload = JSON.parse(line.slice(6))
-              setEmbeddingProgress({
-                done: payload.done,
-                total: payload.total,
-                errors: payload.errors,
-                elapsed_s: payload.elapsed_s ?? 0,
-                finished: payload.finished,
-              })
-              if (payload.finished && token) {
-                api.adminStats(token).then(setStats)
-              }
-            } catch (parseErr) {
-              console.warn('SSE parse error:', parseErr, 'line:', line)
-            }
+      // Poll for progress every 1.5s
+      const poll = async () => {
+        try {
+          const r = await fetch('/api/admin/generate-embeddings/status', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!r.ok) return
+          const payload = await r.json()
+          setEmbeddingProgress({
+            done: payload.done,
+            total: payload.total,
+            errors: payload.errors,
+            elapsed_s: payload.elapsed_s ?? 0,
+            finished: payload.finished,
+          })
+          if (payload.finished) {
+            setEmbeddingRunning(false)
+            api.adminStats(token!).then(setStats)
+          } else {
+            setTimeout(poll, 1500)
           }
+        } catch {
+          setTimeout(poll, 2000)
         }
       }
+      setTimeout(poll, 800)
     } catch (e) {
       console.error('Embedding generation failed', e)
-    } finally {
       setEmbeddingRunning(false)
     }
   }
@@ -1229,10 +1221,19 @@ function StatsPanel({ stats, loading, embeddingRunning, embeddingProgress, onGen
                     return `${done} / ${total} embedded${errors > 0 ? ` · ${errors} errors` : ''}${etaStr}`
                   })()
                 : embeddingProgress?.finished
-                  ? `Done — ${embeddingProgress.done} products embedded`
+                  ? embeddingProgress.done === 0 && embeddingProgress.errors > 0
+                    ? `Failed — ${embeddingProgress.errors} errors. Check that OPENAI_API_KEY is set in backend .env and restart the server.`
+                    : embeddingProgress.errors > 0
+                      ? `Done — ${embeddingProgress.done} embedded, ${embeddingProgress.errors} failed`
+                      : `Done — ${embeddingProgress.done} products embedded`
                   : `${stats.embedded_count.toLocaleString()} of ${stats.total_products.toLocaleString()} products have semantic embeddings`}
             </div>
-            {!(embeddingProgress?.finished) && (
+            {embeddingProgress?.finished && embeddingProgress.done === 0 && embeddingProgress.errors > 0 && (
+              <div className={styles.embedError}>
+                OpenAI API key missing or invalid. Add <code>OPENAI_API_KEY=sk-...</code> to <code>backend/.env</code> and restart.
+              </div>
+            )}
+            {!(embeddingProgress?.finished && embeddingProgress.done > 0) && (
               <button
                 className={styles.embedBtn}
                 onClick={onGenerateEmbeddings}

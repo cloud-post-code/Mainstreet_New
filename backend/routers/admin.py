@@ -3,7 +3,7 @@ import io
 import json
 import uuid
 from decimal import Decimal, InvalidOperation
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -580,42 +580,51 @@ async def clear_all_products(db: AsyncSession = Depends(get_db), _: User = Depen
     return ClearProductsResponse(deleted=total)
 
 
-@router.post("/generate-embeddings", status_code=200)
+# In-memory job state for embedding progress (single-server, sufficient for admin use)
+_embedding_job: dict = {"running": False, "done": 0, "total": 0, "errors": 0, "elapsed_s": 0.0, "finished": False, "error_msg": ""}
+
+
+@router.post("/generate-embeddings", status_code=202)
 async def generate_embeddings(
+    background_tasks: BackgroundTasks,
     _: User = Depends(get_admin_user),
 ):
-    """Generate embeddings for all products that are missing them.
+    """Start background embedding job. Poll /generate-embeddings/status for progress."""
+    global _embedding_job
+    if _embedding_job["running"]:
+        return _embedding_job
 
-    Uses its own DB session per batch so the connection never times out.
-    Streams SSE progress events per batch:
-      data: {"done": N, "total": N, "errors": N, "elapsed_s": F}
-    Final event adds "finished": true
-    """
-    from fastapi.responses import StreamingResponse as _StreamingResponse
+    _embedding_job = {"running": True, "done": 0, "total": 0, "errors": 0, "elapsed_s": 0.0, "finished": False, "error_msg": ""}
+    background_tasks.add_task(_run_embedding_job)
+    return _embedding_job
+
+
+@router.get("/generate-embeddings/status")
+async def embedding_status(_: User = Depends(get_admin_user)):
+    """Poll this to get current embedding job progress."""
+    return _embedding_job
+
+
+async def _run_embedding_job():
+    global _embedding_job
     from sqlalchemy import text as sql_text
     from agent.embeddings import vector_literal
     from db.database import AsyncSessionLocal
-    import json as _json
     import time as _time
 
-    _BATCH = 200  # 200 products per round-trip to OpenAI
+    _BATCH = 200
 
-    async def _stream():
-        # Use a fresh session so we control the lifetime
+    try:
         async with AsyncSessionLocal() as session:
             rows = (await session.execute(
                 select(Product.id, Product.name, Product.shop_name_cached, Product.description)
                 .where(Product.embedding.is_(None))
             )).all()
 
-        total = len(rows)
-        done = 0
-        errors = 0
+        _embedding_job["total"] = len(rows)
         start_ts = _time.monotonic()
 
-        yield f"data: {_json.dumps({'done': 0, 'total': total, 'errors': 0, 'elapsed_s': 0.0})}\n\n"
-
-        for batch_start in range(0, total, _BATCH):
+        for batch_start in range(0, len(rows), _BATCH):
             chunk = rows[batch_start:batch_start + _BATCH]
             texts = [
                 build_canonical_text(name=r.name, shop_name=r.shop_name_cached, description=r.description)
@@ -623,14 +632,13 @@ async def generate_embeddings(
             ]
             vectors = await embed_texts(texts)
 
-            # Build bulk update params — one executemany call per batch
             updates = []
             for r, vec in zip(chunk, vectors):
                 if vec is None:
-                    errors += 1
+                    _embedding_job["errors"] += 1
                 else:
                     updates.append({"v": vector_literal(vec), "id": r.id})
-                    done += 1
+                    _embedding_job["done"] += 1
 
             if updates:
                 async with AsyncSessionLocal() as session:
@@ -640,17 +648,13 @@ async def generate_embeddings(
                     )
                     await session.commit()
 
-            elapsed = round(_time.monotonic() - start_ts, 2)
-            yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'elapsed_s': elapsed})}\n\n"
+            _embedding_job["elapsed_s"] = round(_time.monotonic() - start_ts, 2)
 
-        elapsed = round(_time.monotonic() - start_ts, 2)
-        yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'elapsed_s': elapsed, 'finished': True})}\n\n"
-
-    headers = {
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-    }
-    return _StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
+    except Exception as exc:
+        _embedding_job["error_msg"] = str(exc)
+    finally:
+        _embedding_job["running"] = False
+        _embedding_job["finished"] = True
 
 
 @router.post("/reindex-search", status_code=200)

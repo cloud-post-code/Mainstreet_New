@@ -633,6 +633,25 @@
   cursor: not-allowed;
 }
 
+.embedError {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: #8b1a1a;
+  background: #fff0f0;
+  border: 1px solid #f5c6c6;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+.embedError code {
+  font-family: monospace;
+  font-size: 0.82em;
+  background: #fce8e8;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
 @keyframes shimmer {
   0%   { background-position: -200% center; }
   100% { background-position: 200% center; }
