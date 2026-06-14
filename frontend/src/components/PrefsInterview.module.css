@@ -40,25 +40,49 @@
   padding: 20px 18px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.questionText {
+.topicLabel {
   font-family: 'Lora', serif;
-  font-size: 15px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ms-primary, #015237);
+}
+
+.statement {
+  font-family: 'Lora', serif;
+  font-size: 14px;
   font-weight: 600;
   color: #0f1805;
   margin: 0;
   line-height: 1.5;
 }
 
-.hint {
-  font-family: 'Lora', serif;
-  font-size: 12px;
-  color: #8a7f6c;
+.questionList {
   margin: 0;
-  font-style: italic;
-  line-height: 1.4;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 2px solid #e5dccb;
+  padding-left: 14px;
+}
+
+.questionItem {
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  color: #4b4537;
+  line-height: 1.5;
+}
+
+.questionItem::before {
+  content: '→ ';
+  color: #8a7f6c;
+  font-size: 12px;
 }
 
 .textarea {
@@ -73,7 +97,7 @@
   outline: none;
   resize: none;
   color: #0f1805;
-  line-height: 1.5;
+  line-height: 1.6;
   transition: border-color 0.15s;
 }
 
@@ -84,6 +108,7 @@
 
 .textarea::placeholder {
   color: #b0a490;
+  font-style: italic;
 }
 
 .actions {
@@ -143,16 +168,11 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s, opacity 0.12s;
+  transition: background 0.12s;
 }
 
-.nextBtn:hover:not(:disabled) {
+.nextBtn:hover {
   background: #013d29;
-}
-
-.nextBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .exitBtn {
@@ -173,7 +193,7 @@
   color: #4b4537;
 }
 
-/* Setup call-to-action shown before the interview starts */
+/* Setup CTA */
 .setupWrap {
   display: flex;
   flex-direction: column;

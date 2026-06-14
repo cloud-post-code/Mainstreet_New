@@ -1,4 +1,4 @@
-import { ChangeEvent, ReactNode } from 'react'
+import { ReactNode } from 'react'
 import { MasonGiftBudget, MasonLifestyle, MasonPrefs, MasonPrefsPatch } from '../api'
 import ChipInput from './ChipInput'
 import styles from './PrefsForm.module.css'
@@ -8,17 +8,7 @@ interface PrefsFormProps {
   onPatch: (patch: MasonPrefsPatch) => void
 }
 
-const STYLE_TAGS = [
-  'minimalist', 'classic', 'streetwear', 'preppy', 'athleisure',
-  'bohemian', 'vintage', 'technical', 'rugged', 'modern',
-]
-const PET_OPTIONS = ['Dog', 'Cat', 'Bird', 'Reptile', 'Fish', 'Other']
-const FITNESS_OPTIONS = [
-  'Running', 'Lifting', 'Yoga', 'Cycling',
-  'Hiking', 'Climbing', 'Swimming', 'Team sports',
-]
-
-function numOrUndef(s: string): number | null {
+function numOrNull(s: string): number | null {
   if (!s.trim()) return null
   const n = Number(s)
   return Number.isFinite(n) ? n : null
@@ -34,10 +24,6 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
   function patchGift(patch: Partial<MasonGiftBudget>) {
     onPatch({ gift_budget: patch as Partial<MasonGiftBudget> })
   }
-  function toggleInArray(list: string[] | undefined, value: string): string[] {
-    const arr = list ?? []
-    return arr.includes(value) ? arr.filter(x => x !== value) : [...arr, value]
-  }
 
   return (
     <div className={styles.form}>
@@ -45,46 +31,12 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
         Defaults Mason uses when shopping for you. Saved automatically as you change anything.
       </p>
 
-      <Section title="Style preferences" defaultOpen>
-        <div className={styles.toggleRow}>
-          {STYLE_TAGS.map(tag => {
-            const on = (prefs.style_tags ?? []).includes(tag)
-            return (
-              <button
-                key={tag}
-                type="button"
-                className={`${styles.toggleChip} ${on ? styles.toggleChipOn : ''}`}
-                onClick={() => onPatch({ style_tags: toggleInArray(prefs.style_tags, tag) })}
-              >{tag}</button>
-            )
-          })}
-        </div>
-      </Section>
-
-      <Section title="Quality vs price">
-        <SliderRow
-          value={prefs.quality_price}
-          onChange={v => onPatch({ quality_price: v })}
-          minLabel="budget"
-          maxLabel="premium"
-        />
-      </Section>
-
-      <Section title="Bulk vs individual">
-        <SliderRow
-          value={prefs.bulk_individual}
-          onChange={v => onPatch({ bulk_individual: v })}
-          minLabel="individual"
-          maxLabel="bulk / restock"
-        />
-      </Section>
-
-      <Section title="Discover vs known">
-        <SliderRow
-          value={prefs.discover_known}
-          onChange={v => onPatch({ discover_known: v })}
-          minLabel="stick to known"
-          maxLabel="surprise me"
+      <Section title="Style" defaultOpen>
+        <p className={styles.sectionHint}>Add words that describe your aesthetic — type one and press Enter.</p>
+        <ChipInput
+          values={prefs.style_tags ?? []}
+          onChange={next => onPatch({ style_tags: next })}
+          placeholder="e.g. minimalist, vintage, streetwear…"
         />
       </Section>
 
@@ -94,27 +46,27 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
             type="number"
             inputMode="numeric"
             value={prefs.personal_budget ?? ''}
-            onChange={e => onPatch({ personal_budget: numOrUndef(e.target.value) })}
-            placeholder="150"
+            onChange={e => onPatch({ personal_budget: numOrNull(e.target.value) })}
+            placeholder="e.g. 150"
           />
         </Field>
       </Section>
 
-      <Section title="Typical gift budget">
+      <Section title="Gift budget">
         <Row>
           <Field label="Default ($)">
             <input
               type="number"
               value={gb.default ?? ''}
-              onChange={e => patchGift({ default: numOrUndef(e.target.value) ?? undefined })}
-              placeholder="50"
+              onChange={e => patchGift({ default: numOrNull(e.target.value) ?? undefined })}
+              placeholder="e.g. 50"
             />
           </Field>
           <Field label="Birthday ($)">
             <input
               type="number"
               value={gb.birthday ?? ''}
-              onChange={e => patchGift({ birthday: numOrUndef(e.target.value) ?? undefined })}
+              onChange={e => patchGift({ birthday: numOrNull(e.target.value) ?? undefined })}
             />
           </Field>
         </Row>
@@ -123,142 +75,186 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
             <input
               type="number"
               value={gb.holiday ?? ''}
-              onChange={e => patchGift({ holiday: numOrUndef(e.target.value) ?? undefined })}
+              onChange={e => patchGift({ holiday: numOrNull(e.target.value) ?? undefined })}
             />
           </Field>
           <Field label="Anniversary ($)">
             <input
               type="number"
               value={gb.anniversary ?? ''}
-              onChange={e => patchGift({ anniversary: numOrUndef(e.target.value) ?? undefined })}
+              onChange={e => patchGift({ anniversary: numOrNull(e.target.value) ?? undefined })}
             />
           </Field>
         </Row>
-      </Section>
-
-      <Section title="Lifestyle">
-        <Field label="Housing">
-          <RadioGroup
-            name="housing"
-            value={lifestyle.housing ?? ''}
-            onChange={v => patchLifestyle({ housing: (v || undefined) as MasonLifestyle['housing'] })}
-            options={[
-              { value: 'homeowner', label: 'Homeowner' },
-              { value: 'renter', label: 'Renter' },
-            ]}
-          />
-        </Field>
-        <Field label="Area">
-          <RadioGroup
-            name="area"
-            value={lifestyle.area ?? ''}
-            onChange={v => patchLifestyle({ area: (v || undefined) as MasonLifestyle['area'] })}
-            options={[
-              { value: 'urban', label: 'Urban' },
-              { value: 'suburban', label: 'Suburban' },
-              { value: 'rural', label: 'Rural' },
-            ]}
-          />
-        </Field>
-        <Field label="Pets">
-          <div className={styles.toggleRow}>
-            {PET_OPTIONS.map(p => {
-              const on = (lifestyle.pets ?? []).includes(p)
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  className={`${styles.toggleChip} ${on ? styles.toggleChipOn : ''}`}
-                  onClick={() => patchLifestyle({ pets: toggleInArray(lifestyle.pets, p) })}
-                >{p}</button>
-              )
-            })}
-          </div>
+        <Field label="Notes">
           <input
-            className={styles.inlineInput}
-            value={lifestyle.pets_notes ?? ''}
-            onChange={e => patchLifestyle({ pets_notes: e.target.value })}
-            placeholder="Pet details (breed, age, etc.)"
-          />
-        </Field>
-        <Field label="Hobbies">
-          <ChipInput
-            values={lifestyle.hobbies ?? []}
-            onChange={next => patchLifestyle({ hobbies: next })}
-            placeholder="Add a hobby and press Enter"
-          />
-        </Field>
-        <Field label="Cooking habits">
-          <RadioGroup
-            name="cooking"
-            value={lifestyle.cooking ?? ''}
-            onChange={v => patchLifestyle({ cooking: (v || undefined) as MasonLifestyle['cooking'] })}
-            options={[
-              { value: 'rarely', label: 'Rarely' },
-              { value: 'sometimes', label: 'Sometimes' },
-              { value: 'often', label: 'Often' },
-              { value: 'daily', label: 'Daily' },
-            ]}
-          />
-        </Field>
-        <Field label="Travel frequency">
-          <RadioGroup
-            name="travel"
-            value={lifestyle.travel ?? ''}
-            onChange={v => patchLifestyle({ travel: (v || undefined) as MasonLifestyle['travel'] })}
-            options={[
-              { value: 'rarely', label: 'Rarely' },
-              { value: 'few_times_year', label: 'A few times / year' },
-              { value: 'monthly', label: 'Monthly' },
-              { value: 'frequently', label: 'Frequently' },
-            ]}
-          />
-        </Field>
-        <Field label="Fitness activities">
-          <div className={styles.toggleRow}>
-            {FITNESS_OPTIONS.map(f => {
-              const on = (lifestyle.fitness ?? []).includes(f)
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  className={`${styles.toggleChip} ${on ? styles.toggleChipOn : ''}`}
-                  onClick={() => patchLifestyle({ fitness: toggleInArray(lifestyle.fitness, f) })}
-                >{f}</button>
-              )
-            })}
-          </div>
-        </Field>
-        <Field label="Work environment">
-          <RadioGroup
-            name="work_env"
-            value={lifestyle.work_env ?? ''}
-            onChange={v => patchLifestyle({ work_env: (v || undefined) as MasonLifestyle['work_env'] })}
-            options={[
-              { value: 'wfh', label: 'WFH' },
-              { value: 'hybrid', label: 'Hybrid' },
-              { value: 'office', label: 'Office' },
-              { value: 'outdoor', label: 'Outdoor' },
-              { value: 'industrial', label: 'Industrial' },
-            ]}
+            type="text"
+            value={gb.freeform ?? ''}
+            onChange={e => patchGift({ freeform: e.target.value })}
+            placeholder="Any context on how you approach gift budgets…"
           />
         </Field>
       </Section>
 
       <Section title="Likes" defaultOpen>
         <ChipInput
-          values={prefs.likes}
+          values={prefs.likes ?? []}
           onChange={next => onPatch({ likes: next })}
-          placeholder="Add a brand, style, or material…"
+          placeholder="Add a brand, material, or style…"
         />
       </Section>
 
       <Section title="Dislikes" defaultOpen>
         <ChipInput
-          values={prefs.dislikes}
+          values={prefs.dislikes ?? []}
           onChange={next => onPatch({ dislikes: next })}
           placeholder="Add something to avoid…"
         />
+      </Section>
+
+      <Section title="Lifestyle">
+        <Field label="Where you live">
+          <input
+            type="text"
+            value={(lifestyle as Record<string, unknown>).area as string ?? ''}
+            onChange={e => patchLifestyle({ area: e.target.value as MasonLifestyle['area'] || undefined })}
+            placeholder="e.g. urban, suburban, rural city"
+          />
+        </Field>
+        <Field label="Housing">
+          <input
+            type="text"
+            value={(lifestyle as Record<string, unknown>).housing as string ?? ''}
+            onChange={e => patchLifestyle({ housing: e.target.value as MasonLifestyle['housing'] || undefined })}
+            placeholder="e.g. homeowner, renter, apartment"
+          />
+        </Field>
+        <Field label="Work environment">
+          <input
+            type="text"
+            value={(lifestyle as Record<string, unknown>).work_env as string ?? ''}
+            onChange={e => patchLifestyle({ work_env: e.target.value as MasonLifestyle['work_env'] || undefined })}
+            placeholder="e.g. WFH, office, hybrid, outdoor"
+          />
+        </Field>
+        <Field label="Cooking habits">
+          <input
+            type="text"
+            value={(lifestyle as Record<string, unknown>).cooking as string ?? ''}
+            onChange={e => patchLifestyle({ cooking: e.target.value as MasonLifestyle['cooking'] || undefined })}
+            placeholder="e.g. cook daily, rarely cook, meal prep on weekends"
+          />
+        </Field>
+        <Field label="Travel">
+          <input
+            type="text"
+            value={(lifestyle as Record<string, unknown>).travel as string ?? ''}
+            onChange={e => patchLifestyle({ travel: e.target.value as MasonLifestyle['travel'] || undefined })}
+            placeholder="e.g. travel monthly, a few times a year, rarely"
+          />
+        </Field>
+        <Field label="Pets">
+          <ChipInput
+            values={lifestyle.pets ?? []}
+            onChange={next => patchLifestyle({ pets: next })}
+            placeholder="Add a pet (e.g. dog, cat)…"
+          />
+        </Field>
+        <Field label="Pet notes">
+          <input
+            type="text"
+            value={lifestyle.pets_notes ?? ''}
+            onChange={e => patchLifestyle({ pets_notes: e.target.value })}
+            placeholder="Breed, age, or other details…"
+          />
+        </Field>
+        <Field label="Hobbies & activities">
+          <ChipInput
+            values={lifestyle.hobbies ?? []}
+            onChange={next => patchLifestyle({ hobbies: next })}
+            placeholder="Add a hobby or activity…"
+          />
+        </Field>
+        <Field label="Fitness">
+          <ChipInput
+            values={lifestyle.fitness ?? []}
+            onChange={next => patchLifestyle({ fitness: next })}
+            placeholder="Add a fitness activity…"
+          />
+        </Field>
+      </Section>
+
+      <Section title="Sizes">
+        <Row>
+          <Field label="Shirt">
+            <input
+              type="text"
+              value={prefs.sizes?.shirt ?? ''}
+              onChange={e => onPatch({ sizes: { shirt: e.target.value } })}
+              placeholder="e.g. M, L, XL"
+            />
+          </Field>
+          <Field label="Dress">
+            <input
+              type="text"
+              value={prefs.sizes?.dress ?? ''}
+              onChange={e => onPatch({ sizes: { dress: e.target.value } })}
+              placeholder="e.g. 6, 8, 10"
+            />
+          </Field>
+        </Row>
+        <Row>
+          <Field label="Waist">
+            <input
+              type="text"
+              value={prefs.sizes?.waist ?? ''}
+              onChange={e => onPatch({ sizes: { waist: e.target.value } })}
+              placeholder="e.g. 32"
+            />
+          </Field>
+          <Field label="Inseam">
+            <input
+              type="text"
+              value={prefs.sizes?.inseam ?? ''}
+              onChange={e => onPatch({ sizes: { inseam: e.target.value } })}
+              placeholder="e.g. 30"
+            />
+          </Field>
+        </Row>
+        <Row>
+          <Field label="Shoe size">
+            <input
+              type="text"
+              value={prefs.sizes?.shoe ?? ''}
+              onChange={e => onPatch({ sizes: { shoe: e.target.value } })}
+              placeholder="e.g. 10.5"
+            />
+          </Field>
+          <Field label="Hat">
+            <input
+              type="text"
+              value={prefs.sizes?.hat ?? ''}
+              onChange={e => onPatch({ sizes: { hat: e.target.value } })}
+              placeholder="e.g. L/XL"
+            />
+          </Field>
+        </Row>
+        <Field label="Ring">
+          <input
+            type="text"
+            value={prefs.sizes?.ring ?? ''}
+            onChange={e => onPatch({ sizes: { ring: e.target.value } })}
+            placeholder="e.g. 7"
+          />
+        </Field>
+        <Field label="Size notes">
+          <input
+            type="text"
+            value={prefs.sizes?.freeform ?? ''}
+            onChange={e => onPatch({ sizes: { freeform: e.target.value } })}
+            placeholder="Anything else about fit or sizing…"
+          />
+        </Field>
       </Section>
     </div>
   )
@@ -283,74 +279,5 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className={styles.fieldLabel}>{label}</span>
       {children}
     </label>
-  )
-}
-
-function RadioGroup({
-  name, value, onChange, options,
-}: {
-  name: string
-  value: string
-  onChange: (v: string) => void
-  options: Array<{ value: string; label: string }>
-}) {
-  function handle(e: ChangeEvent<HTMLInputElement>) {
-    onChange(e.target.value === value ? '' : e.target.value)
-  }
-  return (
-    <div className={styles.radioRow}>
-      {options.map(o => (
-        <label key={o.value} className={`${styles.radioChip} ${value === o.value ? styles.radioChipOn : ''}`}>
-          <input
-            type="radio"
-            name={name}
-            value={o.value}
-            checked={value === o.value}
-            onChange={handle}
-            onClick={() => { if (value === o.value) onChange('') }}
-          />
-          {o.label}
-        </label>
-      ))}
-    </div>
-  )
-}
-
-function SliderRow({
-  value, onChange, minLabel, maxLabel,
-}: {
-  value: number | null
-  onChange: (v: number | null) => void
-  minLabel: string
-  maxLabel: string
-}) {
-  const v = value ?? 3
-  const set = value == null
-  return (
-    <div className={styles.sliderWrap}>
-      <div className={styles.sliderLabels}>
-        <span>{minLabel}</span>
-        <span>{maxLabel}</span>
-      </div>
-      <input
-        type="range"
-        min={1}
-        max={5}
-        step={1}
-        value={v}
-        onChange={e => onChange(Number(e.target.value))}
-        className={set ? styles.sliderUnset : ''}
-      />
-      <div className={styles.sliderMeta}>
-        {set ? 'Not set' : `${v} / 5`}
-        {!set && (
-          <button
-            type="button"
-            className={styles.sliderClear}
-            onClick={() => onChange(null)}
-          >clear</button>
-        )}
-      </div>
-    </div>
   )
 }
