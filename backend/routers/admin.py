@@ -587,15 +587,17 @@ async def generate_embeddings(
 ):
     """Generate embeddings for all products that are missing them.
 
-    Streams SSE progress events: data: {"done": N, "total": N, "errors": N}
-    Final event: data: {"done": N, "total": N, "errors": N, "finished": true}
+    Streams SSE progress events per batch:
+      data: {"done": N, "total": N, "errors": N, "elapsed_s": F}
+    Final event adds "finished": true
     """
     from fastapi.responses import StreamingResponse as _StreamingResponse
     from sqlalchemy import text as sql_text
     from agent.embeddings import vector_literal
     import json as _json
+    import time as _time
 
-    _BATCH = 100
+    _BATCH = 20  # smaller batches → more frequent progress ticks
 
     async def _stream():
         rows = (await db.execute(
@@ -606,11 +608,13 @@ async def generate_embeddings(
         total = len(rows)
         done = 0
         errors = 0
+        start_ts = _time.monotonic()
 
-        yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors})}\n\n"
+        # Send initial event immediately so the client knows the total
+        yield f"data: {_json.dumps({'done': 0, 'total': total, 'errors': 0, 'elapsed_s': 0.0})}\n\n"
 
-        for start in range(0, total, _BATCH):
-            chunk = rows[start:start + _BATCH]
+        for batch_start in range(0, total, _BATCH):
+            chunk = rows[batch_start:batch_start + _BATCH]
             texts = [
                 build_canonical_text(name=r.name, shop_name=r.shop_name_cached, description=r.description)
                 for r in chunk
@@ -626,11 +630,17 @@ async def generate_embeddings(
                 )
                 done += 1
             await db.commit()
-            yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors})}\n\n"
+            elapsed = round(_time.monotonic() - start_ts, 2)
+            yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'elapsed_s': elapsed})}\n\n"
 
-        yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'finished': True})}\n\n"
+        elapsed = round(_time.monotonic() - start_ts, 2)
+        yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'elapsed_s': elapsed, 'finished': True})}\n\n"
 
-    return _StreamingResponse(_stream(), media_type="text/event-stream")
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",  # disable nginx buffering
+    }
+    return _StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
 
 
 @router.post("/reindex-search", status_code=200)
