@@ -84,7 +84,7 @@ complete, and faster than HTML scraping.
 SHOPIFY (most common)
   Signal: URL contains myshopify.com, OR meta generator tag says "Shopify", OR page HTML
           contains window.Shopify or /cdn/shop/
-  API:    GET {base_url}/products.json?limit=250&page=N
+  API:    GET {{base_url}}/products.json?limit=250&page=N
           Paginate: keep incrementing ?page= until you get an empty products array.
           Each product has variants[]. Map like this:
             shop_name         = product.vendor  (or the store name from the page title)
@@ -104,13 +104,13 @@ WIX
   Signal: URL contains wix.com or wixsite.com, OR HTML contains "wix-" class prefixes,
           OR window.__wix__ in the HTML
   API:    GET https://www.wixapis.com/stores/v1/products/query  (POST with empty body returns all)
-          OR try the public storefront: {base_url}/_api/wix-ecommerce-storefront-web/api
+          OR try the public storefront: {{base_url}}/_api/wix-ecommerce-storefront-web/api
           If no public API is accessible, fall back to HTML scraping.
 
 SQUARE / SQUARESPACE
   Signal: URL contains squarespace.com, OR HTML contains "squarespace" assets
-  API:    GET {base_url}/api/open/GetItemsByCategory  (Squarespace)
-          OR {base_url}/api/products  — try this first, fall back to HTML if 404.
+  API:    GET {{base_url}}/api/open/GetItemsByCategory  (Squarespace)
+          OR {{base_url}}/api/products  — try this first, fall back to HTML if 404.
 
 BIG CARTEL
   Signal: URL ends in bigcartel.com, OR HTML contains "Big Cartel"
@@ -119,7 +119,7 @@ BIG CARTEL
 
 BIGCOMMERCE
   Signal: HTML contains bigcommerce or cdn11.bigcommerce.com
-  API:    GET {base_url}/api/storefront/catalog/products?limit=200&include=variants,images
+  API:    GET {{base_url}}/api/storefront/catalog/products?limit=200&include=variants,images
 
 ECWID
   Signal: HTML contains "ecwid" or "Ecwid.init"
