@@ -582,11 +582,11 @@ async def clear_all_products(db: AsyncSession = Depends(get_db), _: User = Depen
 
 @router.post("/generate-embeddings", status_code=200)
 async def generate_embeddings(
-    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
     """Generate embeddings for all products that are missing them.
 
+    Uses its own DB session per batch so the connection never times out.
     Streams SSE progress events per batch:
       data: {"done": N, "total": N, "errors": N, "elapsed_s": F}
     Final event adds "finished": true
@@ -594,23 +594,25 @@ async def generate_embeddings(
     from fastapi.responses import StreamingResponse as _StreamingResponse
     from sqlalchemy import text as sql_text
     from agent.embeddings import vector_literal
+    from db.database import AsyncSessionLocal
     import json as _json
     import time as _time
 
-    _BATCH = 20  # smaller batches → more frequent progress ticks
+    _BATCH = 200  # 200 products per round-trip to OpenAI
 
     async def _stream():
-        rows = (await db.execute(
-            select(Product.id, Product.name, Product.shop_name_cached, Product.description)
-            .where(Product.embedding.is_(None))
-        )).all()
+        # Use a fresh session so we control the lifetime
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(
+                select(Product.id, Product.name, Product.shop_name_cached, Product.description)
+                .where(Product.embedding.is_(None))
+            )).all()
 
         total = len(rows)
         done = 0
         errors = 0
         start_ts = _time.monotonic()
 
-        # Send initial event immediately so the client knows the total
         yield f"data: {_json.dumps({'done': 0, 'total': total, 'errors': 0, 'elapsed_s': 0.0})}\n\n"
 
         for batch_start in range(0, total, _BATCH):
@@ -620,16 +622,24 @@ async def generate_embeddings(
                 for r in chunk
             ]
             vectors = await embed_texts(texts)
+
+            # Build bulk update params — one executemany call per batch
+            updates = []
             for r, vec in zip(chunk, vectors):
                 if vec is None:
                     errors += 1
-                    continue
-                await db.execute(
-                    sql_text("UPDATE products SET embedding = CAST(:v AS vector) WHERE id = :id"),
-                    {"v": vector_literal(vec), "id": r.id},
-                )
-                done += 1
-            await db.commit()
+                else:
+                    updates.append({"v": vector_literal(vec), "id": r.id})
+                    done += 1
+
+            if updates:
+                async with AsyncSessionLocal() as session:
+                    await session.execute(
+                        sql_text("UPDATE products SET embedding = CAST(:v AS vector) WHERE id = :id"),
+                        updates,
+                    )
+                    await session.commit()
+
             elapsed = round(_time.monotonic() - start_ts, 2)
             yield f"data: {_json.dumps({'done': done, 'total': total, 'errors': errors, 'elapsed_s': elapsed})}\n\n"
 
@@ -638,7 +648,7 @@ async def generate_embeddings(
 
     headers = {
         "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",  # disable nginx buffering
+        "X-Accel-Buffering": "no",
     }
     return _StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
 
