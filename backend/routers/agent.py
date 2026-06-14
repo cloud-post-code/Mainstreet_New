@@ -17,7 +17,7 @@ from db.models import (
     AgentTurnRun,
     User,
 )
-from db.schemas import SessionOut, SessionCreate, TurnIn, PlanOut
+from db.schemas import SessionOut, SessionCreate, TurnIn, PlanOut, GoalIn
 from auth import get_current_user, get_optional_user
 from agent.runner import (
     MAX_BACKGROUND_RUNS,
@@ -417,6 +417,27 @@ async def get_active_run_for_session(
     if row is None:
         return None
     return {"run_id": row.id, "status": row.status}
+
+
+@router.post("/sessions/{session_id}/goal", response_model=SessionOut)
+async def set_goal(
+    session_id: int,
+    body: GoalIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Set or update the goal for a session. Mason will use Haiku to update notes
+    30 minutes after the conversation started."""
+    session = await get_owned_or_404(
+        db, AgentSession, session_id, current_user.id, detail="Session not found"
+    )
+    goal_text = (body.goal or "").strip()[:500]
+    if not goal_text:
+        raise HTTPException(status_code=400, detail="Goal cannot be empty")
+    session.goal = goal_text
+    await db.commit()
+    await db.refresh(session)
+    return session
 
 
 @router.post("/runs/{run_id}/cancel", status_code=202)

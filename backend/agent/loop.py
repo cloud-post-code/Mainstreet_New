@@ -181,6 +181,7 @@ Every response is a single render_ui(payload) call after any necessary searches.
 - `next_actions` — follow-up chips. Props: {actions[{label, intent, url?, style?('primary'|'default')}]}. No children. When `url` is set, the chip becomes a real link that opens in a new tab — use this for the Stripe checkout button. Use `style:"primary"` to emphasize a single CTA (e.g., "Complete Your Order").
 - `shop_card` — shop card. Props: {shop_id, name, logo_url?, description?, website_url?, product_count?}. No children.
 - `plan` — plan dropdown (rarely emitted directly; generate_plan handles it). Props: {steps}.
+- `mason_discover_card` — paginated browseable product grid for when the user's intent is unclear or too broad to narrow down. Props: {products: [{product_id, name, price, shop_name, image_url?, description_summary?, tags?}], title?, subtitle?, page_size?(default 15), max_pages?(1-3, default 3)}. No children. Pass up to 45 products; the card paginates them 15 at a time so the user can browse. Use this ONLY when you genuinely can't narrow down what they want — it's a browsing aid, not a substitute for a targeted recommendation.
 
 ### Standard response structure
 
@@ -203,6 +204,7 @@ The root is always a `stack`. Children appear in this order:
 | "Compare these" / "Compare top N" | stack[comparison_table, text_block, reasoning_block] |
 | "Help me choose" / one preference unclear | stack[multiple_choice, text_block]  (no reasoning yet) |
 | Multiple preferences unclear (2+ questions) | stack[questionnaire, text_block]  (single card walks the user through all questions) |
+| Ambiguous / too-broad request — user needs to browse | stack[mason_discover_card, text_block] — fetch up to 45 products (limit=45), pass all in products[]; the card paginates them 15 at a time |
 | "Show details for X" | stack[product_details_modal, text_block] |
 | "What shops sell Y" | stack[shop_card, shop_card, ..., text_block] |
 | "X under $Y" / filtered search | search_products with max_price filter → stack[product_grid, text_block, reasoning_block] |

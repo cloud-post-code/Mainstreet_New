@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.loop import run_agent_turn
 from agent.router_classifier import classify_intent
+from agent.goal_updater import maybe_run_goal_update
 from db.database import AsyncSessionLocal
 from db.models import AgentPlan, AgentSession, AgentTurnEvent, AgentTurnRun
 
@@ -255,6 +256,15 @@ async def _run_turn_background(run_id: int) -> None:
                 await emit(payload)
 
             run.status = "done"
+
+            # Fire goal-based note update (Haiku) if 30min has elapsed and
+            # a goal is set. Best-effort — never block or fail the turn.
+            if run.user_id is not None:
+                try:
+                    await maybe_run_goal_update(run.session_id, run.user_id, db)
+                except Exception:
+                    logger.debug("goal_updater: skipped for run %s", run_id, exc_info=True)
+
         except asyncio.CancelledError:
             logger.info("runner: run %s cancelled", run_id)
             run.status = "cancelled"

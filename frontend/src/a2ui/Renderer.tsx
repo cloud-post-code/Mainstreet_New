@@ -11,6 +11,8 @@ import MultipleChoice from '../components/a2ui/MultipleChoice'
 import Questionnaire from '../components/a2ui/Questionnaire'
 import ProductDetailsModal from '../components/a2ui/ProductDetailsModal'
 import NextActions from '../components/a2ui/NextActions'
+import MasonDiscoverCard from '../components/a2ui/MasonDiscoverCard'
+import StyleQuestionCard from '../components/a2ui/StyleQuestionCard'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyComp = ComponentType<any>
@@ -26,6 +28,8 @@ const COMPONENTS: Record<string, AnyComp> = {
   next_actions: NextActions,
   shop_card: ShopCard,
   plan: PlanDropdown,
+  mason_discover_card: MasonDiscoverCard,
+  style_question_card: StyleQuestionCard,
 }
 
 interface NodeProps {

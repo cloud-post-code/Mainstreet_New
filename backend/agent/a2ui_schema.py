@@ -22,6 +22,8 @@ ALLOWED_TYPES: set[str] = {
     "next_actions",
     "shop_card",
     "plan",
+    "mason_discover_card",
+    "style_question_card",
 }
 
 CONTAINER_TYPES: set[str] = {"stack", "product_grid"}
@@ -40,6 +42,8 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     "next_actions": ("actions",),
     "shop_card": ("shop_id", "name"),
     "plan": ("steps",),
+    "mason_discover_card": ("products",),
+    "style_question_card": ("question_id", "products"),
 }
 
 VALID_GRID_LAYOUTS = {"recommendation", "comparison", "curated", "hero", "trio", "quad", "showcase"}
@@ -103,6 +107,48 @@ def validate_render_ui(payload: Any) -> list[str]:
                         f"components[{cid}].props.layout '{layout}' requires exactly "
                         f"{expected} product_card child(ren); got {len(child_ids)}."
                     )
+        if ctype == "mason_discover_card":
+            products = props.get("products")
+            if not isinstance(products, list) or len(products) == 0:
+                errors.append(
+                    f"components[{cid}].props.products must be a non-empty array of "
+                    f"product objects with at minimum {{product_id, name, price, shop_name}}."
+                )
+            else:
+                for i, p in enumerate(products):
+                    if not isinstance(p, dict):
+                        errors.append(f"components[{cid}].props.products[{i}] must be an object")
+                        continue
+                    for required in ("product_id", "name", "price", "shop_name"):
+                        if required not in p:
+                            errors.append(
+                                f"components[{cid}].props.products[{i}] missing '{required}'. "
+                                f"Each product needs product_id, name, price, shop_name."
+                            )
+            page_size = props.get("page_size", 15)
+            max_pages = props.get("max_pages", 3)
+            if not isinstance(page_size, int) or page_size < 1:
+                errors.append(f"components[{cid}].props.page_size must be a positive integer")
+            if not isinstance(max_pages, int) or max_pages < 1 or max_pages > 3:
+                errors.append(f"components[{cid}].props.max_pages must be an integer between 1 and 3")
+        if ctype == "style_question_card":
+            products = props.get("products")
+            if not isinstance(products, list) or len(products) == 0:
+                errors.append(
+                    f"components[{cid}].props.products must be a non-empty array of "
+                    f"product objects (exactly 6 recommended)."
+                )
+            else:
+                for i, p in enumerate(products):
+                    if not isinstance(p, dict):
+                        errors.append(f"components[{cid}].props.products[{i}] must be an object")
+                        continue
+                    for required in ("product_id", "name", "price", "shop_name"):
+                        if required not in p:
+                            errors.append(
+                                f"components[{cid}].props.products[{i}] missing '{required}'. "
+                                f"Each product needs product_id, name, price, shop_name."
+                            )
         if ctype == "comparison_table":
             products = props.get("products")
             if not isinstance(products, list) or len(products) == 0:
@@ -246,32 +292,83 @@ def enrich_render_ui_payload(
     default_variant_by_pid = default_variant_by_pid or {}
     components = []
     for comp in payload.get("components") or []:
-        if not isinstance(comp, dict) or comp.get("type") != "product_card":
+        if not isinstance(comp, dict):
             components.append(comp)
             continue
-        props = dict(comp.get("props") or {})
-        pid = props.get("product_id")
-        if isinstance(pid, int):
-            if pid in quantities:
-                props["quantity"] = quantities[pid]
-            # Always overwrite variants/default_variant_id with the canonical
-            # DB values — the agent's copy can be stale or omitted entirely.
-            if pid in variants_by_pid:
-                props["variants"] = variants_by_pid[pid]
-            if pid in default_variant_by_pid and default_variant_by_pid[pid] is not None:
-                props.setdefault("default_variant_id", default_variant_by_pid[pid])
-        components.append({**comp, "props": props})
+        ctype = comp.get("type")
+        if ctype == "product_card":
+            props = dict(comp.get("props") or {})
+            pid = props.get("product_id")
+            if isinstance(pid, int):
+                if pid in quantities:
+                    props["quantity"] = quantities[pid]
+                # Always overwrite variants/default_variant_id with the canonical
+                # DB values — the agent's copy can be stale or omitted entirely.
+                if pid in variants_by_pid:
+                    props["variants"] = variants_by_pid[pid]
+                if pid in default_variant_by_pid and default_variant_by_pid[pid] is not None:
+                    props.setdefault("default_variant_id", default_variant_by_pid[pid])
+            components.append({**comp, "props": props})
+        elif ctype == "mason_discover_card":
+            props = dict(comp.get("props") or {})
+            enriched_products = []
+            for p in props.get("products") or []:
+                if not isinstance(p, dict):
+                    enriched_products.append(p)
+                    continue
+                p = dict(p)
+                pid = p.get("product_id")
+                if isinstance(pid, int):
+                    if pid in quantities:
+                        p["quantity"] = quantities[pid]
+                    if pid in variants_by_pid:
+                        p["variants"] = variants_by_pid[pid]
+                    if pid in default_variant_by_pid and default_variant_by_pid[pid] is not None:
+                        p.setdefault("default_variant_id", default_variant_by_pid[pid])
+                enriched_products.append(p)
+            props["products"] = enriched_products
+            components.append({**comp, "props": props})
+        elif ctype == "style_question_card":
+            props = dict(comp.get("props") or {})
+            enriched_products = []
+            for p in props.get("products") or []:
+                if not isinstance(p, dict):
+                    enriched_products.append(p)
+                    continue
+                p = dict(p)
+                pid = p.get("product_id")
+                if isinstance(pid, int):
+                    if pid in quantities:
+                        p["quantity"] = quantities[pid]
+                    if pid in variants_by_pid:
+                        p["variants"] = variants_by_pid[pid]
+                    if pid in default_variant_by_pid and default_variant_by_pid[pid] is not None:
+                        p.setdefault("default_variant_id", default_variant_by_pid[pid])
+                enriched_products.append(p)
+            props["products"] = enriched_products
+            components.append({**comp, "props": props})
+        else:
+            components.append(comp)
     return {**payload, "components": components}
 
 
 def collect_product_card_ids(payload: dict) -> list[int]:
     ids: list[int] = []
     for comp in payload.get("components") or []:
-        if not isinstance(comp, dict) or comp.get("type") != "product_card":
+        if not isinstance(comp, dict):
             continue
-        pid = (comp.get("props") or {}).get("product_id")
-        if isinstance(pid, int):
-            ids.append(pid)
+        ctype = comp.get("type")
+        props = comp.get("props") or {}
+        if ctype == "product_card":
+            pid = props.get("product_id")
+            if isinstance(pid, int):
+                ids.append(pid)
+        elif ctype in ("mason_discover_card", "style_question_card"):
+            for p in props.get("products") or []:
+                if isinstance(p, dict):
+                    pid = p.get("product_id")
+                    if isinstance(pid, int):
+                        ids.append(pid)
     return ids
 
 
@@ -327,7 +424,9 @@ RENDER_UI_TOOL_SCHEMA: dict = {
                                 "product_details_modal{product_id,name,price,shop_name,image_url?,gallery?,description_long?,tags?}, "
                                 "next_actions{actions[{label,intent,url?,style?('primary'|'default')}]}, "
                                 "shop_card{shop_id,name,logo_url?,description?,website_url?,product_count?}, "
-                                "plan{steps}."
+                                "plan{steps}, "
+                                "mason_discover_card{products:[{product_id,name,price,shop_name,image_url?,description_summary?,tags?}],title?,subtitle?,page_size?(default 15),max_pages?(1-3, default 3)}, "
+                                "style_question_card{question_id,products:[{product_id,name,price,shop_name,image_url?,tags?,variants?:[...],default_variant_id?}] (exactly 6 products, include image_url and tags on all),question?(default 'Which of these looks most like what you\\'re looking for?'),hint?}."
                             ),
                         },
                         "children": {

@@ -1,0 +1,121 @@
+.container {
+  background: #fff;
+  border: 1px solid rgba(122, 158, 126, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(1, 82, 55, 0.07);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-family: var(--font-display, 'Playfair Display', serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ms-dark, #0f1805);
+  line-height: 1.3;
+}
+
+.subtitle {
+  font-family: var(--font-body, 'Lora', serif);
+  font-size: 0.8rem;
+  color: var(--ms-sage, #7a9e7e);
+  line-height: 1.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cardWrapper {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.cardWrapper:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(1, 82, 55, 0.12);
+}
+
+.cardWrapper:focus-visible {
+  box-shadow: 0 0 0 2px var(--ms-primary, #015237);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(122, 158, 126, 0.15);
+}
+
+.pageBtn {
+  font-family: var(--font-body, 'Lora', serif);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ms-primary, #015237);
+  background: transparent;
+  border: 1px solid rgba(1, 82, 55, 0.3);
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  line-height: 1;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: var(--ms-primary, #015237);
+  color: #fff;
+}
+
+.pageBtn:disabled {
+  color: rgba(1, 82, 55, 0.3);
+  border-color: rgba(1, 82, 55, 0.12);
+  cursor: default;
+}
+
+.pageIndicator {
+  font-family: var(--font-body, 'Lora', serif);
+  font-size: 0.8rem;
+  color: #999;
+  min-width: 36px;
+  text-align: center;
+}

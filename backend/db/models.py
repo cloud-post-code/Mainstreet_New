@@ -114,6 +114,7 @@ class AgentSession(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     title = Column(String(300), default="New conversation")
     session_type = Column(String(20), default="shop", nullable=False, server_default="shop")
+    goal = Column(Text, nullable=True)
     processing = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

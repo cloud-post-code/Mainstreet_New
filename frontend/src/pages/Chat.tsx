@@ -335,10 +335,35 @@ export default function Chat() {
     }
   }
 
+  const [goalBanner, setGoalBanner] = useState<string | null>(null)
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!input.trim() || streaming) return
     const text = input.trim()
+
+    // /goal <text> — set the session goal without sending to Mason
+    if (text.startsWith('/goal ') || text === '/goal') {
+      const goalText = text.slice(6).trim()
+      if (!goalText) return
+      setInput('')
+      if (!token) { setGoalBanner('Sign in to set a goal.'); return }
+      let sessionId = activeSessionId
+      if (!sessionId) {
+        const s = await api.createSession(token)
+        setSessions(prev => [s, ...prev])
+        setActiveSessionId(s.id)
+        sessionId = s.id
+      }
+      try {
+        await api.setSessionGoal(sessionId, goalText, token)
+        setGoalBanner(`Goal set: "${goalText}" — Mason will update your notes 30 min into the conversation.`)
+      } catch {
+        setGoalBanner('Could not set goal. Please try again.')
+      }
+      return
+    }
+
     setInput('')
 
     track('mason_message_sent', {
@@ -626,6 +651,13 @@ export default function Chat() {
               </div>
             ))}
             <div ref={bottomRef} />
+          </div>
+        )}
+
+        {goalBanner && (
+          <div className={styles.goalBanner}>
+            <span>{goalBanner}</span>
+            <button type="button" className={styles.goalBannerClose} onClick={() => setGoalBanner(null)} aria-label="Dismiss">×</button>
           </div>
         )}
 

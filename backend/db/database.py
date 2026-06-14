@@ -42,6 +42,9 @@ async def create_tables():
         await conn.execute(text(
             "ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS session_type varchar(20) NOT NULL DEFAULT 'shop'"
         ))
+        await conn.execute(text(
+            "ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS goal text"
+        ))
         # Variant-aware product model. The columns may exist (Numeric/Integer
         # NOT NULL) on older deployments — drop the NOT NULL constraints so
         # the backfill can move data into product_variants and leave the

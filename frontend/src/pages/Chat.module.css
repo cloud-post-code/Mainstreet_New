@@ -265,6 +265,34 @@
   30% { transform: translateY(-6px); }
 }
 
+/* ── Goal banner ── */
+.goalBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1.5rem;
+  background: #eef6ef;
+  border-top: 1px solid rgba(1,82,55,0.15);
+  font-size: 0.88rem;
+  color: #015237;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.goalBannerClose {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #015237;
+  line-height: 1;
+  padding: 0 0.25rem;
+  opacity: 0.6;
+}
+.goalBannerClose:hover { opacity: 1; }
+
 /* ── Input bar ── */
 .inputBar {
   display: flex;

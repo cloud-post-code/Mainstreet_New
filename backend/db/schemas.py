@@ -123,6 +123,7 @@ class SessionOut(BaseModel):
     id: int
     title: str
     session_type: str = "shop"
+    goal: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -140,6 +141,10 @@ class TurnIn(BaseModel):
     # Optional user override: "fast" forces Fast Mason, "full" forces Full Mason
     # (no classifier call). None = auto (classifier decides).
     mode_override: Optional[str] = None
+
+
+class GoalIn(BaseModel):
+    goal: str
 
 
 class PlanOut(BaseModel):

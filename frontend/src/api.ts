@@ -95,7 +95,7 @@ export interface AdminStats {
   distinct_option_types: string[]
   price_buckets: { under_25: number; '25_to_50': number; '50_to_100': number; over_100: number }
 }
-export interface Session { id: number; title: string; session_type?: string; created_at: string; updated_at: string }
+export interface Session { id: number; title: string; session_type?: string; goal?: string | null; created_at: string; updated_at: string }
 export interface InboxMessage { id: number; user_id: number; session_id: number | null; title: string; preview: string; body: string; read: boolean; created_at: string }
 export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
@@ -295,6 +295,12 @@ export const api = {
 
   cancelRun: (runId: number, token: string) =>
     request<{ cancelled: boolean }>(`/api/agent/runs/${runId}/cancel`, { method: 'POST' }, token),
+
+  setSessionGoal: (sessionId: number, goal: string, token: string) =>
+    request<Session>(`/api/agent/sessions/${sessionId}/goal`, {
+      method: 'POST',
+      body: JSON.stringify({ goal }),
+    }, token),
 
   importShopsCsv: async (file: File, token: string) => {
     const fd = new FormData()
