@@ -3,7 +3,7 @@ import { Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
 import LiveReasoning from './LiveReasoning'
-import PrefsForm from './PrefsForm'
+import PrefsSetup from './PrefsSetup'
 import { useMason } from '../mason/MasonContext'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
@@ -225,7 +225,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
               {!signedIn ? (
                 <GuestNotice message="Sign in to save your shopping preferences so Mason can use them every time." />
               ) : (
-                <PrefsForm prefs={memory.prefs} onPatch={memory.patchPrefs} />
+                <PrefsSetup prefs={memory.prefs} onPatch={memory.patchPrefs} />
               )}
             </div>
           )}
