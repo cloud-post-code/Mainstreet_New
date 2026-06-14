@@ -64,53 +64,126 @@ FORBIDDEN_PATTERNS: list[str] = [
 # ---------------------------------------------------------------------------
 
 _SYSTEM_TMPL = """\
-You are a Python web scraping expert. Your job is to write a single self-contained
-Python script that scrapes product data from the page provided and prints a JSON array to stdout.
+You are an expert at extracting product data from e-commerce websites. Your job is to write a
+single self-contained Python script that retrieves ALL products from the site and prints a JSON
+array to stdout.
 
 SELLER TYPE: {seller_type}
-  - "single": one brand sells everything on this page. Use the brand/shop name for every product's shop_name.
-  - "multi": multiple sellers appear on this page (marketplace). Extract the per-product seller name for each product's shop_name.
-  - "unknown": treat as single seller but do your best.
+  - "single": one brand sells everything. Use that brand/shop name for every product's shop_name.
+  - "multi": marketplace with multiple sellers. Extract the per-product seller name for shop_name.
+  - "unknown": treat as single seller; do your best.
 
-OUTPUT CONTRACT
----------------
+═══════════════════════════════════════════════════════════════
+STEP 1 — DETECT THE PLATFORM AND USE ITS API IF POSSIBLE
+═══════════════════════════════════════════════════════════════
+
+Before writing any HTML scraping code, check the URL and page HTML for platform signals.
+If you can identify the platform, USE ITS NATIVE API — it is always more reliable, more
+complete, and faster than HTML scraping.
+
+SHOPIFY (most common)
+  Signal: URL contains myshopify.com, OR meta generator tag says "Shopify", OR page HTML
+          contains window.Shopify or /cdn/shop/
+  API:    GET {base_url}/products.json?limit=250&page=N
+          Paginate: keep incrementing ?page= until you get an empty products array.
+          Each product has variants[]. Map like this:
+            shop_name         = product.vendor  (or the store name from the page title)
+            product_handle    = product.handle
+            base_product_name = product.title
+            product_name      = variant.title (use product.title if "Default Title")
+            price             = variant.price  (already a string like "29.99")
+            quantity          = str(variant.inventory_quantity) if available, else "1"
+            image_url         = variant.featured_image.src OR product.images[0].src
+            description_json  = JSON.dumps({{"summary": strip_html(product.body_html)[:200], "details": []}})
+            variant_id        = str(variant.id)
+            variant_index     = str(variant.position)
+            option_names      = " / ".join(product.options[].name)
+            option_values     = " / ".join(variant.option1, variant.option2, variant.option3 — skip None)
+
+WIX
+  Signal: URL contains wix.com or wixsite.com, OR HTML contains "wix-" class prefixes,
+          OR window.__wix__ in the HTML
+  API:    GET https://www.wixapis.com/stores/v1/products/query  (POST with empty body returns all)
+          OR try the public storefront: {base_url}/_api/wix-ecommerce-storefront-web/api
+          If no public API is accessible, fall back to HTML scraping.
+
+SQUARE / SQUARESPACE
+  Signal: URL contains squarespace.com, OR HTML contains "squarespace" assets
+  API:    GET {base_url}/api/open/GetItemsByCategory  (Squarespace)
+          OR {base_url}/api/products  — try this first, fall back to HTML if 404.
+
+BIG CARTEL
+  Signal: URL ends in bigcartel.com, OR HTML contains "Big Cartel"
+  API:    GET https://api.bigcartel.com/{{account_slug}}/products.json
+          Extract account_slug from the URL or page source.
+
+BIGCOMMERCE
+  Signal: HTML contains bigcommerce or cdn11.bigcommerce.com
+  API:    GET {base_url}/api/storefront/catalog/products?limit=200&include=variants,images
+
+ECWID
+  Signal: HTML contains "ecwid" or "Ecwid.init"
+  API:    Extract store ID from HTML (window.ec.storefront.storeId or similar)
+          GET https://app.ecwid.com/api/v3/{{store_id}}/products?limit=100&offset=0
+
+ETSY (multi-seller)
+  Signal: URL is etsy.com
+  Note:   Etsy's public API requires a key. Instead, scrape the HTML search/shop pages.
+          Set seller_type="multi" and extract shop_name per listing.
+
+GENERIC / UNKNOWN PLATFORM
+  If no platform is detected, fall back to HTML scraping with httpx + BeautifulSoup.
+  Look for common patterns: JSON-LD product schema, Open Graph tags, or data attributes.
+
+═══════════════════════════════════════════════════════════════
+STEP 2 — OUTPUT CONTRACT
+═══════════════════════════════════════════════════════════════
+
 Print ONLY a valid JSON array to stdout. No other text. No logging. No markdown.
-Each element of the array is one product VARIANT (a specific color/size/style).
-If a product has no variants, emit exactly one element with variant_index = 1.
+Each element is one product VARIANT. Single-variant products get exactly one element with variant_index="1".
 
-REQUIRED FIELDS (every element must have ALL of these — missing any = the script fails):
+REQUIRED FIELDS — every element must have ALL of these (missing any = the script fails):
   shop_name         (string) — seller or brand name
   product_handle    (string) — URL-safe slug, lowercase, hyphens only, unique per parent product
-                               e.g. "blue-canvas-tote" NOT "Blue Canvas Tote" NOT "blue canvas tote"
-  base_product_name (string) — parent product title, IDENTICAL for all variants of one product
-  product_name      (string) — variant display name; if no variants, same as base_product_name
-  price             (string) — decimal price e.g. "29.99"; use "0.00" only if truly free
-  quantity          (string) — stock count as integer string e.g. "10"; use "1" if stock is not shown
-  image_url         (string) — ABSOLUTE https:// URL to the primary product image
-  description_json  (string) — JSON string: {{"summary": "one sentence", "details": ["bullet1", "bullet2"]}}
+                               Derive from product title. e.g. "blue-canvas-tote"
+                               NOT "Blue Canvas Tote", NOT a numeric ID like "12345"
+  base_product_name (string) — parent product title, IDENTICAL across all variants of one product
+  product_name      (string) — variant display name; same as base_product_name if no variants
+  price             (string) — decimal string e.g. "29.99"; use "0.00" only if truly free
+  quantity          (string) — integer string e.g. "10"; use "1" if stock count is unavailable
+  image_url         (string) — ABSOLUTE https:// URL to product image
+  description_json  (string) — JSON-encoded: {{"summary": "one sentence", "details": ["bullet1"]}}
                                If no description: {{"summary": "No description available.", "details": []}}
 
-OPTIONAL FIELDS (include if present on the page):
-  variant_id    (string) — the site's internal variant ID; use "" if not available
-  variant_index (string) — "1", "2", "3" etc; ALWAYS include, use "1" for single-variant products
+OPTIONAL FIELDS — include when available:
+  variant_id    (string) — platform's internal variant ID; use "" if unavailable
+  variant_index (string) — "1", "2", "3" … ALWAYS include, "1" for single-variant products
   option_names  (string) — slash-joined option type labels e.g. "Color / Size"
-  option_values (string) — slash-joined option values matching option_names e.g. "Blue / Large"
-  parent_store  (string) — marketplace name if applicable e.g. "Etsy"
+  option_values (string) — slash-joined option values e.g. "Blue / Large"
+  parent_store  (string) — marketplace/platform name if applicable e.g. "Etsy"
 
-RULES
------
-1. Use ONLY httpx and beautifulsoup4 (bs4). Both are pre-installed. Do NOT import anything else that requires installation.
+═══════════════════════════════════════════════════════════════
+STEP 3 — RULES
+═══════════════════════════════════════════════════════════════
+
+1. Allowed imports: httpx, bs4 (BeautifulSoup), json, re, html, urllib.parse, time, math.
+   These are all pre-installed. Do NOT pip install anything.
 2. Do NOT use: subprocess, os.system, os.popen, eval(), exec(), __import__
-3. The script must be fully self-contained — no arguments, no user input, no environment variables.
-4. Handle pagination: follow next-page links up to 10 pages. Stop at 10 even if more exist.
-5. Do NOT emit duplicate product_handle values (same handle = same parent product). Variants are NOT duplicates.
-6. If you cannot extract a required field for a product, SKIP that product — do not emit a row with empty required fields.
-7. Print ONLY the JSON array to stdout. All logging/warnings go to stderr.
-8. product_handle must be derived from the product name, NOT from a numeric ID.
+3. Fully self-contained — no arguments, no user input, no environment variables, no API keys.
+4. Paginate until you have ALL products. For APIs use page/offset params; for HTML follow
+   next-page links. Hard cap: 50 pages / 5000 products, whichever comes first.
+5. No duplicate product_handle values across parent products. Variants of the same product
+   share a handle and are NOT duplicates.
+6. If a required field is genuinely unavailable for a product, skip that product entirely.
+   Do not emit a row with empty required fields.
+7. Print ONLY the JSON array to stdout. Errors and debug info go to stderr.
+8. Strip HTML tags from any description before putting it in description_json.
+9. If using a paginated API, add a small sleep (0.2s) between pages to be polite.
 
+═══════════════════════════════════════════════════════════════
 CURRENT PAGE URL: {url}
 
-PAGE HTML (first 50000 chars):
+PAGE HTML (first 50000 chars — use this to detect the platform):
 {html_excerpt}
 
 {retry_context}"""
@@ -475,8 +548,11 @@ async def build_scraper(
                 {
                     "role": "user",
                     "content": (
-                        "Write the complete Python scraping script now. "
-                        "Output ONLY the script — no explanation, no markdown preamble."
+                        "First, identify the platform from the URL and HTML (Shopify, Wix, Squarespace, "
+                        "BigCartel, BigCommerce, Ecwid, or unknown). If a native API is available, use it — "
+                        "do not scrape HTML when an API exists. "
+                        "Then write the complete Python script. "
+                        "Output ONLY the script — no explanation, no markdown, no preamble."
                     ),
                 }
             ],
