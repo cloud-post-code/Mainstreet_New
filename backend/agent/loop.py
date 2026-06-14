@@ -488,7 +488,7 @@ async def _run_agent_turn_inner(
     mode: str = "full",
 ) -> AsyncGenerator[str, None]:
     turn_started_at = time.perf_counter()
-    distinct_id = str(user_id) if user_id else None
+    distinct_id = str(user_id) if user_id else f"session_{session_id}"
 
     # NOTE: PostHogAnthropic.messages.stream() returns a plain generator
     # rather than a context manager, which breaks stream_claude's
@@ -649,6 +649,24 @@ async def _run_agent_turn_inner(
         for k in ("input", "output", "cache_read", "cache_creation"):
             turn_usage_totals[k] += u[k]
         turn_usage_totals["cost"] += iter_cost
+
+        _safe_capture(
+            "$ai_generation",
+            {
+                "$ai_provider": "anthropic",
+                "$ai_model": model_name,
+                "$ai_input_tokens": u["input"],
+                "$ai_output_tokens": u["output"],
+                "$ai_cache_read_tokens": u["cache_read"],
+                "$ai_cache_creation_tokens": u["cache_creation"],
+                "$ai_total_cost_usd": iter_cost,
+                "$ai_stop_reason": getattr(response, "stop_reason", None),
+                "session_id": session_id,
+                "mode": mode,
+                "iteration": iteration,
+            },
+            distinct_id=distinct_id,
+        )
 
         # Process response blocks
         tool_use_blocks = []

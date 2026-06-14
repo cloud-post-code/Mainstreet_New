@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useVariantSelector } from '../hooks/useVariantSelector'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { useModalDismiss } from '../hooks/useModalDismiss'
@@ -10,6 +10,20 @@ import { normalizeTags } from '../lib/normalizeTags'
 import styles from './ProductModal.module.css'
 import cardStyles from './Cards.module.css'
 import { formatCurrency } from '../lib/format'
+
+// Axis names that indicate a clothing/shoe size selection
+const SIZE_AXIS_NAMES = new Set(['size', 'Size', 'sizes', 'Sizes', 'shoe size', 'Shoe Size'])
+
+// Map a size axis name + selected value to the right MasonSizes field
+function sizeAxisToField(axisName: string, value: string): { field: keyof import('../api').MasonSizes; value: string } | null {
+  const lower = axisName.toLowerCase()
+  if (lower.includes('shoe')) return { field: 'shoe', value }
+  if (lower.includes('waist')) return { field: 'waist', value }
+  if (lower.includes('inseam')) return { field: 'inseam', value }
+  if (lower.includes('dress') || lower.includes('suit')) return { field: 'dress', value }
+  if (lower === 'size' || lower === 'sizes') return { field: 'shirt', value }
+  return null
+}
 
 export interface ProductModalVariant {
   variant_id: number
@@ -49,6 +63,10 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   const { add: addToCart, busy, added, error: addError } = useAddToCart()
   const [toast, setToast] = useState<string | null>(null)
   const [likeBusy, setLikeBusy] = useState(false)
+  // Sizing capture: shown once after add-to-cart when a size option was selected
+  const [sizeSavePrompt, setSizeSavePrompt] = useState<{ field: keyof import('../api').MasonSizes; value: string; label: string } | null>(null)
+  const [fitNote, setFitNote] = useState('')
+  const sizeSaveShown = useRef(false)
 
   const variants = product.variants ?? []
   const hasVariants = variants.length > 1
@@ -84,6 +102,22 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
         ? { variantId: selectedVariantId }
         : { productId: product.product_id },
     )
+    // After adding, check if a size axis was selected and we don't have it saved
+    if (!sizeSaveShown.current && optionAxes.length > 0) {
+      for (const axis of optionAxes) {
+        if (SIZE_AXIS_NAMES.has(axis.name)) {
+          const chosen = selectedValues[axis.name]
+          if (chosen) {
+            const mapped = sizeAxisToField(axis.name, chosen)
+            if (mapped && !memory.prefs.sizes[mapped.field]) {
+              setSizeSavePrompt({ ...mapped, label: axis.name })
+              sizeSaveShown.current = true
+              break
+            }
+          }
+        }
+      }
+    }
   }
 
   const onLike = async () => {
@@ -211,6 +245,45 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
               <h3 className={styles.sectionTitle}>Reviews</h3>
               <p className={styles.descEmpty}>No reviews yet.</p>
             </section>
+            {sizeSavePrompt && (
+              <div className={styles.sizeSaveBox}>
+                <p className={styles.sizeSaveTitle}>
+                  Save your {sizeSavePrompt.label.toLowerCase()} ({sizeSavePrompt.value}) to your profile?
+                </p>
+                <input
+                  className={styles.sizeSaveInput}
+                  placeholder="How do you like things to fit? (e.g. relaxed, true to size, size up) — optional"
+                  value={fitNote}
+                  onChange={e => setFitNote(e.target.value)}
+                />
+                <div className={styles.sizeSaveBtns}>
+                  <button
+                    type="button"
+                    className={styles.sizeSaveYes}
+                    onClick={() => {
+                      const patch: import('../api').MasonPrefsPatch = {
+                        sizes: { [sizeSavePrompt.field]: sizeSavePrompt.value } as import('../api').MasonSizes,
+                      }
+                      if (fitNote.trim()) {
+                        patch.sizes = { ...patch.sizes, freeform: fitNote.trim() } as import('../api').MasonSizes
+                      }
+                      memory.patchPrefs(patch)
+                      setSizeSavePrompt(null)
+                      setToast('Size saved to your profile ✓')
+                    }}
+                  >
+                    Save size
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.sizeSaveNo}
+                    onClick={() => setSizeSavePrompt(null)}
+                  >
+                    Skip
+                  </button>
+                </div>
+              </div>
+            )}
             <div className={styles.actionRow}>
               <button
                 type="button"

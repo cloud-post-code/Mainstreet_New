@@ -277,3 +277,86 @@
   color: #8a1a1a;
   margin: 0;
 }
+
+/* Size-save prompt (shown after add-to-cart) */
+.sizeSaveBox {
+  background: #fff;
+  border: 1.5px solid #c9e0d6;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sizeSaveTitle {
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #015237;
+  margin: 0;
+}
+
+.sizeSaveInput {
+  font-family: 'Lora', serif;
+  font-size: 12px;
+  padding: 7px 10px;
+  border: 1px solid #d4c9b0;
+  border-radius: 8px;
+  background: #fffdf7;
+  color: #0f1805;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sizeSaveInput:focus {
+  border-color: #015237;
+}
+
+.sizeSaveInput::placeholder {
+  color: #b0a490;
+  font-style: italic;
+}
+
+.sizeSaveBtns {
+  display: flex;
+  gap: 8px;
+}
+
+.sizeSaveYes {
+  appearance: none;
+  padding: 7px 16px;
+  background: #015237;
+  color: #f1e9d8;
+  border: none;
+  border-radius: 20px;
+  font-family: 'Lora', serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.sizeSaveYes:hover { background: #013d29; }
+
+.sizeSaveNo {
+  appearance: none;
+  padding: 7px 12px;
+  background: transparent;
+  color: #8a7f6c;
+  border: 1px solid #d4c9b0;
+  border-radius: 20px;
+  font-family: 'Lora', serif;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sizeSaveNo:hover { border-color: #8a7f6c; }

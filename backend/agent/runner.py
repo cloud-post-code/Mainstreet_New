@@ -197,7 +197,9 @@ async def _run_turn_background(run_id: int) -> None:
             mode, classify_ms, decided_by = "full", 0, "fallback"
 
         try:
+            _classifier_distinct_id = str(run.user_id) if run.user_id else f"session_{run.session_id}"
             posthog.capture(
+                _classifier_distinct_id,
                 "mason_classifier_decided",
                 properties={
                     "session_id": run.session_id,
@@ -299,7 +301,9 @@ async def _run_turn_background(run_id: int) -> None:
                 logger.exception("runner: failed to clear processing flag for session %s", run.session_id)
 
             try:
+                _response_distinct_id = str(run.user_id) if run.user_id else f"session_{run.session_id}"
                 posthog.capture(
+                    _response_distinct_id,
                     "mason_response_sent",
                     properties={
                         "session_id": run.session_id,

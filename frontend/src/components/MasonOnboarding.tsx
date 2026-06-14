@@ -9,16 +9,62 @@ interface Props {
 
 // ─── Step types ────────────────────────────────────────────────────────────────
 
-type StepKind = 'chips' | 'multi-chips' | 'text' | 'image-pick' | 'image-multi'
+type StepKind = 'chips' | 'multi-chips' | 'text' | 'image-pick' | 'image-multi' | 'sizing-steps'
+
+interface SizingStep {
+  id: string
+  label: string
+  placeholder: string
+}
 
 interface Step {
   id: string
-  message: string
+  message: string | string[] // array = Mason sends multiple bubbles
   kind: StepKind
   options?: string[]
   images?: Array<{ label: string; url: string; tags: string[] }>
   placeholder?: string
+  sizingSteps?: SizingStep[]
   patchFn: (answer: string | string[]) => Partial<MasonPrefsPatch>
+}
+
+// ─── Mason personality helpers ─────────────────────────────────────────────────
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+const BRIDGE_LINES: Record<string, string[]> = {
+  after_style: [
+    "Love it — already getting a picture of your vibe.",
+    "That's a solid start. I've got your aesthetic locked in.",
+    "Good taste. I can work with this.",
+  ],
+  after_images: [
+    "Yeah, those caught my eye too.",
+    "Your taste is coming through loud and clear.",
+    "Nice. The pattern here tells me a lot.",
+  ],
+  after_lifestyle: [
+    "That's helpful — context matters a lot when I'm picking things for you.",
+    "Good to know. I'll keep that in mind every time I shop for you.",
+    "Perfect. That fills in a lot of gaps.",
+  ],
+  after_sizing: [
+    "Got it — I'll keep your sizes on file so you never have to guess.",
+    "Saved. That'll save you a lot of back and forth.",
+    "Perfect. I'll use that whenever sizing matters.",
+  ],
+  after_gifts: [
+    "Good to know. Gift shopping can be the hardest part.",
+    "Noted — I'll be ready whenever an occasion comes up.",
+  ],
+  generic: [
+    "Got it.",
+    "Makes sense.",
+    "Perfect.",
+    "Noted.",
+  ],
 }
 
 // ─── Steps definition ──────────────────────────────────────────────────────────
@@ -36,7 +82,7 @@ const STEPS: Step[] = [
   },
   {
     id: 'vibe_images',
-    message: "Nice! Now — tap everything that catches your eye. Don't overthink it.",
+    message: "Now — tap everything that catches your eye. Go with your gut.",
     kind: 'image-multi',
     images: [
       { label: 'Clean & simple',   url: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=300&q=80', tags: ['minimalist', 'clean'] },
@@ -60,6 +106,31 @@ const STEPS: Step[] = [
       return { style_tags: [...new Set(tagsFromImages)] }
     },
   },
+
+  // ── Interior/home aesthetic ────────────────────────────────────────────────
+  {
+    id: 'home_aesthetic',
+    message: "What about your home — which of these feels most like your space?",
+    kind: 'image-multi',
+    images: [
+      { label: 'Warm & rustic',    url: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80', tags: ['rustic', 'warm', 'natural'] },
+      { label: 'Modern & clean',   url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80', tags: ['modern', 'minimalist', 'clean'] },
+      { label: 'Cozy & eclectic',  url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80', tags: ['cozy', 'eclectic', 'layered'] },
+      { label: 'Bright & airy',    url: 'https://images.unsplash.com/photo-1484101403633-562f891dc89a?w=300&q=80', tags: ['bright', 'airy', 'open'] },
+    ],
+    patchFn: (ans) => {
+      const HOME_TAGS: Record<string, string[]> = {
+        'Warm & rustic':   ['rustic', 'warm', 'natural'],
+        'Modern & clean':  ['modern', 'minimalist', 'clean'],
+        'Cozy & eclectic': ['cozy', 'eclectic', 'layered'],
+        'Bright & airy':   ['bright', 'airy', 'open'],
+      }
+      const tags = (ans as string[]).flatMap(l => HOME_TAGS[l] ?? [])
+      return { lifestyle: { home_aesthetic: (ans as string[]).join(', ') } as MasonPrefsPatch['lifestyle'], style_tags: [...new Set(tags)] }
+    },
+  },
+
+  // ── Shopping mode ──────────────────────────────────────────────────────────
   {
     id: 'shopping_vibe',
     message: "When you go shopping, what's your usual mode?",
@@ -71,6 +142,8 @@ const STEPS: Step[] = [
       return { discover_known, lifestyle: { discovery_notes: a } as MasonPrefsPatch['lifestyle'] }
     },
   },
+
+  // ── Price attitude ─────────────────────────────────────────────────────────
   {
     id: 'price_vibe',
     message: "How do you think about price when you're buying something for yourself?",
@@ -86,14 +159,122 @@ const STEPS: Step[] = [
       return { quality_price, lifestyle: { quality_notes: a } as MasonPrefsPatch['lifestyle'] }
     },
   },
+
+  // ── Sizing (guided steps) ──────────────────────────────────────────────────
+  {
+    id: 'sizing',
+    message: [
+      "Quick one — let's get your sizing on file so I never have to guess.",
+      "Pick what applies to you. You can skip anything that doesn't.",
+    ],
+    kind: 'sizing-steps',
+    sizingSteps: [
+      { id: 'shirt',  label: 'Shirt / Top',  placeholder: 'XS / S / M / L / XL / XXL' },
+      { id: 'waist',  label: 'Pants waist',  placeholder: 'e.g. 32' },
+      { id: 'inseam', label: 'Inseam',       placeholder: 'e.g. 30' },
+      { id: 'shoe',   label: 'Shoe size',    placeholder: 'e.g. 10 (US mens)' },
+      { id: 'dress',  label: 'Dress / Suit', placeholder: 'e.g. 6 or 38R' },
+    ],
+    patchFn: (ans) => {
+      // ans is a JSON string: { shirt, waist, inseam, shoe, dress }
+      try {
+        const vals = JSON.parse(ans as string) as Record<string, string>
+        const sizes: MasonPrefsPatch['sizes'] = {}
+        if (vals.shirt)  sizes.shirt = vals.shirt
+        if (vals.waist)  sizes.waist = vals.waist
+        if (vals.inseam) sizes.inseam = vals.inseam
+        if (vals.shoe)   sizes.shoe = vals.shoe
+        if (vals.dress)  sizes.dress = vals.dress
+        return { sizes }
+      } catch { return {} }
+    },
+  },
+
+  // ── Family & home ──────────────────────────────────────────────────────────
+  {
+    id: 'family',
+    message: "Who's at home with you? (Helps me shop for the right people.)",
+    kind: 'multi-chips',
+    options: ['Live alone', 'Partner / spouse', 'Kids', 'Roommates', 'Parents / family'],
+    patchFn: (ans) => {
+      return { lifestyle: { family_notes: (ans as string[]).join(', ') } as MasonPrefsPatch['lifestyle'] }
+    },
+  },
+  {
+    id: 'homeowner',
+    message: "Do you own your home or rent?",
+    kind: 'chips',
+    options: ['Own / homeowner', 'Renting', 'Other'],
+    patchFn: (ans) => {
+      const a = ans as string
+      const housing: MasonLifestyleHousing = a.includes('Own') ? 'homeowner' : a.includes('Rent') ? 'renter' : 'renter'
+      return { lifestyle: { housing } as MasonPrefsPatch['lifestyle'] }
+    },
+  },
+
+  // ── Work & travel ──────────────────────────────────────────────────────────
+  {
+    id: 'work_env',
+    message: "How do you work most days?",
+    kind: 'chips',
+    options: ['From home', 'Hybrid (office + home)', 'In the office', 'Outdoors / field work', 'Varies'],
+    patchFn: (ans) => {
+      const a = ans as string
+      const work_env = a.includes('home') ? 'wfh' : a.includes('Hybrid') ? 'hybrid' : a.includes('office') ? 'office' : a.includes('Outdoor') ? 'outdoor' : 'hybrid'
+      return { lifestyle: { work_env } as MasonPrefsPatch['lifestyle'] }
+    },
+  },
+  {
+    id: 'travel',
+    message: "How much do you travel?",
+    kind: 'chips',
+    options: ['Rarely — I stay local', 'A few times a year', 'Monthly or so', 'Constantly on the go'],
+    patchFn: (ans) => {
+      const a = ans as string
+      const travel = a.includes('Rarely') ? 'rarely' : a.includes('few') ? 'few_times_year' : a.includes('Monthly') ? 'monthly' : 'frequently'
+      return { lifestyle: { travel } as MasonPrefsPatch['lifestyle'] }
+    },
+  },
+
+  // ── Pets ───────────────────────────────────────────────────────────────────
+  {
+    id: 'pets',
+    message: "Any pets?",
+    kind: 'multi-chips',
+    options: ['Dog', 'Cat', 'Other', 'No pets'],
+    patchFn: (ans) => {
+      const selected = (ans as string[]).filter(s => s !== 'No pets')
+      if (selected.length === 0) return {}
+      return { lifestyle: { pets: selected.map(s => s.toLowerCase()) } as MasonPrefsPatch['lifestyle'] }
+    },
+  },
+
+  // ── Hobbies ────────────────────────────────────────────────────────────────
+  {
+    id: 'hobbies',
+    message: "What takes up real time in your life outside of work? Pick anything that applies.",
+    kind: 'multi-chips',
+    options: [
+      'Running / cycling', 'Gym / lifting', 'Yoga / pilates', 'Hiking / outdoors',
+      'Cooking / baking', 'Reading', 'Gaming', 'Music', 'Travel', 'Art / crafts',
+      'Golf', 'Team sports', 'Gardening', 'Photography',
+    ],
+    patchFn: (ans) => {
+      const selected = ans as string[]
+      const hobbies = selected.map(h => h.toLowerCase().split('/')[0].trim())
+      return { lifestyle: { hobbies } as MasonPrefsPatch['lifestyle'] }
+    },
+  },
+
+  // ── Brands / likes ─────────────────────────────────────────────────────────
   {
     id: 'loves',
-    message: "Any brands or materials you absolutely love? I'll always keep them in mind. (Type anything, or skip!)",
+    message: "Any brands or materials you absolutely love? I'll always keep them in mind.",
     kind: 'text',
-    placeholder: "e.g. Patagonia, merino wool, Japanese denim…",
+    placeholder: "e.g. Patagonia, merino wool, Japanese denim… (or skip)",
     patchFn: (ans) => {
       const text = (ans as string).trim()
-      if (!text) return {}
+      if (!text || text === '(skipped)') return {}
       const items = text.split(/[,;&\n]+/).map(s => s.trim()).filter(Boolean)
       return { likes: items }
     },
@@ -102,14 +283,16 @@ const STEPS: Step[] = [
     id: 'avoids',
     message: "And anything you always want to avoid — brands, materials, styles?",
     kind: 'text',
-    placeholder: "e.g. fast fashion, polyester, overly logo-heavy…",
+    placeholder: "e.g. fast fashion, polyester, overly logo-heavy… (or skip)",
     patchFn: (ans) => {
       const text = (ans as string).trim()
-      if (!text) return {}
+      if (!text || text === '(skipped)') return {}
       const items = text.split(/[,;&\n]+/).map(s => s.trim()).filter(Boolean)
       return { dislikes: items }
     },
   },
+
+  // ── Gifting ────────────────────────────────────────────────────────────────
   {
     id: 'gifting',
     message: "Do you shop for gifts often?",
@@ -134,6 +317,17 @@ const STEPS: Step[] = [
   },
 ]
 
+// Tiny alias so patchFn can reference the housing union without importing
+type MasonLifestyleHousing = 'homeowner' | 'renter'
+
+// Which step IDs get a bridge line before the NEXT step fires
+const BRIDGE_AFTER: Record<string, keyof typeof BRIDGE_LINES> = {
+  vibe_images:    'after_images',
+  home_aesthetic: 'after_lifestyle',
+  sizing:         'after_sizing',
+  budget:         'after_gifts',
+}
+
 // ─── Message types ─────────────────────────────────────────────────────────────
 
 type Message =
@@ -145,16 +339,17 @@ type Message =
 
 export default function MasonOnboarding({ onComplete, onSkip }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [stepIdx, setStepIdx] = useState(-1) // -1 = intro not shown yet
+  const [stepIdx, setStepIdx] = useState(-1)
   const [typing, setTyping] = useState(false)
   const [selectedChips, setSelectedChips] = useState<string[]>([])
   const [selectedImages, setSelectedImages] = useState<string[]>([])
   const [textVal, setTextVal] = useState('')
+  const [sizingVals, setSizingVals] = useState<Record<string, string>>({})
   const [patch, setPatch] = useState<MasonPrefsPatch>({})
   const [done, setDone] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
-  let msgCounter = useRef(0)
+  const msgCounter = useRef(0)
 
   function nextId() {
     msgCounter.current += 1
@@ -165,7 +360,6 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }
 
-  // Show typing then add a mason message
   function masonSays(text: string, delay = 700): Promise<void> {
     return new Promise(resolve => {
       const typingId = nextId()
@@ -186,70 +380,97 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
     scrollToBottom()
   }
 
-  // Kick off the intro
   useEffect(() => {
     const run = async () => {
-      await masonSays("Hey there! I'm Mason — your Main Street personal shopper. 👋", 400)
-      await masonSays("I'd love to get to know you a little so I can show you things you'll actually love. It only takes a minute, and the more I know, the better I get!", 900)
-      // Advance to first step
+      const intro = pick([
+        "Hey! I'm Mason — your personal shopper on Main Street. 👋",
+        "Hey there! I'm Mason. Think of me as your shopping sidekick. 👋",
+        "Hi! I'm Mason, your personal shopper here on Main Street. 👋",
+      ])
+      await masonSays(intro, 400)
+      const sub = pick([
+        "A few quick questions and I'll know exactly what to show you.",
+        "Just a few questions so I can make every recommendation feel made for you.",
+        "Let me get to know you a bit — then I'll only show you things you'll actually want.",
+      ])
+      await masonSays(sub, 900)
       setStepIdx(0)
     }
     run()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // When stepIdx advances, show the step question
   const prevStepIdx = useRef(-1)
   useEffect(() => {
     if (stepIdx < 0 || stepIdx === prevStepIdx.current) return
     if (stepIdx >= STEPS.length) return
     prevStepIdx.current = stepIdx
     const step = STEPS[stepIdx]
-    masonSays(step.message, 500).then(() => {
+    const run = async () => {
+      const msgs = Array.isArray(step.message) ? step.message : [step.message]
+      for (let i = 0; i < msgs.length; i++) {
+        await masonSays(msgs[i], i === 0 ? 500 : 600)
+      }
       setSelectedChips([])
       setSelectedImages([])
       setTextVal('')
-    })
+      setSizingVals({})
+    }
+    run()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx])
 
   function mergedPatch(current: MasonPrefsPatch, next: Partial<MasonPrefsPatch>): MasonPrefsPatch {
     const merged = { ...current, ...next }
-    // Merge arrays
     if (current.style_tags && next.style_tags) merged.style_tags = [...new Set([...current.style_tags, ...next.style_tags])]
     if (current.likes && next.likes) merged.likes = [...new Set([...current.likes, ...next.likes])]
     if (current.dislikes && next.dislikes) merged.dislikes = [...new Set([...current.dislikes, ...next.dislikes])]
-    // Merge lifestyle
     if (current.lifestyle || next.lifestyle) merged.lifestyle = { ...(current.lifestyle ?? {}), ...(next.lifestyle ?? {}) } as MasonPrefsPatch['lifestyle']
+    if (current.sizes || next.sizes) merged.sizes = { ...(current.sizes ?? {}), ...(next.sizes ?? {}) } as MasonPrefsPatch['sizes']
     return merged
   }
 
-  function advance(answer: string | string[]) {
+  async function advance(answer: string | string[]) {
     const step = STEPS[stepIdx]
     const answerText = Array.isArray(answer) ? answer.join(', ') : answer
 
-    if (answerText.trim()) {
+    if (answerText.trim() && answerText !== '(skipped)') {
       userSays(answerText)
-      const newPatch = step.patchFn(answer)
-      setPatch(prev => mergedPatch(prev, newPatch))
+    }
+
+    const newPatch = step.patchFn(answer)
+    setPatch(prev => mergedPatch(prev, newPatch))
+
+    const bridgeKey = BRIDGE_AFTER[step.id]
+    if (bridgeKey) {
+      await masonSays(pick(BRIDGE_LINES[bridgeKey]), 400)
     }
 
     const next = stepIdx + 1
     if (next >= STEPS.length) {
-      // Wrap up
-      setTimeout(async () => {
-        await masonSays("You're all set! I've got a great sense of your style now.", 600)
-        await masonSays("I'll use everything you shared to make every recommendation feel like it was made just for you. Let's go shopping! 🛍️", 1000)
-        setTimeout(() => {
-          // Build final merged patch
-          setPatch(prev => {
-            const finalPatch = mergedPatch(prev, step.patchFn(answer))
+      setPatch(prev => {
+        const finalPatch = mergedPatch(prev, newPatch)
+        // Slight delay so the bridge line reads before completion
+        setTimeout(async () => {
+          await masonSays(pick([
+            "You're all set! I've got a clear picture of you now.",
+            "Perfect — that's everything I need.",
+            "Done! I've got a solid sense of your taste.",
+          ]), 600)
+          await masonSays(pick([
+            "Every recommendation from here on is tailored just for you. Let's shop! 🛍️",
+            "I'll put all of this to work. Let's find you something great. 🛍️",
+            "Time to go find you some great things. 🛍️",
+          ]), 1000)
+          setTimeout(() => {
             onComplete(finalPatch)
-            return finalPatch
-          })
-          setDone(true)
-        }, 800)
-      }, 300)
+            setDone(true)
+          }, 800)
+        }, 300)
+        return finalPatch
+      })
     } else {
-      setTimeout(() => setStepIdx(next), 300)
+      setStepIdx(next)
     }
   }
 
@@ -280,8 +501,7 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
   }
 
   function handleTextSend() {
-    const val = textVal.trim()
-    advance(val || '(skipped)')
+    advance(textVal.trim() || '(skipped)')
   }
 
   function handleTextKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -289,6 +509,10 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
       e.preventDefault()
       handleTextSend()
     }
+  }
+
+  function handleSizingConfirm() {
+    advance(JSON.stringify(sizingVals))
   }
 
   const currentStep = stepIdx >= 0 && stepIdx < STEPS.length ? STEPS[stepIdx] : null
@@ -456,6 +680,30 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
               </div>
               <div className={styles.chipRow}>
                 <button className={styles.chip} onClick={() => advance('(skipped)')}>Skip</button>
+              </div>
+            </>
+          )}
+
+          {currentStep.kind === 'sizing-steps' && (
+            <>
+              <div className={styles.sizingGrid}>
+                {currentStep.sizingSteps!.map(s => (
+                  <div key={s.id} className={styles.sizingRow}>
+                    <label className={styles.sizingLabel}>{s.label}</label>
+                    <input
+                      className={styles.sizingInput}
+                      placeholder={s.placeholder}
+                      value={sizingVals[s.id] ?? ''}
+                      onChange={e => setSizingVals(prev => ({ ...prev, [s.id]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className={styles.confirmRow}>
+                <button className={styles.chip} onClick={() => advance('(skipped)')}>Skip sizing</button>
+                <button className={styles.confirmBtn} onClick={handleSizingConfirm}>
+                  Save sizes →
+                </button>
               </div>
             </>
           )}

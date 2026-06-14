@@ -356,7 +356,9 @@
 /* Multi-select confirm */
 .confirmRow {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 
 .confirmBtn {
@@ -375,6 +377,52 @@
 
 .confirmBtn:hover {
   background: #013d29;
+}
+
+/* Sizing grid */
+.sizingGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.sizingRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sizingLabel {
+  font-family: 'Lora', serif;
+  font-size: 12px;
+  color: #6a604f;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.sizingInput {
+  flex: 1;
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  padding: 7px 11px;
+  border: 1.5px solid #d4c9b0;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f1805;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sizingInput:focus {
+  border-color: var(--ms-primary, #015237);
+}
+
+.sizingInput::placeholder {
+  color: #b0a490;
+  font-style: italic;
+  font-size: 11px;
 }
 
 /* Done state */

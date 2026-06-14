@@ -178,6 +178,15 @@
 .compColPrice { width: 14%; white-space: nowrap; }
 .compColPros, .compColCons { width: 29%; }
 .compProductCell { vertical-align: top; }
+.compProductImg {
+  display: block;
+  width: 100%;
+  max-width: 80px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 0.45rem;
+}
 .compProductName {
   font-family: var(--font-heading);
   font-weight: 700;

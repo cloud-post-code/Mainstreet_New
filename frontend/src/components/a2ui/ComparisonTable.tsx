@@ -70,6 +70,9 @@ export default function ComparisonTable({ products, product_ids }: Props) {
           {ordered.map(p => (
             <tr key={p.product_id}>
               <td className={styles.compProductCell}>
+                {p.image_url && (
+                  <img src={p.image_url} alt={p.name} className={styles.compProductImg} />
+                )}
                 <div className={styles.compProductName}>{p.name}</div>
                 {p.shop_name && <div className={styles.compProductShop}>{p.shop_name}</div>}
               </td>

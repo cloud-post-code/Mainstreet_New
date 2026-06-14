@@ -6,6 +6,7 @@ import { api, ShippingAddress } from '../api'
 import styles from './CartDrawer.module.css'
 import { formatCurrency } from '../lib/format'
 import { useModalDismiss } from '../hooks/useModalDismiss'
+import { track } from '../analytics/posthog'
 
 const EMPTY_SHIPPING: ShippingAddress = {
   name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
@@ -48,7 +49,10 @@ export default function CartDrawer() {
     setBusy(true)
     try {
       const url = await checkout()
-      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      if (url) {
+        track('mason_checkout_initiated', { items_count: items.length, total_usd: total })
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
       close()
     } finally {
       setBusy(false)

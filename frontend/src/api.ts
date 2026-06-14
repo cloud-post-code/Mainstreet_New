@@ -130,6 +130,11 @@ export interface MasonLifestyle {
   travel?: 'rarely' | 'few_times_year' | 'monthly' | 'frequently'
   fitness?: string[]
   work_env?: 'wfh' | 'hybrid' | 'office' | 'outdoor' | 'industrial'
+  family_notes?: string
+  home_aesthetic?: string
+  freeform_notes?: string
+  discovery_notes?: string
+  quality_notes?: string
 }
 export interface MasonPrefs {
   sizes: MasonSizes
