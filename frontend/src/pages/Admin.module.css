@@ -930,3 +930,58 @@
 .status_success  { color: #015237; font-weight: 600; }
 .status_failed   { color: #c0392b; font-weight: 600; }
 .status_cannot_scrape { color: #a0522d; font-weight: 600; }
+
+.scraperProgressHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.scrapedCountBadge {
+  background: rgba(1,82,55,0.1);
+  color: #015237;
+  border: 1px solid rgba(1,82,55,0.25);
+  border-radius: 999px;
+  padding: 0.25rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.rerunBtn {
+  background: var(--ms-primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.rerunBtn:hover { opacity: 0.85; }
+.rerunBtn:disabled { opacity: 0.4; cursor: default; }
+
+.scraperLog_thinking {
+  color: #7ab8a0;
+  font-style: italic;
+}
+
+.thinkingText {
+  white-space: pre-wrap;
+  font-size: 0.72rem;
+  opacity: 0.85;
+  display: block;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+.blinkDot {
+  color: #5fd87e;
+  animation: blink 1.2s ease-in-out infinite;
+}

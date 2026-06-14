@@ -609,9 +609,9 @@ export default function Admin() {
 
 // ── Scrapers Panel ────────────────────────────────────────────────────────
 
-type ScraperLogLine = { time: string; text: string; kind: 'info' | 'error' | 'success' | 'warn' }
+type ScraperLogLine = { time: string; text: string; kind: 'info' | 'error' | 'success' | 'warn' | 'thinking' }
 
-function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
+function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] }) {
   const [url, setUrl] = useState('')
   const [shopNameOverride, setShopNameOverride] = useState('')
   const [starting, setStarting] = useState(false)
@@ -619,18 +619,26 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
   const [activeJobId, setActiveJobId] = useState<number | null>(null)
   const [activeStatus, setActiveStatus] = useState<'running' | 'success' | 'failed' | 'cannot_scrape' | null>(null)
   const [log, setLog] = useState<ScraperLogLine[]>([])
+  const [thinkingPreview, setThinkingPreview] = useState<string | null>(null)
+  const [scrapedCount, setScrapedCount] = useState<{ rows: number; products: number; shops: number } | null>(null)
   const [report, setReport] = useState<ScraperVerificationReport | null>(null)
   const [cannotScrapeMsg, setCannotScrapeMsg] = useState<string | null>(null)
   const [jobs, setJobs] = useState<ScraperJobOut[]>([])
   const [jobsLoading, setJobsLoading] = useState(true)
   const [rerunning, setRerunning] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
-  const esRef = useRef<EventSource | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const logEndRef = useRef<HTMLDivElement | null>(null)
 
   function pushLog(text: string, kind: ScraperLogLine['kind'] = 'info') {
     const time = new Date().toLocaleTimeString()
     setLog(prev => [...prev, { time, text, kind }])
   }
+
+  // Auto-scroll log to bottom
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [log, thinkingPreview])
 
   useEffect(() => {
     setJobsLoading(true)
@@ -644,51 +652,112 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
     api.listScraperJobs(token).then(setJobs).catch(() => {})
   }
 
+  // fetch()-based SSE so we can send Authorization header (EventSource can't)
   function connectSSE(jobId: number) {
-    if (esRef.current) esRef.current.close()
-    const es = new EventSource(`${api.scraperJobStreamUrl(jobId)}?token=${encodeURIComponent(token)}`)
-    esRef.current = es
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
 
-    es.onmessage = (e) => {
-      let event: ScraperSSEEvent
-      try { event = JSON.parse(e.data) } catch { return }
+    const BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? ''
 
-      if (event.type === 'heartbeat') return
-
-      if (event.type === 'stage') {
-        const msg = event.message || `Stage: ${event.stage}`
-        const extra = event.seller_type ? ` (${event.seller_type})` : ''
-        pushLog(msg + extra, 'info')
-      } else if (event.type === 'attempt_result') {
-        pushLog(`Attempt ${event.attempt} failed: ${event.errors.join('; ')}`, 'warn')
-      } else if (event.type === 'sample_check') {
-        const r = event.result as { passed?: boolean; mismatch_reason?: string }
-        pushLog(r.passed ? 'Sample check: 3/3 products verified' : `Sample check failed: ${r.mismatch_reason}`, r.passed ? 'success' : 'warn')
-      } else if (event.type === 'script_ready') {
-        pushLog(`Script ready on attempt ${event.attempt}`, 'success')
-      } else if (event.type === 'cannot_scrape') {
-        pushLog(event.message, 'error')
-        if (event.detail) pushLog(`Detail: ${event.detail}`, 'error')
-        setCannotScrapeMsg(event.message + (event.detail ? `\n\n${event.detail}` : ''))
-        setActiveStatus('cannot_scrape')
-      } else if (event.type === 'success') {
-        pushLog(`Done — ${event.report.products_ingested} products, ${event.report.variants_ingested} variants`, 'success')
-        setReport(event.report)
-        setActiveStatus('success')
-        refreshJobs()
-      } else if (event.type === 'error') {
-        pushLog(`Error: ${event.message}`, 'error')
-        setActiveStatus('failed')
-        refreshJobs()
-      } else if (event.type === 'done') {
-        setActiveStatus(event.status as typeof activeStatus)
-        refreshJobs()
-        es.close()
+    ;(async () => {
+      try {
+        const res = await fetch(`${BASE}/api/admin/scrapers/${jobId}/stream`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        })
+        if (!res.ok || !res.body) {
+          pushLog(`Stream error: ${res.status} ${res.statusText}`, 'error')
+          return
+        }
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+          const parts = buf.split('\n\n')
+          buf = parts.pop() ?? ''
+          for (const part of parts) {
+            const dataLine = part.split('\n').find(l => l.startsWith('data: '))
+            if (!dataLine) continue
+            const raw = dataLine.slice(6)
+            let event: ScraperSSEEvent
+            try { event = JSON.parse(raw) } catch { continue }
+            handleSSEEvent(event, jobId, controller)
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          pushLog(`Stream disconnected: ${(err as Error).message}`, 'error')
+          setActiveStatus('failed')
+        }
       }
-    }
-    es.onerror = () => {
-      es.close()
-      esRef.current = null
+    })()
+  }
+
+  function handleSSEEvent(event: ScraperSSEEvent, _jobId: number, controller: AbortController) {
+    if (event.type === 'heartbeat') return
+
+    if (event.type === 'stage') {
+      setThinkingPreview(null)
+      const msg = event.message || `Stage: ${event.stage}`
+      const extra = event.seller_type ? ` → ${event.seller_type} seller` : ''
+      pushLog(msg + extra, 'info')
+
+    } else if (event.type === 'thinking') {
+      const e = event as { type: 'thinking'; attempt: number; chars_written: number; preview: string; done?: boolean }
+      setThinkingPreview(e.done ? null : `Writing script… ${e.chars_written} chars\n${e.preview}`)
+      if (e.done) pushLog(`Script written (${e.chars_written} chars)`, 'info')
+
+    } else if (event.type === 'running_script') {
+      const e = event as { type: 'running_script'; attempt: number; message: string }
+      pushLog(e.message, 'info')
+
+    } else if (event.type === 'rows_scraped') {
+      const e = event as { type: 'rows_scraped'; attempt: number; rows: number; products: number; shops: number }
+      setScrapedCount({ rows: e.rows, products: e.products, shops: e.shops })
+      pushLog(`Scraped ${e.products} products (${e.rows} variants) across ${e.shops} shop${e.shops !== 1 ? 's' : ''}`, 'success')
+
+    } else if (event.type === 'attempt_result') {
+      pushLog(`Attempt ${event.attempt} failed: ${event.errors.join(' | ')}`, 'warn')
+
+    } else if (event.type === 'sample_check') {
+      const r = event.result as { passed?: boolean; mismatch_reason?: string }
+      pushLog(r.passed ? '✓ Sample check: products verified against live page' : `⚠ Sample check failed: ${r.mismatch_reason}`, r.passed ? 'success' : 'warn')
+
+    } else if (event.type === 'script_ready') {
+      pushLog(`✓ Script validated on attempt ${event.attempt}`, 'success')
+
+    } else if (event.type === 'cannot_scrape') {
+      setThinkingPreview(null)
+      pushLog('✗ ' + event.message, 'error')
+      if (event.detail) pushLog(event.detail, 'error')
+      setCannotScrapeMsg((event.detail || event.message))
+      setActiveStatus('cannot_scrape')
+      controller.abort()
+
+    } else if (event.type === 'success') {
+      setThinkingPreview(null)
+      const r = event.report
+      pushLog(`✓ Ingested: ${r.shops_created} shops created, ${r.products_ingested} products, ${r.variants_ingested} variants`, 'success')
+      setReport(r)
+      setActiveStatus('success')
+      refreshJobs()
+      controller.abort()
+
+    } else if (event.type === 'error') {
+      setThinkingPreview(null)
+      pushLog(`✗ ${event.message}`, 'error')
+      setActiveStatus('failed')
+      refreshJobs()
+      controller.abort()
+
+    } else if (event.type === 'done') {
+      setActiveStatus(event.status as typeof activeStatus)
+      refreshJobs()
+      controller.abort()
     }
   }
 
@@ -700,12 +769,14 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
     setLog([])
     setReport(null)
     setCannotScrapeMsg(null)
+    setScrapedCount(null)
+    setThinkingPreview(null)
     setActiveStatus(null)
     try {
       const job = await api.startScraperJob(url.trim(), shopNameOverride.trim() || null, token)
       setActiveJobId(job.id)
       setActiveStatus('running')
-      pushLog(`Job #${job.id} started`, 'info')
+      pushLog(`Job #${job.id} started for ${url.trim()}`, 'info')
       connectSSE(job.id)
       setUrl('')
       setShopNameOverride('')
@@ -724,8 +795,10 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
       setLog([])
       setReport(null)
       setCannotScrapeMsg(null)
+      setScrapedCount(null)
+      setThinkingPreview(null)
       setActiveStatus('running')
-      pushLog(`Rerun started for job #${jobId}`, 'info')
+      pushLog(`Re-running saved script for job #${jobId}…`, 'info')
       connectSSE(jobId)
       refreshJobs()
     } catch (err: unknown) {
@@ -741,6 +814,7 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
     try {
       await api.deleteScraperJob(jobId, token)
       setJobs(prev => prev.filter(j => j.id !== jobId))
+      if (activeJobId === jobId) { setActiveJobId(null); setActiveStatus(null) }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Delete failed')
     } finally {
@@ -785,14 +859,32 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
       {/* Live progress panel */}
       {activeJobId !== null && (
         <section className={styles.scraperProgressSection}>
-          <h2 className={styles.sectionTitle}>
-            Job #{activeJobId} —{' '}
-            {activeStatus === 'running' ? 'Running…'
-              : activeStatus === 'success' ? '✓ Success'
-              : activeStatus === 'cannot_scrape' ? '⚠ Cannot Scrape'
-              : activeStatus === 'failed' ? '✗ Failed'
-              : 'Pending'}
-          </h2>
+          <div className={styles.scraperProgressHeader}>
+            <h2 className={styles.sectionTitle} style={{ margin: 0 }}>
+              Job #{activeJobId} —{' '}
+              {activeStatus === 'running' ? '⟳ Running…'
+                : activeStatus === 'success' ? '✓ Complete'
+                : activeStatus === 'cannot_scrape' ? '⚠ Cannot Scrape'
+                : activeStatus === 'failed' ? '✗ Failed'
+                : 'Pending'}
+            </h2>
+            {/* Live scraped count badge */}
+            {scrapedCount && (
+              <div className={styles.scrapedCountBadge}>
+                {scrapedCount.products} products · {scrapedCount.rows} variants · {scrapedCount.shops} shop{scrapedCount.shops !== 1 ? 's' : ''}
+              </div>
+            )}
+            {/* Re-run button in progress header */}
+            {activeStatus !== 'running' && activeJobId && jobs.find(j => j.id === activeJobId)?.script_id && (
+              <button
+                className={styles.rerunBtn}
+                onClick={() => handleRerun(activeJobId)}
+                disabled={rerunning === activeJobId}
+              >
+                {rerunning === activeJobId ? '…' : '↺ Re-run Script'}
+              </button>
+            )}
+          </div>
 
           <div className={styles.scraperLog}>
             {log.map((l, i) => (
@@ -801,16 +893,27 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
                 {l.text}
               </div>
             ))}
-            {activeStatus === 'running' && <div className={styles.scraperLogLine}>…</div>}
+            {/* Live thinking preview while Claude writes */}
+            {thinkingPreview && (
+              <div className={`${styles.scraperLogLine} ${styles.scraperLog_thinking}`}>
+                <span className={styles.scraperLogTime}>now</span>
+                <span className={styles.thinkingText}>{thinkingPreview}</span>
+              </div>
+            )}
+            {activeStatus === 'running' && !thinkingPreview && (
+              <div className={`${styles.scraperLogLine} ${styles.scraperLog_info}`}>
+                <span className={styles.scraperLogTime}></span>
+                <span className={styles.blinkDot}>●</span>
+              </div>
+            )}
+            <div ref={logEndRef} />
           </div>
 
           {/* Cannot scrape failure */}
           {cannotScrapeMsg && (
             <div className={styles.cannotScrapeBox}>
               <strong>I cannot build the correct scraping script to gather the necessary information from this site.</strong>
-              {cannotScrapeMsg.includes('\n') && (
-                <p className={styles.cannotScrapeDetail}>{cannotScrapeMsg.split('\n').slice(2).join('\n')}</p>
-              )}
+              <p className={styles.cannotScrapeDetail}>{cannotScrapeMsg}</p>
             </div>
           )}
 
@@ -824,26 +927,26 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
                 <span className={styles.sellerTypeBadge}>{report.seller_type} seller</span>
               </div>
               <div className={styles.reportStats}>
-                <span>{report.shops_created} shops created</span>
-                <span>{report.shops_updated} updated</span>
-                <span>{report.products_ingested} products</span>
-                <span>{report.products_updated} updated</span>
-                <span>{report.variants_ingested} variants</span>
-                <span>{report.attempts_used} attempt{report.attempts_used !== 1 ? 's' : ''}</span>
+                <span><strong>{report.shops_created}</strong> shops created</span>
+                {report.shops_updated > 0 && <span><strong>{report.shops_updated}</strong> shops updated</span>}
+                <span><strong>{report.products_ingested}</strong> products ingested</span>
+                {report.products_updated > 0 && <span><strong>{report.products_updated}</strong> products updated</span>}
+                <span><strong>{report.variants_ingested}</strong> variants</span>
+                <span>{report.attempts_used} attempt{report.attempts_used !== 1 ? 's' : ''} to build script</span>
               </div>
               {report.fields_missing.length > 0 && (
                 <div className={styles.reportWarning}>
-                  Optional fields not found: {report.fields_missing.join(', ')}
+                  Optional fields absent from all rows: {report.fields_missing.join(', ')}
                 </div>
               )}
               {report.errors.length > 0 && (
                 <div className={styles.reportWarning}>
-                  {report.errors.length} row error{report.errors.length !== 1 ? 's' : ''} during ingest
+                  {report.errors.length} row error{report.errors.length !== 1 ? 's' : ''} during ingest (data still saved where possible)
                 </div>
               )}
               {report.sample_products.length > 0 && (
                 <div className={styles.sampleProducts}>
-                  <div className={styles.sampleTitle}>Sample products</div>
+                  <div className={styles.sampleTitle}>Sample products ingested</div>
                   <div className={styles.sampleGrid}>
                     {report.sample_products.map((p, i) => (
                       <div key={i} className={styles.sampleCard}>
@@ -907,12 +1010,11 @@ function ScrapersPanel({ token, shops }: { token: string; shops: Shop[] }) {
                       <div style={{ display: 'flex', gap: '0.4rem' }}>
                         {job.script_id && (
                           <button
-                            className={styles.uploadBtn}
+                            className={styles.rerunBtn}
                             onClick={() => handleRerun(job.id)}
                             disabled={rerunning === job.id || job.status === 'running'}
-                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}
                           >
-                            {rerunning === job.id ? '…' : 'Re-run'}
+                            {rerunning === job.id ? '…' : '↺ Re-run'}
                           </button>
                         )}
                         <button

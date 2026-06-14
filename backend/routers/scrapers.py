@@ -305,10 +305,9 @@ async def _get_admin_from_token_param(token: str, db: AsyncSession) -> User:
 @router.get("/{job_id}/stream")
 async def stream_job(
     job_id: int,
-    token: str,
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
 ):
-    await _get_admin_from_token_param(token, db)
 
     async def generate():
         # Replay already-seen events first so the client gets full history on reconnect.

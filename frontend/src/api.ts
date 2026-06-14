@@ -598,6 +598,9 @@ export interface ScraperJobOut {
 
 export type ScraperSSEEvent =
   | { type: 'stage'; stage: string; message?: string; seller_type?: string }
+  | { type: 'thinking'; attempt: number; chars_written: number; preview: string; done?: boolean }
+  | { type: 'running_script'; attempt: number; message: string }
+  | { type: 'rows_scraped'; attempt: number; rows: number; products: number; shops: number }
   | { type: 'attempt_result'; attempt: number; errors: string[] }
   | { type: 'sample_check'; result: Record<string, unknown> }
   | { type: 'script_ready'; script_code: string; rows: Record<string, unknown>[]; attempt: number }

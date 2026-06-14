@@ -464,8 +464,10 @@ async def build_scraper(
             retry_context=retry_context,
         )
 
-        # Call Claude (non-streaming) to get the full script text.
-        response = client.messages.create(
+        # Call Claude with streaming so the frontend can show live progress.
+        full_text = ""
+        char_count = 0
+        with client.messages.stream(
             model=MODEL,
             max_tokens=8192,
             system=system_prompt,
@@ -478,12 +480,28 @@ async def build_scraper(
                     ),
                 }
             ],
-        )
-
-        full_text = ""
-        for block in response.content:
-            if getattr(block, "type", None) == "text":
-                full_text += block.text
+        ) as stream:
+            for chunk in stream.text_stream:
+                full_text += chunk
+                char_count += len(chunk)
+                # Emit a thinking chunk every ~200 chars so the UI feels live
+                # without flooding the SSE channel.
+                if char_count >= 200:
+                    yield {
+                        "type": "thinking",
+                        "attempt": attempt,
+                        "chars_written": len(full_text),
+                        "preview": full_text[-120:],
+                    }
+                    char_count = 0
+        # Final thinking event with total char count
+        yield {
+            "type": "thinking",
+            "attempt": attempt,
+            "chars_written": len(full_text),
+            "preview": full_text[-120:],
+            "done": True,
+        }
 
         script_code = _extract_python(full_text)
 
@@ -506,6 +524,7 @@ async def build_scraper(
             continue
 
         # Run the script.
+        yield {"type": "running_script", "attempt": attempt, "message": "Running script in sandbox..."}
         stdout, stderr = _run_script(script_code)
         prev_stdout = stdout
 
@@ -526,6 +545,16 @@ async def build_scraper(
                     )
                 else:
                     rows = parsed
+                    # Emit live count so UI can show progress immediately
+                    unique_products = len({r.get("product_handle") for r in rows if r.get("product_handle")})
+                    unique_shops = len({r.get("shop_name") for r in rows if r.get("shop_name")})
+                    yield {
+                        "type": "rows_scraped",
+                        "attempt": attempt,
+                        "rows": len(rows),
+                        "products": unique_products,
+                        "shops": unique_shops,
+                    }
             except json.JSONDecodeError as exc:
                 parse_errors.append(f"Script output is not valid JSON: {exc}")
 
