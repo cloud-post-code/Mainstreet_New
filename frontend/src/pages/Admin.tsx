@@ -64,8 +64,9 @@ export default function Admin() {
     if (!token || embeddingRunning) return
     setEmbeddingRunning(true)
     setEmbeddingProgress({ done: 0, total: 0, errors: 0, elapsed_s: 0 })
+    const apiBase = (import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app')
     try {
-      const resp = await fetch('/api/admin/generate-embeddings', {
+      const resp = await fetch(`${apiBase}/api/admin/generate-embeddings`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -77,7 +78,7 @@ export default function Admin() {
       // Poll for progress every 1.5s
       const poll = async () => {
         try {
-          const r = await fetch('/api/admin/generate-embeddings/status', {
+          const r = await fetch(`${apiBase}/api/admin/generate-embeddings/status`, {
             headers: { Authorization: `Bearer ${token}` },
           })
           if (!r.ok) return
