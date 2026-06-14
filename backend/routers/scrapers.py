@@ -382,7 +382,7 @@ async def rerun_scraper_job(
     return ScraperJobOut.model_validate(refreshed)
 
 
-@router.delete("/{job_id}", status_code=204)
+@router.delete("/{job_id}", status_code=204, response_model=None)
 async def delete_scraper_job(
     job_id: int,
     db: AsyncSession = Depends(get_db),
