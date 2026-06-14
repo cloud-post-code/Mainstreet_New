@@ -3,7 +3,7 @@ import io
 import json
 import uuid
 from decimal import Decimal, InvalidOperation
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -586,16 +586,16 @@ _embedding_job: dict = {"running": False, "done": 0, "total": 0, "errors": 0, "e
 
 @router.post("/generate-embeddings", status_code=202)
 async def generate_embeddings(
-    background_tasks: BackgroundTasks,
     _: User = Depends(get_admin_user),
 ):
     """Start background embedding job. Poll /generate-embeddings/status for progress."""
+    import asyncio
     global _embedding_job
     if _embedding_job["running"]:
         return _embedding_job
 
     _embedding_job = {"running": True, "done": 0, "total": 0, "errors": 0, "elapsed_s": 0.0, "finished": False, "error_msg": ""}
-    background_tasks.add_task(_run_embedding_job)
+    asyncio.create_task(_run_embedding_job())
     return _embedding_job
 
 
@@ -652,6 +652,8 @@ async def _run_embedding_job():
 
     except Exception as exc:
         _embedding_job["error_msg"] = str(exc)
+        import logging
+        logging.getLogger(__name__).error("Embedding job failed: %s", exc, exc_info=True)
     finally:
         _embedding_job["running"] = False
         _embedding_job["finished"] = True
