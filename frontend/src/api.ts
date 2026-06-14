@@ -386,7 +386,9 @@ export const api = {
     ),
 
   adminStats: (token: string) => request<AdminStats>('/api/admin/stats', {}, token),
-  adminShops: (token: string) => request<Shop[]>('/api/admin/shops', {}, token),
+  adminShops: (token: string) => request<Shop[]>('/api/admin/shops?limit=2000', {}, token),
+  searchShops: (q: string, token: string) =>
+    request<Shop[]>(`/api/admin/shops/search?q=${encodeURIComponent(q)}&limit=5`, {}, token),
   createShop: (
     body: { name: string; logo_url?: string; description?: string; website_url?: string },
     token: string,

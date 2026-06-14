@@ -496,10 +496,11 @@ export default function Admin() {
       {tab === 'products' && (
         <>
           <div className={styles.filterBar}>
-            <select className={styles.select} value={selectedShop ?? ''} onChange={e => setSelectedShop(e.target.value ? Number(e.target.value) : undefined)}>
-              <option value="">All shops</option>
-              {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <ShopSearchCombobox
+              token={token!}
+              value={selectedShop}
+              onChange={(id) => { setSelectedShop(id); setProductOffset(0) }}
+            />
             <form
               onSubmit={e => { e.preventDefault(); setProductSearch(productSearchInput.trim()) }}
               style={{ display: 'flex', gap: '0.5rem', flex: 1 }}
@@ -878,6 +879,102 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+// ── Shop Search Combobox ──────────────────────────────────────────────────
+
+function ShopSearchCombobox({
+  token,
+  value,
+  onChange,
+}: {
+  token: string
+  value: number | undefined
+  onChange: (id: number | undefined, name: string) => void
+}) {
+  const [input, setInput] = useState('')
+  const [suggestions, setSuggestions] = useState<Shop[]>([])
+  const [open, setOpen] = useState(false)
+  const [selectedName, setSelectedName] = useState('')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Clear display name when value cleared externally
+  useEffect(() => {
+    if (value === undefined) { setInput(''); setSelectedName('') }
+  }, [value])
+
+  function handleInput(v: string) {
+    setInput(v)
+    setOpen(true)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchShops(v, token)
+        setSuggestions(results)
+      } catch { setSuggestions([]) }
+    }, 180)
+  }
+
+  function handleSelect(shop: Shop) {
+    setInput(shop.name)
+    setSelectedName(shop.name)
+    setSuggestions([])
+    setOpen(false)
+    onChange(shop.id, shop.name)
+  }
+
+  function handleClear() {
+    setInput('')
+    setSelectedName('')
+    setSuggestions([])
+    onChange(undefined, '')
+  }
+
+  return (
+    <div ref={wrapRef} className={styles.shopSearchWrap}>
+      <div className={styles.shopSearchInputWrap}>
+        <input
+          className={styles.input}
+          placeholder="Search shops…"
+          value={input}
+          onChange={e => handleInput(e.target.value)}
+          onFocus={() => { setOpen(true); handleInput(input) }}
+          autoComplete="off"
+        />
+        {(input || value) && (
+          <button type="button" className={styles.shopSearchClear} onClick={handleClear}>✕</button>
+        )}
+      </div>
+      {open && suggestions.length > 0 && (
+        <div className={styles.shopSearchDropdown}>
+          {suggestions.map(s => (
+            <div
+              key={s.id}
+              className={`${styles.shopSearchItem} ${s.id === value ? styles.shopSearchItemActive : ''}`}
+              onMouseDown={() => handleSelect(s)}
+            >
+              <span className={styles.shopSearchName}>{s.name}</span>
+              {s.product_count != null && (
+                <span className={styles.shopSearchCount}>{s.product_count}p</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

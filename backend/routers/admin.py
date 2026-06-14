@@ -426,15 +426,43 @@ async def export_shops_csv(
     return _csv_response(output.getvalue(), "shops.csv")
 
 
+@router.get("/shops/search", response_model=list[ShopOut])
+async def search_shops(
+    q: str = "",
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Return up to `limit` shops whose name contains `q` (case-insensitive)."""
+    from sqlalchemy import func
+    limit = max(1, min(limit, 20))
+    stmt = (
+        select(Shop, func.count(Product.id).label("product_count"))
+        .outerjoin(Product, Product.shop_id == Shop.id)
+        .group_by(Shop.id)
+        .order_by(Shop.name)
+        .limit(limit)
+    )
+    if q.strip():
+        stmt = stmt.where(Shop.name.ilike(f"%{q.strip()}%"))
+    result = await db.execute(stmt)
+    shops = []
+    for shop, count in result.all():
+        out = ShopOut.model_validate(shop)
+        out.product_count = count
+        shops.append(out)
+    return shops
+
+
 @router.get("/shops", response_model=list[ShopOut])
 async def admin_list_shops(
-    limit: int = 200,
+    limit: int = 2000,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
     from sqlalchemy import func
-    limit = max(1, min(limit, 500))
+    limit = max(1, min(limit, 2000))
     offset = max(0, offset)
     result = await db.execute(
         select(Shop, func.count(Product.id).label("product_count"))

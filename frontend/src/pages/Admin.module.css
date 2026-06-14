@@ -985,3 +985,75 @@
   color: #5fd87e;
   animation: blink 1.2s ease-in-out infinite;
 }
+
+/* ── Shop search combobox ─────────────────────────────────────────────── */
+.shopSearchWrap {
+  position: relative;
+  min-width: 220px;
+  flex-shrink: 0;
+}
+
+.shopSearchInputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.shopSearchInputWrap .input {
+  width: 100%;
+  padding-right: 2rem;
+}
+
+.shopSearchClear {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 0.75rem;
+  padding: 0.2rem;
+  line-height: 1;
+}
+.shopSearchClear:hover { color: #333; }
+
+.shopSearchDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid rgba(1,82,55,0.2);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.shopSearchItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.1s;
+}
+.shopSearchItem:hover { background: rgba(1,82,55,0.06); }
+.shopSearchItemActive { background: rgba(1,82,55,0.1); font-weight: 600; }
+
+.shopSearchName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1a1a1a;
+}
+
+.shopSearchCount {
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  color: #888;
+  font-family: var(--font-heading);
+}
