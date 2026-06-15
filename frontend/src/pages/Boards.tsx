@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { api, Board, BoardDetail, BoardNote, MasonSavedProduct } from '../api'
+import { Board, BoardNote, MasonSavedProduct } from '../api'
 import { useAuth } from '../hooks/useAuth'
+import { useBoardsState } from '../mason/useBoardsState'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import { formatCurrency } from '../lib/format'
 import styles from './Boards.module.css'
@@ -12,42 +12,34 @@ export default function Boards() {
   return <BoardsInner token={token} />
 }
 
-type BoardTab = 'notes' | 'saved'
-
 function BoardsInner({ token }: { token: string }) {
   const memory = useMasonMemory(token)
-  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null)
-  const [boardDetail, setBoardDetail] = useState<BoardDetail | null>(null)
-  const [boardTab, setBoardTab] = useState<BoardTab>('saved')
-  const [showAddBoard, setShowAddBoard] = useState(false)
-  const [newBoardName, setNewBoardName] = useState('')
-  const [newBoardDesc, setNewBoardDesc] = useState('')
-  const [addingBoard, setAddingBoard] = useState(false)
-  const [newNoteText, setNewNoteText] = useState('')
-  const [addingNote, setAddingNote] = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [uploadingCover, setUploadingCover] = useState(false)
-  const coverInputRef = useRef<HTMLInputElement>(null)
+  const {
+    selectedBoardId, setSelectedBoardId,
+    boardDetail, setBoardDetail,
+    boardTab, setBoardTab,
+    showAddBoard, setShowAddBoard,
+    newBoardName, setNewBoardName,
+    newBoardDesc, setNewBoardDesc,
+    newBoardImagePreview,
+    addingBoard,
+    newBoardImageRef,
+    newNoteText, setNewNoteText,
+    addingNote,
+    detailLoading,
+    uploadingCover,
+    coverInputRef,
+    handleAddBoard,
+    handleNewBoardImageChange,
+    handleDeleteBoard,
+    handleCoverUpload,
+    handleAddNote,
+    handleDeleteNote,
+    handleRemoveProduct,
+    resetNewBoardForm,
+  } = useBoardsState(memory, token)
 
-  const loadBoardDetail = useCallback(async (id: number) => {
-    setDetailLoading(true)
-    try {
-      const detail = await api.getBoard(id, token)
-      setBoardDetail(detail)
-    } catch (e) {
-      console.error('[Boards] load board detail failed', e)
-    } finally {
-      setDetailLoading(false)
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (selectedBoardId != null) {
-      loadBoardDetail(selectedBoardId)
-    } else {
-      setBoardDetail(null)
-    }
-  }, [selectedBoardId, loadBoardDetail])
+  const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
 
   const handleOpenBoard = (id: number) => {
     setSelectedBoardId(id)
@@ -58,73 +50,6 @@ function BoardsInner({ token }: { token: string }) {
     setSelectedBoardId(null)
     setBoardDetail(null)
   }
-
-  const handleAddBoard = async () => {
-    const name = newBoardName.trim()
-    if (!name) return
-    setAddingBoard(true)
-    try {
-      await memory.createBoard(name, newBoardDesc.trim() || undefined)
-      setNewBoardName('')
-      setNewBoardDesc('')
-      setShowAddBoard(false)
-    } catch (e) {
-      console.error('[Boards] create board failed', e)
-    } finally {
-      setAddingBoard(false)
-    }
-  }
-
-  const handleDeleteBoard = async (id: number) => {
-    if (!confirm('Delete this board and all its items?')) return
-    await memory.deleteBoard(id)
-    if (selectedBoardId === id) setSelectedBoardId(null)
-  }
-
-  const handleRemoveProduct = async (productId: number) => {
-    if (!selectedBoardId || !boardDetail) return
-    await memory.removeProductFromBoard(selectedBoardId, productId)
-    setBoardDetail(prev => prev ? { ...prev, products: prev.products.filter(p => p.product_id !== productId) } : prev)
-  }
-
-  const handleAddNote = async () => {
-    const text = newNoteText.trim()
-    if (!text || !selectedBoardId) return
-    setAddingNote(true)
-    try {
-      const note = await memory.addNoteToBoard(selectedBoardId, text)
-      setBoardDetail(prev => prev ? { ...prev, notes: [...prev.notes, note] } : prev)
-      setNewNoteText('')
-    } catch (e) {
-      console.error('[Boards] add note failed', e)
-    } finally {
-      setAddingNote(false)
-    }
-  }
-
-  const handleDeleteNote = async (noteId: number) => {
-    if (!selectedBoardId) return
-    await memory.deleteBoardNote(selectedBoardId, noteId)
-    setBoardDetail(prev => prev ? { ...prev, notes: prev.notes.filter(n => n.id !== noteId) } : prev)
-  }
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !selectedBoardId) return
-    setUploadingCover(true)
-    try {
-      const result = await api.uploadBoardCover(selectedBoardId, file, token)
-      memory.refresh()
-      setBoardDetail(prev => prev ? { ...prev, cover_image_url: result.cover_image_url } : prev)
-    } catch (e) {
-      console.error('[Boards] cover upload failed', e)
-    } finally {
-      setUploadingCover(false)
-      if (coverInputRef.current) coverInputRef.current.value = ''
-    }
-  }
-
-  const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
 
   // Board detail view
   if (selectedBoard) {
@@ -240,11 +165,41 @@ function BoardsInner({ token }: { token: string }) {
             onChange={e => setNewBoardDesc(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
           />
+          <div
+            className={styles.newBoardImagePicker}
+            onClick={() => newBoardImageRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && newBoardImageRef.current?.click()}
+          >
+            {newBoardImagePreview ? (
+              <img src={newBoardImagePreview} alt="Cover preview" className={styles.newBoardImagePreview} />
+            ) : (
+              <span className={styles.newBoardImageLabel}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                Add cover photo
+              </span>
+            )}
+            {newBoardImagePreview && (
+              <span className={styles.newBoardImageChange}>Change</span>
+            )}
+          </div>
+          <input
+            ref={newBoardImageRef}
+            type="file"
+            accept="image/*"
+            className={styles.coverInput}
+            onChange={handleNewBoardImageChange}
+          />
           <div className={styles.addFormActions}>
             <button className={styles.saveBtn} onClick={handleAddBoard} disabled={addingBoard || !newBoardName.trim()}>
               {addingBoard ? 'Creating…' : 'Create Board'}
             </button>
-            <button className={styles.cancelBtn} onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc('') }}>
+            <button className={styles.cancelBtn} onClick={resetNewBoardForm}>
               Cancel
             </button>
           </div>

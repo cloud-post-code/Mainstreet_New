@@ -149,6 +149,20 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.defaultBadge {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: #6b7f5e;
+  background: #e8f0e4;
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .rowDesc {
@@ -285,6 +299,57 @@
 
 .removeBtn:hover {
   color: #c0392b;
+}
+
+.newBoardImagePicker {
+  position: relative;
+  width: 100%;
+  height: 90px;
+  border-radius: 8px;
+  border: 1.5px dashed #d9cebd;
+  background: #faf5e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 120ms, background 120ms;
+}
+
+.newBoardImagePicker:hover {
+  border-color: #015237;
+  background: #f4edd8;
+}
+
+.newBoardImageLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #999;
+  pointer-events: none;
+}
+
+.newBoardImagePreview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.newBoardImageChange {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
 }
 
 .addRow {

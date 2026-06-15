@@ -16,9 +16,9 @@ import anthropic
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.memory import add_note, list_notes, load_short_term
+from agent.memory import add_note_to_board, get_or_create_default_board, load_short_term
 from config import settings
-from db.models import AgentSession, UserMemory
+from db.models import AgentSession, BoardNote, UserMemory
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +131,11 @@ async def _run_goal_update(
     if not history:
         return
 
-    existing = await list_notes(user_id, db)
-    existing_text = "\n".join(f"- {n['text']}" for n in existing) or "(none)"
+    default_board = await get_or_create_default_board(user_id, db)
+    existing_notes_rows = (await db.execute(
+        select(BoardNote).where(BoardNote.board_id == default_board["id"]).order_by(BoardNote.created_at.desc()).limit(50)
+    )).scalars().all()
+    existing_text = "\n".join(f"- {n.text}" for n in existing_notes_rows) or "(none)"
     conversation_text = _format_conversation(history)
 
     prompt = GOAL_UPDATER_PROMPT.format(
@@ -170,7 +173,7 @@ async def _run_goal_update(
     for note_text in notes:
         if isinstance(note_text, str) and note_text.strip():
             try:
-                await add_note(user_id, note_text.strip(), db)
+                await add_note_to_board(user_id, None, note_text.strip(), db)
                 saved_count += 1
             except Exception:
                 logger.warning("goal_updater: failed to save note for user %s", user_id, exc_info=True)

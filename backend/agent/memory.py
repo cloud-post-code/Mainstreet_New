@@ -135,13 +135,12 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     )
     memories = result.scalars().all()
 
-    notes: list[str] = []
     legacy_prefs: dict[str, str] = {}
     other: list[tuple[str, str]] = []
     for m in memories:
         v = str(m.value if not isinstance(m.value, dict) else m.value)[:MAX_MEMORY_VALUE_CHARS]
         if m.key.startswith(NOTE_KEY_PREFIX):
-            notes.append(_note_text(m.value)[:MAX_MEMORY_VALUE_CHARS])
+            pass  # legacy notes are now stored as BoardNote rows on "My Board"
         elif m.key in LEGACY_PREF_KEYS:
             legacy_prefs[m.key.split(":", 1)[1]] = v
         else:
@@ -152,7 +151,7 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
 
     boards = await list_boards(user_id, db)
 
-    if not notes and not pref_block and not legacy_prefs and not boards and not other:
+    if not pref_block and not legacy_prefs and not boards and not other:
         return ""
 
     sections: list[str] = []
@@ -175,11 +174,6 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
                     board_lines.append(f"  - #{p['product_id']} {p['name']} ({p['shop_name'] or 'unknown shop'})")
         sections.append("### Boards\n" + "\n".join(board_lines))
 
-    if notes:
-        sections.append(
-            "### Notes about the user\n"
-            + "\n".join(f"- {n}" for n in notes)
-        )
     if pref_block:
         sections.append("### Preferences\n" + pref_block)
     if legacy_prefs:
@@ -192,76 +186,6 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     body = "\n\n".join(sections)
     # User-controlled content — wrap so the model treats it as data, not instructions.
     return "## What Mason remembers about this user\n" + wrap_untrusted(body, label="user_memory")
-
-
-# ── Notes ───────────────────────────────────────────────────────────────────
-
-async def list_notes(user_id: int, db: AsyncSession) -> list[dict]:
-    """Return notes for the UI sorted newest-first."""
-    result = await db.execute(
-        select(UserMemory)
-        .where(UserMemory.user_id == user_id, UserMemory.key.like(f"{NOTE_KEY_PREFIX}%"))
-        .order_by(UserMemory.created_at.desc())
-    )
-    out = []
-    for m in result.scalars().all():
-        out.append({
-            "key": m.key,
-            "text": _note_text(m.value),
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        })
-    return out
-
-
-async def add_note(user_id: int, text: str, db: AsyncSession) -> dict:
-    """Insert a new note. Returns the created row dict."""
-    text = (text or "").strip()[:MAX_NOTE_CHARS]
-    if not text:
-        raise ValueError("empty note")
-
-    # Skip silent duplicates so Mason re-saving the same fact doesn't pile up.
-    # Match the JSON `text` field directly in SQL instead of scanning every note row.
-    existing = await db.execute(
-        select(UserMemory).where(
-            UserMemory.user_id == user_id,
-            UserMemory.key.like(f"{NOTE_KEY_PREFIX}%"),
-            func.lower(func.trim(UserMemory.value["text"].astext)) == text.lower(),
-        ).limit(1)
-    )
-    row = existing.scalars().first()
-    if row:
-        return {
-            "key": row.key,
-            "text": _note_text(row.value),
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        }
-
-    await _evict_if_full(user_id, db)
-    key = f"{NOTE_KEY_PREFIX}{uuid.uuid4().hex}"
-    value = {"text": text, "created_at": datetime.now(timezone.utc).isoformat()}
-    row = UserMemory(user_id=user_id, key=key, value=value)
-    db.add(row)
-    await db.flush()
-    await db.refresh(row)
-    return {
-        "key": row.key,
-        "text": text,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-    }
-
-
-async def delete_note(user_id: int, key: str, db: AsyncSession) -> bool:
-    if not key.startswith(NOTE_KEY_PREFIX):
-        return False
-    result = await db.execute(
-        select(UserMemory).where(UserMemory.user_id == user_id, UserMemory.key == key)
-    )
-    row = result.scalars().first()
-    if not row:
-        return False
-    await db.delete(row)
-    await db.flush()
-    return True
 
 
 # ── Structured preferences (user_preferences table) ─────────────────────────
@@ -418,6 +342,13 @@ async def _backfill_legacy_prefs(user_id: int, db: AsyncSession) -> UserPreferen
 def _format_prefs_for_prompt(p: dict) -> str:
     """Render structured prefs as a compact prose block for Mason's prompt."""
     lines: list[str] = []
+
+    # Prose lifestyle profile composed from image selections — show first if present
+    ls_top = p.get("lifestyle") or {}
+    profile_text = ls_top.get("profile_text", "")
+    if profile_text:
+        lines.append(f"Profile: {profile_text}")
+
     sizes = p.get("sizes") or {}
     if sizes:
         bits = []
@@ -611,6 +542,7 @@ async def list_boards(user_id: int, db: AsyncSession) -> list[dict]:
             "name": b.name,
             "description": b.description,
             "cover_image_url": b.cover_image_url,
+            "is_default": b.is_default,
             "note_count": note_count,
             "product_count": product_count,
             "created_at": b.created_at.isoformat() if b.created_at else None,
@@ -674,6 +606,7 @@ async def get_board(user_id: int, board_id: int, db: AsyncSession) -> dict | Non
         "name": board.name,
         "description": board.description,
         "cover_image_url": board.cover_image_url,
+        "is_default": board.is_default,
         "notes": notes,
         "products": products,
         "created_at": board.created_at.isoformat() if board.created_at else None,
@@ -686,6 +619,10 @@ async def create_board(user_id: int, name: str, description: str | None, db: Asy
     name = (name or "").strip()[:200]
     if not name:
         raise ValueError("board name required")
+
+    # Redirect to the protected default board rather than creating a duplicate
+    if name.lower() == "my board":
+        return await get_or_create_default_board(user_id, db)
 
     count = (await db.execute(
         select(func.count(Board.id)).where(Board.user_id == user_id)
@@ -702,6 +639,7 @@ async def create_board(user_id: int, name: str, description: str | None, db: Asy
             "name": existing.name,
             "description": existing.description,
             "cover_image_url": existing.cover_image_url,
+            "is_default": existing.is_default,
             "note_count": 0,
             "product_count": 0,
             "created_at": existing.created_at.isoformat() if existing.created_at else None,
@@ -717,6 +655,7 @@ async def create_board(user_id: int, name: str, description: str | None, db: Asy
         "name": board.name,
         "description": board.description,
         "cover_image_url": board.cover_image_url,
+        "is_default": board.is_default,
         "note_count": 0,
         "product_count": 0,
         "created_at": board.created_at.isoformat() if board.created_at else None,
@@ -733,7 +672,10 @@ async def update_board(user_id: int, board_id: int, patch: dict, db: AsyncSessio
     if not board:
         return None
     if "name" in patch and patch["name"]:
-        board.name = str(patch["name"]).strip()[:200]
+        new_name = str(patch["name"]).strip()
+        if board.is_default and new_name.lower() != "my board":
+            raise ValueError("cannot rename 'My Board'")
+        board.name = new_name[:200]
     if "description" in patch:
         board.description = patch["description"]
     if "cover_image_url" in patch:
@@ -751,6 +693,7 @@ async def update_board(user_id: int, board_id: int, patch: dict, db: AsyncSessio
         "name": board.name,
         "description": board.description,
         "cover_image_url": board.cover_image_url,
+        "is_default": board.is_default,
         "note_count": note_count,
         "product_count": product_count,
         "created_at": board.created_at.isoformat() if board.created_at else None,
@@ -765,6 +708,8 @@ async def delete_board(user_id: int, board_id: int, db: AsyncSession) -> bool:
     board = result.scalars().first()
     if not board:
         return False
+    if board.is_default:
+        raise ValueError("cannot delete the default 'My Board'")
     await db.delete(board)
     await db.flush()
     return True
@@ -809,7 +754,10 @@ async def remove_product_from_board(user_id: int, board_id: int, product_id: int
     return True
 
 
-async def add_note_to_board(user_id: int, board_id: int, text: str, db: AsyncSession) -> dict:
+async def add_note_to_board(user_id: int, board_id: int | None, text: str, db: AsyncSession) -> dict:
+    if board_id is None:
+        default = await get_or_create_default_board(user_id, db)
+        board_id = default["id"]
     board = (await db.execute(
         select(Board).where(Board.id == board_id, Board.user_id == user_id)
     )).scalars().first()
@@ -855,12 +803,30 @@ async def delete_board_note(user_id: int, board_id: int, note_id: int, db: Async
 
 
 async def get_or_create_default_board(user_id: int, db: AsyncSession) -> dict:
-    """Return the user's first board, creating a 'Saved' board (with migration) if none exist."""
-    boards = await list_boards(user_id, db)
-    if boards:
-        return boards[0]
+    """Return the user's is_default board, creating 'My Board' (with migration) if none exist."""
+    existing_default = (await db.execute(
+        select(Board).where(Board.user_id == user_id, Board.is_default == True)  # noqa: E712
+    )).scalars().first()
+    if existing_default:
+        note_count = (await db.execute(
+            select(func.count(BoardNote.id)).where(BoardNote.board_id == existing_default.id)
+        )).scalar() or 0
+        product_count = (await db.execute(
+            select(func.count(BoardProduct.id)).where(BoardProduct.board_id == existing_default.id)
+        )).scalar() or 0
+        return {
+            "id": existing_default.id,
+            "name": existing_default.name,
+            "description": existing_default.description,
+            "cover_image_url": existing_default.cover_image_url,
+            "is_default": True,
+            "note_count": note_count,
+            "product_count": product_count,
+            "created_at": existing_default.created_at.isoformat() if existing_default.created_at else None,
+            "updated_at": existing_default.updated_at.isoformat() if existing_default.updated_at else None,
+        }
 
-    board = Board(user_id=user_id, name="Saved", description="Your saved items")
+    board = Board(user_id=user_id, name="My Board", description="Your saved items", is_default=True)
     db.add(board)
     await db.flush()
     await db.refresh(board)
@@ -874,7 +840,7 @@ async def get_or_create_default_board(user_id: int, db: AsyncSession) -> dict:
     if existing_saved:
         await db.flush()
 
-    # Migrate existing UserMemory note rows
+    # Migrate existing UserMemory note rows into My Board
     existing_notes = (await db.execute(
         select(UserMemory).where(
             UserMemory.user_id == user_id,
@@ -893,6 +859,7 @@ async def get_or_create_default_board(user_id: int, db: AsyncSession) -> dict:
         "name": board.name,
         "description": board.description,
         "cover_image_url": board.cover_image_url,
+        "is_default": True,
         "note_count": len(existing_notes),
         "product_count": len(existing_saved),
         "created_at": board.created_at.isoformat() if board.created_at else None,

@@ -100,13 +100,12 @@ export interface InboxMessage { id: number; user_id: number; session_id: number 
 export interface PlanStep { step: number; description: string; done: boolean }
 export interface Plan { id: number; session_id: number; steps: PlanStep[]; updated_at: string }
 
-export interface MasonNote { key: string; text: string; created_at: string | null }
-
 export interface Board {
   id: number
   name: string
   description: string | null
   cover_image_url: string | null
+  is_default: boolean
   note_count: number
   product_count: number
   created_at: string | null
@@ -185,6 +184,22 @@ export interface MasonLifestyle {
   vibe_notes?: string
   likes_notes?: string
   dislikes_notes?: string
+  // ── selections for onboarding steps ──
+  shopping_vibe_selections?: string[]
+  shopping_vibe_notes?: string
+  price_vibe_selections?: string[]
+  price_vibe_notes?: string
+  homeowner_selection?: string
+  homeowner_notes?: string
+  travel_selections?: string[]
+  travel_notes?: string
+  pets_selections?: string[]
+  gifting_selections?: string[]
+  gifting_notes?: string
+  budget_selection?: string
+  budget_notes?: string
+  // ── composed prose profile (what Mason reads first) ──
+  profile_text?: string
 }
 export interface MasonPrefs {
   sizes: MasonSizes
@@ -503,13 +518,6 @@ export const api = {
     request<BoardNote>(`/api/mason/boards/${boardId}/notes`, { method: 'POST', body: JSON.stringify({ text }) }, token),
   deleteBoardNote: (boardId: number, noteId: number, token: string) =>
     request<void>(`/api/mason/boards/${boardId}/notes/${noteId}`, { method: 'DELETE' }, token),
-
-  getMasonNotes: (token: string) =>
-    request<MasonNote[]>('/api/mason/notes', {}, token),
-  addMasonNote: (text: string, token: string) =>
-    request<MasonNote>('/api/mason/notes', { method: 'POST', body: JSON.stringify({ text }) }, token),
-  deleteMasonNote: (key: string, token: string) =>
-    request<void>(`/api/mason/notes/${encodeURIComponent(key)}`, { method: 'DELETE' }, token),
 
   getMasonPrefs: (token: string) =>
     request<MasonPrefs>('/api/mason/prefs', {}, token),

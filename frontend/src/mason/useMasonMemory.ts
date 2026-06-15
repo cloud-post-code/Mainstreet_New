@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, Board, BoardNote, InboxMessage, MasonNote, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
+import { api, Board, BoardNote, InboxMessage, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
 
 const EMPTY_SHIPPING: ShippingAddress = {
   name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
@@ -19,15 +19,12 @@ const EMPTY_PREFS: MasonPrefs = {
 }
 
 export interface MasonMemory {
-  notes: MasonNote[]
   prefs: MasonPrefs
   savedProducts: MasonSavedProduct[]
   boards: Board[]
   inbox: InboxMessage[]
   shipping: ShippingAddress
   loading: boolean
-  addNote: (text: string) => Promise<void>
-  removeNote: (key: string) => Promise<void>
   patchPrefs: (patch: MasonPrefsPatch) => void
   saveShipping: (patch: ShippingAddressPatch) => Promise<void>
   saveProduct: (product: MasonSavedProduct | { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => Promise<void>
@@ -44,11 +41,10 @@ export interface MasonMemory {
 
 const JSONB_KEYS: Array<keyof MasonPrefs> = ['sizes', 'gift_budget', 'lifestyle']
 
-// One hook that owns the three Mason memory resources. Gated on token —
+// One hook that owns the Mason memory resources. Gated on token —
 // signed-out users get empty data and a no-op refresh so the panel can
 // fall back to a sign-in prompt without crashing.
 export function useMasonMemory(token: string | null): MasonMemory {
-  const [notes, setNotes] = useState<MasonNote[]>([])
   const [prefs, setPrefs] = useState<MasonPrefs>(EMPTY_PREFS)
   const [savedProducts, setSavedProducts] = useState<MasonSavedProduct[]>([])
   const [boards, setBoards] = useState<Board[]>([])
@@ -58,20 +54,19 @@ export function useMasonMemory(token: string | null): MasonMemory {
 
   const refresh = useCallback(async () => {
     if (!token) {
-      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([]); setBoards([]); setInbox([]); setShipping(EMPTY_SHIPPING)
+      setPrefs(EMPTY_PREFS); setSavedProducts([]); setBoards([]); setInbox([]); setShipping(EMPTY_SHIPPING)
       return
     }
     setLoading(true)
     try {
-      const [n, p, s, b, i, sh] = await Promise.all([
-        api.getMasonNotes(token),
+      const [p, s, b, i, sh] = await Promise.all([
         api.getMasonPrefs(token),
         api.getMasonSavedProducts(token),
         api.getBoards(token).catch(() => [] as Board[]),
         api.getInbox(token).catch(() => [] as InboxMessage[]),
         api.getMasonShipping(token).catch(() => EMPTY_SHIPPING),
       ])
-      setNotes(n); setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setBoards(b); setInbox(i); setShipping({ ...EMPTY_SHIPPING, ...sh })
+      setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setBoards(b); setInbox(i); setShipping({ ...EMPTY_SHIPPING, ...sh })
     } catch (e) {
       console.error('[useMasonMemory] refresh failed', e)
     } finally {
@@ -101,20 +96,6 @@ export function useMasonMemory(token: string | null): MasonMemory {
   }, [token])
 
   useEffect(() => { refresh() }, [refresh])
-
-  const addNote = useCallback(async (text: string) => {
-    if (!token) return
-    const t = text.trim()
-    if (!t) return
-    const note = await api.addMasonNote(t, token)
-    setNotes(prev => [note, ...prev.filter(n => n.key !== note.key)])
-  }, [token])
-
-  const removeNote = useCallback(async (key: string) => {
-    if (!token) return
-    await api.deleteMasonNote(key, token)
-    setNotes(prev => prev.filter(n => n.key !== key))
-  }, [token])
 
   // Pref edits are debounced so rapid slider drags / chip adds don't hit the
   // API on every event. Patches accumulate; JSONB keys are shallow-merged so
@@ -230,5 +211,5 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setBoards(prev => prev.map(b => b.id === boardId ? { ...b, note_count: Math.max(0, b.note_count - 1) } : b))
   }, [token])
 
-  return { notes, prefs, savedProducts, boards, inbox, shipping, loading, addNote, removeNote, patchPrefs, saveShipping, saveProduct, unsaveProduct, createBoard, deleteBoard, addProductToBoard, removeProductFromBoard, addNoteToBoard, deleteBoardNote, refresh, refreshInbox }
+  return { prefs, savedProducts, boards, inbox, shipping, loading, patchPrefs, saveShipping, saveProduct, unsaveProduct, createBoard, deleteBoard, addProductToBoard, removeProductFromBoard, addNoteToBoard, deleteBoardNote, refresh, refreshInbox }
 }

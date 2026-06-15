@@ -1,10 +1,4 @@
-"""REST endpoints powering Mason's Notes / Prefs / Saved tabs.
-
-All endpoints require an authenticated user. Storage lives in `user_memory`
-(notes + prefs) and `saved_products` (saved items). The agent reads the same
-data on each turn via `agent.memory.load_long_term`, so anything written here
-shows up in Mason's context next turn.
-"""
+"""REST endpoints powering Mason's Prefs / Saved / Boards tabs."""
 import uuid
 from typing import Optional, Any, List, Dict
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -31,46 +25,6 @@ def _board_cover_url(filename: str, base: str) -> str:
     return f"{base.rstrip('/')}/uploads/board_covers/{filename}"
 
 router = APIRouter(prefix="/api/mason", tags=["mason-memory"])
-
-
-# ── Notes ───────────────────────────────────────────────────────────────────
-
-class NoteIn(BaseModel):
-    text: str = Field(min_length=1, max_length=mem.MAX_NOTE_CHARS)
-
-
-@router.get("/notes")
-async def list_notes(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return await mem.list_notes(current_user.id, db)
-
-
-@router.post("/notes", status_code=201)
-async def add_note(
-    body: NoteIn,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        note = await mem.add_note(current_user.id, body.text, db)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    await db.commit()
-    return note
-
-
-@router.delete("/notes/{key}", status_code=204)
-async def delete_note(
-    key: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    ok = await mem.delete_note(current_user.id, key, db)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Note not found")
-    await db.commit()
 
 
 # ── Preferences ─────────────────────────────────────────────────────────────
@@ -251,7 +205,10 @@ async def update_board(
     current_user: User = Depends(get_current_user),
 ):
     patch = body.model_dump(exclude_unset=True)
-    board = await mem.update_board(current_user.id, board_id, patch, db)
+    try:
+        board = await mem.update_board(current_user.id, board_id, patch, db)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     await db.commit()
@@ -285,7 +242,10 @@ async def delete_board(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ok = await mem.delete_board(current_user.id, board_id, db)
+    try:
+        ok = await mem.delete_board(current_user.id, board_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     if not ok:
         raise HTTPException(status_code=404, detail="Board not found")
     await db.commit()

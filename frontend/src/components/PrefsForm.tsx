@@ -175,6 +175,24 @@ const FAMILY_LIFE_OPTIONS: ImageOption[] = [
   { value: 'newborn',           label: 'Newborn or expecting',    img: 'https://images.unsplash.com/photo-1492725764893-90b379c2b6e7?w=400&q=60&fit=crop', note: 'a newborn or expecting a baby' },
 ]
 
+// ─── Profile text composer ────────────────────────────────────────────────────
+// Joins all *_notes fields into a single prose block for Mason.
+
+const PROFILE_NOTE_KEYS: Array<keyof MasonLifestyle> = [
+  'style_notes', 'color_notes', 'dream_home_notes', 'dream_scene_notes',
+  'weekend_notes', 'dream_car_notes', 'gift_mood_notes', 'area_notes',
+  'material_notes', 'work_setup_notes', 'family_life_notes',
+  'shopping_vibe_notes', 'price_vibe_notes', 'homeowner_notes',
+  'travel_notes', 'gifting_notes', 'budget_notes', 'vibe_notes',
+]
+
+function composeProfileText(lifestyle: Partial<MasonLifestyle>): string {
+  return PROFILE_NOTE_KEYS
+    .map(k => (lifestyle[k] as string | undefined) ?? '')
+    .filter(Boolean)
+    .join(' ')
+}
+
 // ─── Note templates ───────────────────────────────────────────────────────────
 // These produce the human-readable strings Mason actually reads.
 
@@ -204,7 +222,9 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
   const lifestyle = (prefs.lifestyle ?? {}) as MasonLifestyle
 
   function patchLifestyle(patch: Partial<MasonLifestyle>) {
-    onPatch({ lifestyle: patch as Partial<MasonLifestyle> })
+    const merged = { ...lifestyle, ...patch }
+    const profile_text = composeProfileText(merged)
+    onPatch({ lifestyle: { ...patch, profile_text } as Partial<MasonLifestyle> })
   }
 
   // Derive UI selection state from stored _selections fields
@@ -238,6 +258,12 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
     }
   }
 
+  // Wraps any onPatch call that touches lifestyle to also recompute profile_text
+  function withProfileText(lifestylePatch: Partial<MasonLifestyle>): Partial<MasonLifestyle> {
+    const merged = { ...lifestyle, ...lifestylePatch }
+    return { ...lifestylePatch, profile_text: composeProfileText(merged) }
+  }
+
   const toggleStyle = makeToggle('style', STYLE_OPTIONS, (sels, note) => {
     const bonusTags = sels.flatMap(v => STYLE_OPTIONS.find(o => o.value === v)?.style_tags ?? [])
     const existingOther = (prefs.style_tags ?? []).filter(t =>
@@ -245,7 +271,7 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
     )
     onPatch({
       style_tags: [...new Set([...existingOther, ...sels, ...bonusTags])],
-      lifestyle: { style_selections: sels, style_notes: note } as Partial<MasonLifestyle>,
+      lifestyle: withProfileText({ style_selections: sels, style_notes: note }),
     })
   })
 
@@ -260,7 +286,7 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
     )
     onPatch({
       style_tags: [...new Set([...existingOther, ...bonusTags])],
-      lifestyle: { dream_home_selections: sels, dream_home_notes: note } as Partial<MasonLifestyle>,
+      lifestyle: withProfileText({ dream_home_selections: sels, dream_home_notes: note }),
     })
   })
 
@@ -279,7 +305,7 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
     )
     onPatch({
       style_tags: [...new Set([...existingOther, ...bonusTags])],
-      lifestyle: { dream_car_selections: sels, dream_car_notes: note } as Partial<MasonLifestyle>,
+      lifestyle: withProfileText({ dream_car_selections: sels, dream_car_notes: note }),
     })
   })
 
@@ -298,7 +324,7 @@ export default function PrefsForm({ prefs, onPatch }: PrefsFormProps) {
     )
     onPatch({
       style_tags: [...new Set([...existingOther, ...bonusTags])],
-      lifestyle: { material_selections: sels, material_notes: note } as Partial<MasonLifestyle>,
+      lifestyle: withProfileText({ material_selections: sels, material_notes: note }),
     })
   })
 

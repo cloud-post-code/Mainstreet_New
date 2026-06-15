@@ -9,7 +9,7 @@ interface Props {
   onPatch: (patch: MasonPrefsPatch) => void
 }
 
-type View = 'cta' | 'interview' | 'form'
+type View = 'cta' | 'onboarding' | 'form'
 
 function isPrefsEmpty(prefs: MasonPrefs): boolean {
   return (
@@ -27,9 +27,8 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
   const firstTime = isPrefsEmpty(prefs)
   const [view, setView] = useState<View>(firstTime ? 'cta' : 'form')
 
-  function handleInterviewComplete(patch: MasonPrefsPatch) {
+  function handleOnboardingComplete(patch: MasonPrefsPatch) {
     onPatch(patch)
-    // Brief delay so the done screen shows, then switch to the form
     setTimeout(() => setView('form'), 2000)
   }
 
@@ -40,7 +39,7 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
           <div style={{ marginBottom: 12 }}>
             <button
               type="button"
-              onClick={() => setView('interview')}
+              onClick={() => setView('onboarding')}
               style={{
                 appearance: 'none',
                 background: 'transparent',
@@ -53,7 +52,7 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
                 cursor: 'pointer',
               }}
             >
-              Re-run setup interview
+              Re-run setup questions
             </button>
           </div>
         )}
@@ -62,10 +61,10 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
     )
   }
 
-  if (view === 'interview') {
+  if (view === 'onboarding') {
     return (
       <MasonOnboarding
-        onComplete={handleInterviewComplete}
+        onComplete={handleOnboardingComplete}
         onSkip={() => setView('form')}
       />
     )
@@ -84,7 +83,7 @@ export default function PrefsSetup({ prefs, onPatch }: Props) {
       <button
         type="button"
         className={styles.setupBtn}
-        onClick={() => setView('interview')}
+        onClick={() => setView('onboarding')}
       >
         Let's do it →
       </button>

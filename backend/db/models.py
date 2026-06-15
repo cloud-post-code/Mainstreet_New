@@ -276,6 +276,7 @@ class Board(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text)
     cover_image_url = Column(Text)
+    is_default = Column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

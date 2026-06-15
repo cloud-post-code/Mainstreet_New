@@ -10,10 +10,7 @@ from sqlalchemy import select, func, text as sql_text, bindparam
 from db.models import Product, ProductVariant, Shop, AgentPlan
 from agent.memory import (
     save_preference,
-    add_note as memory_add_note,
     save_product as memory_save_product,
-    delete_note as memory_delete_note,
-    list_notes as memory_list_notes,
     get_prefs as memory_get_prefs,
     set_prefs as memory_set_prefs,
     list_saved_products as memory_list_saved,
@@ -215,8 +212,8 @@ TOOL_DEFINITIONS = [
         "description": (
             "Save a shopping preference for one of the four reserved keys so it shows up in the Prefs panel. "
             "Use this when the user states a durable shopping preference: clothing/shoe sizes, budget caps, "
-            "brands or materials they love, or things they want to avoid. Prefer this over save_note for "
-            "the four canonical fields."
+            "brands or materials they love, or things they want to avoid. Prefer update_preferences over "
+            "this for the four canonical fields."
         ),
         "input_schema": {
             "type": "object",
@@ -313,24 +310,6 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "save_note",
-        "description": (
-            "Record a durable fact about the user as a Note so future conversations can use it. "
-            "Use when the user reveals a lasting fact about themselves — where they live, who they "
-            "shop for (kids, partner, pets), allergies, recurring needs, lifestyle, personality. "
-            "Write the note in third person (\"Lives in the South End\", \"Shops for a 5yo daughter\"). "
-            "Do NOT save: the current request, ephemeral context, or anything already in memory. "
-            "One note per fact; keep it under 280 characters."
-        ),
-        "input_schema": {
-            "type": "object",
-            "required": ["text"],
-            "properties": {
-                "text": {"type": "string", "description": "A short third-person fact about the user."},
-            },
-        },
-    },
-    {
         "name": "save_product",
         "description": (
             "Save a product to the user's default Saved board. Prefer save_to_board when you know "
@@ -372,7 +351,7 @@ TOOL_DEFINITIONS = [
         "name": "save_to_board",
         "description": (
             "Save a product to a specific board. This is the preferred way to save products. "
-            "If the user has no boards, a default 'Saved' board is created automatically. "
+            "If the user has no boards, 'My Board' is created automatically as the default. "
             "Provide board_id (preferred) or board_name to target a specific board. "
             "If context is ambiguous and the user has multiple boards, use ask_save_to_board instead."
         ),
@@ -389,15 +368,16 @@ TOOL_DEFINITIONS = [
     {
         "name": "save_note_to_board",
         "description": (
-            "Save a contextual note to a specific board. Reason about which board fits based on the "
-            "current shopping context — do not ask the user. For durable user facts not tied to any "
-            "board (e.g. size, pets, lifestyle), use save_note instead."
+            "Save a durable note to a board. Use this for ALL durable note-saving — both "
+            "user facts (size, pets, lifestyle) and contextual shopping notes. "
+            "Omit board_id to save to 'My Board' (the default). Provide board_id when "
+            "the note belongs to a specific board context. Do not ask the user which board — reason about it."
         ),
         "input_schema": {
             "type": "object",
-            "required": ["board_id", "text"],
+            "required": ["text"],
             "properties": {
-                "board_id": {"type": "integer", "description": "Board to attach the note to"},
+                "board_id": {"type": "integer", "description": "Board to attach the note to. Omit to save to My Board."},
                 "text": {"type": "string", "description": "Note text, under 500 characters"},
             },
         },
@@ -433,7 +413,6 @@ _FAST_TOOL_NAMES = {
     "view_cart",
     "update_preferences",
     "save_preference",
-    "save_note",
     "save_product",
     "list_boards",
     "create_board",
@@ -448,7 +427,6 @@ FAST_TOOL_DEFINITIONS = [t for t in TOOL_DEFINITIONS if t["name"] in _FAST_TOOL_
 # Used on the /mason page chat. No shopping tools (no product search, cart,
 # checkout, render_ui). Mason can read and write memory directly.
 
-_SAVE_NOTE_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_note")
 _SAVE_PREF_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_preference")
 _UPDATE_PREFS_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "update_preferences")
 _LIST_BOARDS_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "list_boards")
@@ -456,26 +434,11 @@ _CREATE_BOARD_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "create_boa
 _SAVE_NOTE_TO_BOARD_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_note_to_board")
 
 MASON_MEMORY_TOOL_DEFINITIONS = [
-    _SAVE_NOTE_DEF,
     _SAVE_PREF_DEF,
     _UPDATE_PREFS_DEF,
     _LIST_BOARDS_DEF,
     _CREATE_BOARD_DEF,
     _SAVE_NOTE_TO_BOARD_DEF,
-    {
-        "name": "delete_note",
-        "description": (
-            "Remove a note from the user's notes by its key. Use list_notes first "
-            "to find the key. The key looks like 'note:<uuid>'."
-        ),
-        "input_schema": {
-            "type": "object",
-            "required": ["key"],
-            "properties": {
-                "key": {"type": "string", "description": "The note key to remove."},
-            },
-        },
-    },
     {
         "name": "delete_preference",
         "description": (
@@ -492,11 +455,6 @@ MASON_MEMORY_TOOL_DEFINITIONS = [
                 },
             },
         },
-    },
-    {
-        "name": "list_notes",
-        "description": "Return all of the user's notes (key + text + created_at), newest first.",
-        "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "list_preferences",
@@ -663,14 +621,6 @@ async def execute_tool(
             except Exception as e:
                 return {"saved": False, "reason": str(e)}, None
             return {"saved": True, "updated_fields": list(patch.keys()), "prefs": updated}, None
-        if tool_name == "save_note":
-            if user_id is None:
-                return {"saved": False, "reason": "not_logged_in"}, None
-            try:
-                note = await memory_add_note(user_id, str(tool_input.get("text") or ""), db)
-            except ValueError as ve:
-                return {"saved": False, "reason": str(ve)}, None
-            return {"saved": True, "key": note["key"], "text": note["text"]}, None
         if tool_name == "save_product":
             if user_id is None:
                 return {"saved": False, "reason": "not_logged_in"}, None
@@ -726,10 +676,10 @@ async def execute_tool(
                 return {"saved": False, "reason": "not_logged_in"}, None
             board_id = tool_input.get("board_id")
             text = str(tool_input.get("text") or "").strip()
-            if not board_id:
-                return {"saved": False, "reason": "board_id required"}, None
             try:
-                note = await memory_add_note_to_board(user_id, int(board_id), text, db)
+                note = await memory_add_note_to_board(
+                    user_id, int(board_id) if board_id else None, text, db
+                )
             except ValueError as ve:
                 return {"saved": False, "reason": str(ve)}, None
             return {"saved": True, "note": note}, None
@@ -778,11 +728,6 @@ async def execute_tool(
             return await cart_service.remove_item(int(tool_input["variant_id"]), user_id, session_id, db), None
         if tool_name == "checkout":
             return await cart_service.checkout(user_id, session_id, db), None
-        if tool_name == "delete_note":
-            if user_id is None:
-                return {"deleted": False, "reason": "not_logged_in"}, None
-            ok = await memory_delete_note(user_id, str(tool_input.get("key") or ""), db)
-            return {"deleted": ok, "key": tool_input.get("key")}, None
         if tool_name == "delete_preference":
             if user_id is None:
                 return {"deleted": False, "reason": "not_logged_in"}, None
@@ -798,10 +743,6 @@ async def execute_tool(
             elif field == "budget":
                 await memory_set_prefs(user_id, {"personal_budget": None, "gift_budget": None}, db)
             return {"deleted": True, "key": key}, None
-        if tool_name == "list_notes":
-            if user_id is None:
-                return {"notes": [], "reason": "not_logged_in"}, None
-            return {"notes": await memory_list_notes(user_id, db)}, None
         if tool_name == "list_preferences":
             if user_id is None:
                 return {"prefs": {}, "reason": "not_logged_in"}, None
