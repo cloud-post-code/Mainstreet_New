@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { api, Session, ShippingAddress, ShippingAddressPatch } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
@@ -20,7 +20,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'history', label: 'History' },
   { key: 'notes', label: 'Notes' },
   { key: 'preferences', label: 'Prefs' },
-  { key: 'saved', label: 'Saved' },
+  { key: 'saved', label: 'Boards' },
   { key: 'shipping', label: 'Shipping' },
 ]
 
@@ -179,29 +179,30 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
           )}
 
           {tab === 'saved' && (
-            memory.savedProducts.length === 0 ? (
-              <p className={styles.empty}>
-                Saved products will land here. Tell Mason to "save this" or "keep this for later".
+            <div style={{ padding: '12px 16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '0.875rem', color: '#555' }}>
+                Boards let you organize saved items by project, occasion, or recipient.
               </p>
-            ) : (
-              <ul className={styles.savedList}>
-                {memory.savedProducts.map(p => (
-                  <SavedProductItem
-                    key={p.product_id}
-                    product={p}
-                    classes={{
-                      item: styles.savedItem,
-                      thumb: styles.savedThumb,
-                      body: styles.savedBody,
-                      name: styles.savedName,
-                      sub: styles.savedSub,
-                      remove: styles.iconBtn,
-                    }}
-                    onRemove={memory.unsaveProduct}
-                  />
-                ))}
-              </ul>
-            )
+              {memory.boards.length > 0 ? (
+                <ul style={{ listStyle: 'none', margin: '0 0 12px', padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {memory.boards.map(b => (
+                    <li key={b.id} style={{ background: '#f9f3e3', borderRadius: '8px', padding: '10px 14px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1a1a1a' }}>{b.name}</strong>
+                      {b.description && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#777' }}>{b.description}</span>}
+                      <span style={{ marginLeft: '8px', fontSize: '0.78rem', color: '#aaa' }}>{b.product_count} saved · {b.note_count} notes</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ fontSize: '0.85rem', color: '#aaa', margin: '0 0 12px' }}>No boards yet.</p>
+              )}
+              <Link
+                to="/boards"
+                style={{ display: 'inline-block', background: '#015237', color: '#fff', padding: '8px 16px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none' }}
+              >
+                Open Boards →
+              </Link>
+            </div>
           )}
 
           {tab === 'history' && (
