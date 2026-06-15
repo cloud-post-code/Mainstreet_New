@@ -201,3 +201,11 @@ async def create_tables():
                 END IF;
             END$$;
         """))
+        # Boards feature — additive tables created by create_all above if fresh.
+        # On existing deployments the tables may not exist; these are safe no-ops.
+        await conn.execute(text(
+            "ALTER TABLE boards ADD COLUMN IF NOT EXISTS description text"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE boards ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now()"
+        ))

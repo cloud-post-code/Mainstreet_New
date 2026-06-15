@@ -7,6 +7,8 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 from pgvector.sqlalchemy import Vector
 
 
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -23,6 +25,7 @@ class User(Base):
 
     sessions = relationship("AgentSession", back_populates="user", cascade="all, delete-orphan", foreign_keys="AgentSession.user_id")
     memory = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
+    boards = relationship("Board", back_populates="user", cascade="all, delete-orphan")
 
 
 class Shop(Base):
@@ -262,6 +265,55 @@ class SavedProduct(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "product_id", name="uq_saved_user_product"),
     )
+
+
+class Board(Base):
+    """A named collection of saved products and notes. One user can have many boards."""
+    __tablename__ = "boards"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="boards")
+    board_products = relationship("BoardProduct", back_populates="board", cascade="all, delete-orphan")
+    board_notes = relationship("BoardNote", back_populates="board", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_boards_user_name"),
+    )
+
+
+class BoardProduct(Base):
+    """A product saved to a specific board."""
+    __tablename__ = "board_products"
+
+    id = Column(Integer, primary_key=True)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    saved_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    board = relationship("Board", back_populates="board_products")
+    product = relationship("Product")
+
+    __table_args__ = (
+        UniqueConstraint("board_id", "product_id", name="uq_board_products"),
+    )
+
+
+class BoardNote(Base):
+    """A note attached to a specific board."""
+    __tablename__ = "board_notes"
+
+    id = Column(Integer, primary_key=True)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    board = relationship("Board", back_populates="board_notes")
 
 
 class TurnUsage(Base):
