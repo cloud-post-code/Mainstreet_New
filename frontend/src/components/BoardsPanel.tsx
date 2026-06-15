@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, BoardDetail, BoardNote } from '../api'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './BoardsPanel.module.css'
@@ -19,6 +19,8 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
   const [newNoteText, setNewNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement>(null)
 
   const loadBoardDetail = useCallback(async (id: number) => {
     setDetailLoading(true)
@@ -91,8 +93,25 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
     setBoardDetail(prev => prev ? { ...prev, products: prev.products.filter((p: { product_id: number }) => p.product_id !== productId) } : prev)
   }
 
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedBoardId) return
+    setUploadingCover(true)
+    try {
+      const result = await api.uploadBoardCover(selectedBoardId, file, token)
+      memory.refresh()
+      setBoardDetail(prev => prev ? { ...prev, cover_image_url: result.cover_image_url } : prev)
+    } catch (e) {
+      console.error('[BoardsPanel] cover upload failed', e)
+    } finally {
+      setUploadingCover(false)
+      if (coverInputRef.current) coverInputRef.current.value = ''
+    }
+  }
+
   // Board detail view
   if (selectedBoard) {
+    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url
     return (
       <div className={styles.boards}>
         <div className={styles.back}>
@@ -103,6 +122,36 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
             Delete
           </button>
         </div>
+
+        {/* Cover image */}
+        <div className={styles.coverArea}>
+          {coverUrl ? (
+            <img className={styles.coverImg} src={coverUrl} alt="" />
+          ) : (
+            <div className={styles.coverPlaceholder}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+          )}
+          <button
+            className={styles.coverUploadBtn}
+            onClick={() => coverInputRef.current?.click()}
+            disabled={uploadingCover}
+          >
+            {uploadingCover ? 'Uploading…' : coverUrl ? 'Change photo' : 'Add photo'}
+          </button>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            className={styles.coverInput}
+            onChange={handleCoverUpload}
+          />
+        </div>
+
         <div className={styles.boardTitle}>
           <strong>{selectedBoard.name}</strong>
           {selectedBoard.description && <span className={styles.boardPurpose}>{selectedBoard.description}</span>}
@@ -208,6 +257,19 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
           {memory.boards.map(b => (
             <li key={b.id}>
               <button className={styles.row} onClick={() => { setSelectedBoardId(b.id); setBoardTab('saved') }}>
+                <div className={styles.rowCover}>
+                  {b.cover_image_url ? (
+                    <img src={b.cover_image_url} alt="" className={styles.rowCoverImg} />
+                  ) : (
+                    <div className={styles.rowCoverPlaceholder}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
                 <div className={styles.rowMeta}>
                   <span className={styles.rowName}>{b.name}</span>
                   {b.description && <span className={styles.rowDesc}>{b.description}</span>}
