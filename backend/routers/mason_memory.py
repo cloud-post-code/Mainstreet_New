@@ -162,12 +162,11 @@ async def list_boards(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Always ensure the user has a default "My Board". This handles new users,
+    # existing users who never had one, and migration of pre-board saved items.
+    await mem.get_or_create_default_board(current_user.id, db)
+    await db.commit()
     boards = await mem.list_boards(current_user.id, db)
-    if not boards:
-        # Auto-migrate existing saved products and notes into a default board
-        default = await mem.get_or_create_default_board(current_user.id, db)
-        await db.commit()
-        boards = [default]
     return boards
 
 

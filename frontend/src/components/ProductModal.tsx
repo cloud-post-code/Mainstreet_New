@@ -134,8 +134,12 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
     }
   }
 
-  const onSaveClick = () => {
+  const onSaveClick = async () => {
     if (!token) { navigate('/login'); return }
+    // If no boards are loaded yet, fetch them now before opening the picker
+    if (!boardPickerOpen && boards.length === 0) {
+      await memory?.refresh()
+    }
     setBoardPickerOpen(v => !v)
   }
 
@@ -321,7 +325,9 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
                 {boardPickerOpen && (
                   <div className={styles.boardPicker}>
                     <div className={styles.boardPickerTitle}>Save to board</div>
-                    {boards.length === 0 ? (
+                    {memory?.loading ? (
+                      <p className={styles.boardPickerEmpty}>Loading…</p>
+                    ) : boards.length === 0 ? (
                       <p className={styles.boardPickerEmpty}>No boards yet</p>
                     ) : (
                       boards.map(b => (
