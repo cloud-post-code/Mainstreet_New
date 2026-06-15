@@ -9,7 +9,7 @@ export interface BoardsState {
   boardTab: 'saved' | 'notes'
   detailLoading: boolean
   uploadingCover: boolean
-  coverInputRef: React.RefObject<HTMLInputElement | null>
+  coverInputRef: React.RefObject<HTMLInputElement>
   // new board form
   showAddBoard: boolean
   newBoardName: string
@@ -17,7 +17,7 @@ export interface BoardsState {
   newBoardImage: File | null
   newBoardImagePreview: string | null
   addingBoard: boolean
-  newBoardImageRef: React.RefObject<HTMLInputElement | null>
+  newBoardImageRef: React.RefObject<HTMLInputElement>
   // notes
   newNoteText: string
   addingNote: boolean
