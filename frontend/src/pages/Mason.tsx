@@ -10,14 +10,13 @@ import { formatDate } from '../lib/format'
 import { track } from '../analytics/posthog'
 import MasonFeedback from '../components/MasonFeedback'
 
-type TabKey = 'shipping' | 'notes' | 'preferences' | 'saved' | 'history' | 'inbox'
+type TabKey = 'shipping' | 'preferences' | 'saved' | 'history' | 'inbox'
 
 const SESSIONS_PAGE_SIZE = 50
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'inbox', label: 'Inbox' },
   { key: 'history', label: 'History' },
-  { key: 'notes', label: 'Notes' },
   { key: 'preferences', label: 'Prefs' },
   { key: 'saved', label: 'Boards' },
   { key: 'shipping', label: 'Shipping' },
@@ -34,7 +33,6 @@ export default function Mason() {
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
   const [tab, setTab] = useState<TabKey>('inbox')
-  const [newNote, setNewNote] = useState('')
   const [sessions, setSessions] = useState<Session[]>([])
   const [sessionsHasMore, setSessionsHasMore] = useState(false)
   const [sessionsLoadingMore, setSessionsLoadingMore] = useState(false)
@@ -95,13 +93,6 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
     }
   }
 
-  async function addNoteFromInput() {
-    const t = newNote.trim()
-    if (!t) return
-    await memory.addNote(t)
-    setNewNote('')
-  }
-
   async function openInboxMessage(id: number) {
     const { session_id } = await api.openInboxMessage(id, token)
     await memory.refreshInbox()
@@ -131,46 +122,6 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
         <div className={styles.panelBody}>
           {tab === 'shipping' && (
             <ShippingPanel shipping={memory.shipping} onSave={memory.saveShipping} />
-          )}
-
-          {tab === 'notes' && (
-            <>
-              <p className={styles.helpText}>
-                What Mason knows about you. Mason adds notes automatically when he learns something durable; you can edit them here.
-              </p>
-              <ul className={styles.notesList}>
-                {memory.notes.map(n => (
-                  <li key={n.key} className={styles.noteItem}>
-                    <span>
-                      {n.text}
-                      {n.created_at && (
-                        <span className={styles.noteMeta}>
-                          {formatDate(n.created_at)}
-                        </span>
-                      )}
-                    </span>
-                    <button
-                      className={styles.iconBtn}
-                      onClick={() => memory.removeNote(n.key)}
-                      aria-label="Remove note"
-                    >×</button>
-                  </li>
-                ))}
-                {memory.notes.length === 0 && (
-                  <li className={styles.empty}>No notes yet. Mason will start adding them as you chat.</li>
-                )}
-              </ul>
-              <div className={styles.addRow}>
-                <input
-                  className={styles.addInput}
-                  placeholder="Add a note about yourself…"
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNoteFromInput() } }}
-                />
-                <button className={styles.addBtn} onClick={addNoteFromInput} disabled={!newNote.trim()}>Add</button>
-              </div>
-            </>
           )}
 
           {tab === 'preferences' && (

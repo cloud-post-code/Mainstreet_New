@@ -10,7 +10,7 @@ import styles from './MasonDrawer.module.css'
 import { formatDate } from '../lib/format'
 import SavedProductItem from './SavedProductItem'
 
-type TabKey = 'notes' | 'preferences' | 'saved' | 'boards' | 'history'
+type TabKey = 'preferences' | 'saved' | 'boards' | 'history'
 
 interface PlanStep { step: number; description: string; done: boolean }
 
@@ -38,7 +38,6 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'history', label: 'History' },
   { key: 'preferences', label: 'Prefs' },
   { key: 'boards', label: 'Boards' },
-  { key: 'notes', label: 'Notes' },
 ]
 
 export default function MasonDrawer(props: MasonDrawerProps) {
@@ -56,7 +55,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     }
   }, [isOpen])
   const [tab, setTab] = useState<TabKey>('history')
-  const [newNote, setNewNote] = useState('')
 
   // Latest agent message's events drive the "Now" reasoning view.
   const latestAgentEvents = useMemo(() => {
@@ -72,13 +70,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     : agentState === 'tool' ? 'updating knowledge…'
     : agentState === 'replying' ? 'replying…'
     : 'available'
-
-  async function addNote() {
-    const t = newNote.trim()
-    if (!t) return
-    await memory.addNote(t)
-    setNewNote('')
-  }
 
   if (!isOpen) return (
     <ReopenButton
@@ -176,50 +167,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
         </nav>
 
         <div className={styles.body}>
-          {tab === 'notes' && (
-            <div className={styles.section}>
-              {!signedIn ? (
-                <GuestNotice message="Sign in so Mason can remember notes about you between visits." />
-              ) : (
-                <>
-                  <p className={styles.helpText}>
-                    What Mason knows about you. Mason adds notes automatically when he learns something durable; you can edit them here.
-                  </p>
-                  <ul className={styles.notesList}>
-                    {memory.notes.map(n => (
-                      <li key={n.key} className={styles.noteItem}>
-                        <span>
-                          {n.text}
-                          {n.created_at && (
-                            <span className={styles.noteMeta}>{formatDate(n.created_at)}</span>
-                          )}
-                        </span>
-                        <button
-                          className={styles.noteRemove}
-                          onClick={() => memory.removeNote(n.key)}
-                          aria-label="Remove"
-                        >×</button>
-                      </li>
-                    ))}
-                    {memory.notes.length === 0 && (
-                      <li className={styles.emptyRow}>No notes yet. Mason will start adding them as you chat.</li>
-                    )}
-                  </ul>
-                  <div className={styles.addRow}>
-                    <input
-                      className={styles.addInput}
-                      placeholder="Add a note about yourself…"
-                      value={newNote}
-                      onChange={e => setNewNote(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNote() } }}
-                    />
-                    <button className={styles.addBtn} onClick={addNote} disabled={!newNote.trim()}>Add</button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
           {tab === 'preferences' && (
             <div className={styles.section}>
               {!signedIn ? (
