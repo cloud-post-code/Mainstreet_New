@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, InboxMessage, MasonNote, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
+import { api, Board, BoardNote, InboxMessage, MasonNote, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
 
 const EMPTY_SHIPPING: ShippingAddress = {
   name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
@@ -22,6 +22,7 @@ export interface MasonMemory {
   notes: MasonNote[]
   prefs: MasonPrefs
   savedProducts: MasonSavedProduct[]
+  boards: Board[]
   inbox: InboxMessage[]
   shipping: ShippingAddress
   loading: boolean
@@ -31,6 +32,12 @@ export interface MasonMemory {
   saveShipping: (patch: ShippingAddressPatch) => Promise<void>
   saveProduct: (product: MasonSavedProduct | { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => Promise<void>
   unsaveProduct: (productId: number) => Promise<void>
+  createBoard: (name: string, description?: string) => Promise<Board>
+  deleteBoard: (boardId: number) => Promise<void>
+  addProductToBoard: (boardId: number, product: { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => Promise<void>
+  removeProductFromBoard: (boardId: number, productId: number) => Promise<void>
+  addNoteToBoard: (boardId: number, text: string) => Promise<BoardNote>
+  deleteBoardNote: (boardId: number, noteId: number) => Promise<void>
   refresh: () => Promise<void>
   refreshInbox: () => Promise<void>
 }
@@ -44,25 +51,27 @@ export function useMasonMemory(token: string | null): MasonMemory {
   const [notes, setNotes] = useState<MasonNote[]>([])
   const [prefs, setPrefs] = useState<MasonPrefs>(EMPTY_PREFS)
   const [savedProducts, setSavedProducts] = useState<MasonSavedProduct[]>([])
+  const [boards, setBoards] = useState<Board[]>([])
   const [inbox, setInbox] = useState<InboxMessage[]>([])
   const [shipping, setShipping] = useState<ShippingAddress>(EMPTY_SHIPPING)
   const [loading, setLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!token) {
-      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([]); setInbox([]); setShipping(EMPTY_SHIPPING)
+      setNotes([]); setPrefs(EMPTY_PREFS); setSavedProducts([]); setBoards([]); setInbox([]); setShipping(EMPTY_SHIPPING)
       return
     }
     setLoading(true)
     try {
-      const [n, p, s, i, sh] = await Promise.all([
+      const [n, p, s, b, i, sh] = await Promise.all([
         api.getMasonNotes(token),
         api.getMasonPrefs(token),
         api.getMasonSavedProducts(token),
+        api.getBoards(token).catch(() => [] as Board[]),
         api.getInbox(token).catch(() => [] as InboxMessage[]),
         api.getMasonShipping(token).catch(() => EMPTY_SHIPPING),
       ])
-      setNotes(n); setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setInbox(i); setShipping({ ...EMPTY_SHIPPING, ...sh })
+      setNotes(n); setPrefs({ ...EMPTY_PREFS, ...p }); setSavedProducts(s); setBoards(b); setInbox(i); setShipping({ ...EMPTY_SHIPPING, ...sh })
     } catch (e) {
       console.error('[useMasonMemory] refresh failed', e)
     } finally {
@@ -179,5 +188,47 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setSavedProducts(prev => prev.filter(p => p.product_id !== productId))
   }, [token])
 
-  return { notes, prefs, savedProducts, inbox, shipping, loading, addNote, removeNote, patchPrefs, saveShipping, saveProduct, unsaveProduct, refresh, refreshInbox }
+  const createBoard = useCallback(async (name: string, description?: string): Promise<Board> => {
+    if (!token) throw new Error('not logged in')
+    const board = await api.createBoard({ name, description }, token)
+    setBoards(prev => [...prev, board])
+    return board
+  }, [token])
+
+  const deleteBoard = useCallback(async (boardId: number) => {
+    if (!token) return
+    await api.deleteBoard(boardId, token)
+    setBoards(prev => prev.filter(b => b.id !== boardId))
+  }, [token])
+
+  const addProductToBoard = useCallback(async (boardId: number, product: { product_id: number; name: string; price: number; image_url: string | null; shop_id: number; shop_name: string | null; quantity: number }) => {
+    if (!token) return
+    await api.addProductToBoard(boardId, product.product_id, token)
+    setBoards(prev => prev.map(b => b.id === boardId ? { ...b, product_count: b.product_count + 1 } : b))
+    setSavedProducts(prev => {
+      if (prev.some(p => p.product_id === product.product_id)) return prev
+      return [{ ...product, saved_at: new Date().toISOString() }, ...prev]
+    })
+  }, [token])
+
+  const removeProductFromBoard = useCallback(async (boardId: number, productId: number) => {
+    if (!token) return
+    await api.removeProductFromBoard(boardId, productId, token)
+    setBoards(prev => prev.map(b => b.id === boardId ? { ...b, product_count: Math.max(0, b.product_count - 1) } : b))
+  }, [token])
+
+  const addNoteToBoard = useCallback(async (boardId: number, text: string): Promise<BoardNote> => {
+    if (!token) throw new Error('not logged in')
+    const note = await api.addNoteToBoard(boardId, text, token)
+    setBoards(prev => prev.map(b => b.id === boardId ? { ...b, note_count: b.note_count + 1 } : b))
+    return note
+  }, [token])
+
+  const deleteBoardNote = useCallback(async (boardId: number, noteId: number) => {
+    if (!token) return
+    await api.deleteBoardNote(boardId, noteId, token)
+    setBoards(prev => prev.map(b => b.id === boardId ? { ...b, note_count: Math.max(0, b.note_count - 1) } : b))
+  }, [token])
+
+  return { notes, prefs, savedProducts, boards, inbox, shipping, loading, addNote, removeNote, patchPrefs, saveShipping, saveProduct, unsaveProduct, createBoard, deleteBoard, addProductToBoard, removeProductFromBoard, addNoteToBoard, deleteBoardNote, refresh, refreshInbox }
 }

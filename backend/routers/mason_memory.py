@@ -166,3 +166,147 @@ async def unsave_product_route(
     if not ok:
         raise HTTPException(status_code=404, detail="Saved product not found")
     await db.commit()
+
+
+# ── Boards ──────────────────────────────────────────────────────────────────
+
+class BoardCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=1000)
+
+
+class BoardPatch(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = None
+
+
+class BoardProductIn(BaseModel):
+    product_id: int
+
+
+class BoardNoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+@router.get("/boards")
+async def list_boards(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    boards = await mem.list_boards(current_user.id, db)
+    if not boards:
+        # Auto-migrate existing saved products and notes into a default board
+        default = await mem.get_or_create_default_board(current_user.id, db)
+        await db.commit()
+        boards = [default]
+    return boards
+
+
+@router.post("/boards", status_code=201)
+async def create_board(
+    body: BoardCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        board = await mem.create_board(current_user.id, body.name, body.description, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await db.commit()
+    return board
+
+
+@router.get("/boards/{board_id}")
+async def get_board(
+    board_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    board = await mem.get_board(current_user.id, board_id, db)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    return board
+
+
+@router.patch("/boards/{board_id}")
+async def update_board(
+    board_id: int,
+    body: BoardPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    patch = body.model_dump(exclude_unset=True)
+    board = await mem.update_board(current_user.id, board_id, patch, db)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    await db.commit()
+    return board
+
+
+@router.delete("/boards/{board_id}", status_code=204)
+async def delete_board(
+    board_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ok = await mem.delete_board(current_user.id, board_id, db)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Board not found")
+    await db.commit()
+
+
+@router.post("/boards/{board_id}/products", status_code=201)
+async def add_product_to_board(
+    board_id: int,
+    body: BoardProductIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        newly_saved = await mem.save_product_to_board(current_user.id, board_id, body.product_id, db)
+    except ValueError as e:
+        status = 404 if "not found" in str(e) else 400
+        raise HTTPException(status_code=status, detail=str(e))
+    await db.commit()
+    return {"board_id": board_id, "product_id": body.product_id, "newly_saved": newly_saved}
+
+
+@router.delete("/boards/{board_id}/products/{product_id}", status_code=204)
+async def remove_product_from_board(
+    board_id: int,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ok = await mem.remove_product_from_board(current_user.id, board_id, product_id, db)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Product not found in board")
+    await db.commit()
+
+
+@router.post("/boards/{board_id}/notes", status_code=201)
+async def add_note_to_board(
+    board_id: int,
+    body: BoardNoteIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        note = await mem.add_note_to_board(current_user.id, board_id, body.text, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await db.commit()
+    return note
+
+
+@router.delete("/boards/{board_id}/notes/{note_id}", status_code=204)
+async def delete_board_note(
+    board_id: int,
+    note_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ok = await mem.delete_board_note(current_user.id, board_id, note_id, db)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Note not found")
+    await db.commit()

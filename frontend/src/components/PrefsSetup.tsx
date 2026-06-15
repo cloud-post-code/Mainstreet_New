@@ -17,11 +17,9 @@ function isPrefsEmpty(prefs: MasonPrefs): boolean {
     prefs.quality_price == null &&
     prefs.bulk_individual == null &&
     prefs.discover_known == null &&
-    prefs.personal_budget == null &&
     (prefs.likes ?? []).length === 0 &&
     (prefs.dislikes ?? []).length === 0 &&
-    Object.keys(prefs.lifestyle ?? {}).length === 0 &&
-    Object.keys(prefs.gift_budget ?? {}).length === 0
+    Object.keys(prefs.lifestyle ?? {}).length === 0
   )
 }
 

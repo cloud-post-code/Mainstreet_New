@@ -13,6 +13,7 @@ import ProductDetailsModal from '../components/a2ui/ProductDetailsModal'
 import NextActions from '../components/a2ui/NextActions'
 import MasonDiscoverCard from '../components/a2ui/MasonDiscoverCard'
 import StyleQuestionCard from '../components/a2ui/StyleQuestionCard'
+import BoardPicker from '../components/a2ui/BoardPicker'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyComp = ComponentType<any>
@@ -30,6 +31,7 @@ const COMPONENTS: Record<string, AnyComp> = {
   plan: PlanDropdown,
   mason_discover_card: MasonDiscoverCard,
   style_question_card: StyleQuestionCard,
+  board_picker: BoardPicker,
 }
 
 interface NodeProps {

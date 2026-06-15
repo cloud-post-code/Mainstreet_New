@@ -11,6 +11,7 @@ import Chat from './pages/Chat'
 import Admin from './pages/Admin'
 import Discover from './pages/Discover'
 import Mason from './pages/Mason'
+import Boards from './pages/Boards'
 import { initPostHog, identify, reset } from './analytics/posthog'
 
 initPostHog()
@@ -53,6 +54,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/" element={<Chat />} />
               <Route path="/discover" element={<Discover />} />
               <Route path="/mason" element={<Mason />} />
+              <Route path="/boards" element={<Boards />} />
               <Route path="/inbox" element={<Navigate to="/mason" replace />} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             </Route>

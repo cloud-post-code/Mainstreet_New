@@ -102,6 +102,27 @@ export interface Plan { id: number; session_id: number; steps: PlanStep[]; updat
 
 export interface MasonNote { key: string; text: string; created_at: string | null }
 
+export interface Board {
+  id: number
+  name: string
+  description: string | null
+  note_count: number
+  product_count: number
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface BoardNote {
+  id: number
+  text: string
+  created_at: string | null
+}
+
+export interface BoardDetail extends Board {
+  notes: BoardNote[]
+  products: MasonSavedProduct[]
+}
+
 export interface MasonSizes {
   shirt?: string
   waist?: string
@@ -121,7 +142,7 @@ export interface MasonGiftBudget {
   freeform?: string
 }
 export interface MasonLifestyle {
-  housing?: 'homeowner' | 'renter'
+  housing?: 'homeowner' | 'renter' | 'condo'
   area?: 'urban' | 'suburban' | 'rural'
   pets?: string[]
   pets_notes?: string
@@ -135,6 +156,20 @@ export interface MasonLifestyle {
   freeform_notes?: string
   discovery_notes?: string
   quality_notes?: string
+  color_palette?: string[]
+  weekend_vibes?: string[]
+  shop_style?: string
+  dream_home?: string
+  dream_scene?: string
+  dream_car?: string
+  gift_mood?: string
+  vibe_notes?: string
+  materials?: string[]
+  work_setup?: string[]
+  family_life?: string[]
+  likes_notes?: string
+  dislikes_notes?: string
+  style_notes?: string
 }
 export interface MasonPrefs {
   sizes: MasonSizes
@@ -421,6 +456,29 @@ export const api = {
     request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }, token),
   clearAllProducts: (token: string) =>
     request<{ deleted: number }>(`/api/admin/products`, { method: 'DELETE' }, token),
+
+  getBoards: (token: string) =>
+    request<Board[]>('/api/mason/boards', {}, token),
+  createBoard: (body: { name: string; description?: string }, token: string) =>
+    request<Board>('/api/mason/boards', { method: 'POST', body: JSON.stringify(body) }, token),
+  getBoard: (id: number, token: string) =>
+    request<BoardDetail>(`/api/mason/boards/${id}`, {}, token),
+  updateBoard: (id: number, patch: { name?: string; description?: string | null }, token: string) =>
+    request<Board>(`/api/mason/boards/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }, token),
+  deleteBoard: (id: number, token: string) =>
+    request<void>(`/api/mason/boards/${id}`, { method: 'DELETE' }, token),
+  addProductToBoard: (boardId: number, product_id: number, token: string) =>
+    request<{ board_id: number; product_id: number; newly_saved: boolean }>(
+      `/api/mason/boards/${boardId}/products`,
+      { method: 'POST', body: JSON.stringify({ product_id }) },
+      token,
+    ),
+  removeProductFromBoard: (boardId: number, product_id: number, token: string) =>
+    request<void>(`/api/mason/boards/${boardId}/products/${product_id}`, { method: 'DELETE' }, token),
+  addNoteToBoard: (boardId: number, text: string, token: string) =>
+    request<BoardNote>(`/api/mason/boards/${boardId}/notes`, { method: 'POST', body: JSON.stringify({ text }) }, token),
+  deleteBoardNote: (boardId: number, noteId: number, token: string) =>
+    request<void>(`/api/mason/boards/${boardId}/notes/${noteId}`, { method: 'DELETE' }, token),
 
   getMasonNotes: (token: string) =>
     request<MasonNote[]>('/api/mason/notes', {}, token),
