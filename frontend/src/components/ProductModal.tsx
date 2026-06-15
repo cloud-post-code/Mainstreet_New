@@ -52,9 +52,9 @@ export interface ProductModalData {
 
 interface Props {
   product: ProductModalData
-  memory: MasonMemory
+  memory?: MasonMemory
   onClose: () => void
-  onChatAbout: (name: string) => void
+  onChatAbout?: (name: string) => void
 }
 
 export default function ProductModal({ product, memory, onClose, onChatAbout }: Props) {
@@ -62,7 +62,8 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   const navigate = useNavigate()
   const { add: addToCart, busy, added, error: addError } = useAddToCart()
   const [toast, setToast] = useState<string | null>(null)
-  const [likeBusy, setLikeBusy] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
+  const [boardPickerOpen, setBoardPickerOpen] = useState(false)
   // Sizing capture: shown once after add-to-cart when a size option was selected
   const [sizeSavePrompt, setSizeSavePrompt] = useState<{ field: keyof import('../api').MasonSizes; value: string; label: string } | null>(null)
   const [fitNote, setFitNote] = useState('')
@@ -85,7 +86,20 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   const displayQty = selectedVariant ? selectedVariant.quantity : product.quantity
   const qty = displayQty == null ? null : Number(displayQty)
   const inStock = qty === null || !Number.isFinite(qty) ? true : qty > 0
-  const isLiked = memory.savedProducts.some(p => p.product_id === product.product_id)
+  const isLiked = memory?.savedProducts.some(p => p.product_id === product.product_id) ?? false
+  const boards = memory?.boards ?? []
+  const saveWrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!boardPickerOpen) return
+    const handler = (e: MouseEvent) => {
+      if (saveWrapRef.current && !saveWrapRef.current.contains(e.target as Node)) {
+        setBoardPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [boardPickerOpen])
   const description = product.description_long ?? product.description_summary ?? ''
 
   useModalDismiss(true, onClose)
@@ -109,7 +123,7 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
           const chosen = selectedValues[axis.name]
           if (chosen) {
             const mapped = sizeAxisToField(axis.name, chosen)
-            if (mapped && !memory.prefs.sizes[mapped.field]) {
+            if (mapped && !memory?.prefs.sizes[mapped.field]) {
               setSizeSavePrompt({ ...mapped, label: axis.name })
               sizeSaveShown.current = true
               break
@@ -120,30 +134,30 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
     }
   }
 
-  const onLike = async () => {
+  const onSaveClick = () => {
     if (!token) { navigate('/login'); return }
-    if (likeBusy) return
-    setLikeBusy(true)
+    setBoardPickerOpen(v => !v)
+  }
+
+  const onSaveToBoard = async (boardId: number, boardName: string) => {
+    if (saveBusy) return
+    setBoardPickerOpen(false)
+    setSaveBusy(true)
     try {
-      if (isLiked) {
-        await memory.unsaveProduct(product.product_id)
-        setToast('Removed from saved')
-      } else {
-        await memory.saveProduct({
-          product_id: product.product_id,
-          name: product.name,
-          price: product.price,
-          image_url: product.image_url ?? null,
-          shop_id: product.shop_id ?? 0,
-          shop_name: product.shop_name ?? null,
-          quantity: qty ?? 0,
-        })
-        setToast('Saved to your likes')
-      }
+      await memory?.addProductToBoard(boardId, {
+        product_id: product.product_id,
+        name: product.name,
+        price: product.price,
+        image_url: product.image_url ?? null,
+        shop_id: product.shop_id ?? 0,
+        shop_name: product.shop_name ?? null,
+        quantity: qty ?? 0,
+      })
+      setToast(`Saved to ${boardName}`)
     } catch {
-      setToast('Could not update')
+      setToast('Could not save')
     } finally {
-      setLikeBusy(false)
+      setSaveBusy(false)
     }
   }
 
@@ -167,7 +181,7 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   }
 
   const onChat = () => {
-    onChatAbout(product.name)
+    onChatAbout?.(product.name)
     onClose()
   }
 
@@ -267,7 +281,7 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
                       if (fitNote.trim()) {
                         patch.sizes = { ...patch.sizes, freeform: fitNote.trim() } as import('../api').MasonSizes
                       }
-                      memory.patchPrefs(patch)
+                      memory?.patchPrefs(patch)
                       setSizeSavePrompt(null)
                       setToast('Size saved to your profile ✓')
                     }}
@@ -293,16 +307,37 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
               >
                 {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
               </button>
-              <button
-                type="button"
-                className={`${styles.iconBtn} ${isLiked ? styles.liked : ''}`}
-                onClick={onLike}
-                aria-label={isLiked ? 'Unlike' : 'Like'}
-                aria-pressed={isLiked}
-                disabled={likeBusy}
-              >
-                {isLiked ? '♥' : '♡'}
-              </button>
+              <div className={styles.saveWrap} ref={saveWrapRef}>
+                <button
+                  type="button"
+                  className={`${styles.iconBtn} ${isLiked ? styles.liked : ''}`}
+                  onClick={onSaveClick}
+                  aria-label="Save to board"
+                  aria-pressed={isLiked}
+                  disabled={saveBusy}
+                >
+                  {isLiked ? '♥' : '♡'}
+                </button>
+                {boardPickerOpen && (
+                  <div className={styles.boardPicker}>
+                    <div className={styles.boardPickerTitle}>Save to board</div>
+                    {boards.length === 0 ? (
+                      <p className={styles.boardPickerEmpty}>No boards yet</p>
+                    ) : (
+                      boards.map(b => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className={styles.boardPickerItem}
+                          onClick={() => onSaveToBoard(b.id, b.name)}
+                        >
+                          {b.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className={styles.iconBtn}
