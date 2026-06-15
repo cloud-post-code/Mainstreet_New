@@ -1,9 +1,10 @@
-import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { Session, api, BoardDetail, BoardNote } from '../api'
+import { MouseEvent, useEffect, useMemo, useState } from 'react'
+import { Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
 import LiveReasoning from './LiveReasoning'
 import PrefsSetup from './PrefsSetup'
+import BoardsPanel from './BoardsPanel'
 import { useMason } from '../mason/MasonContext'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
@@ -212,7 +213,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
               {!signedIn ? (
                 <GuestNotice message="Sign in to create boards and organize saved items." />
               ) : (
-                <DrawerBoardsPanel memory={memory} token={props.token!} />
+                <BoardsPanel memory={memory} token={props.token!} />
               )}
             </div>
           )}
@@ -289,221 +290,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
         </div>
       </aside>
     </>
-  )
-}
-
-function DrawerBoardsPanel({ memory, token }: { memory: MasonMemory; token: string }) {
-  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null)
-  const [boardDetail, setBoardDetail] = useState<BoardDetail | null>(null)
-  const [boardTab, setBoardTab] = useState<'saved' | 'notes'>('saved')
-  const [showAddBoard, setShowAddBoard] = useState(false)
-  const [newBoardName, setNewBoardName] = useState('')
-  const [newBoardDesc, setNewBoardDesc] = useState('')
-  const [addingBoard, setAddingBoard] = useState(false)
-  const [newNoteText, setNewNoteText] = useState('')
-  const [addingNote, setAddingNote] = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
-
-  const loadBoardDetail = useCallback(async (id: number) => {
-    setDetailLoading(true)
-    try {
-      const detail = await api.getBoard(id, token)
-      setBoardDetail(detail)
-    } catch (e) {
-      console.error('[DrawerBoardsPanel] load board detail failed', e)
-    } finally {
-      setDetailLoading(false)
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (selectedBoardId != null) {
-      loadBoardDetail(selectedBoardId)
-    } else {
-      setBoardDetail(null)
-    }
-  }, [selectedBoardId, loadBoardDetail])
-
-  const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
-
-  const handleAddBoard = async () => {
-    const name = newBoardName.trim()
-    if (!name) return
-    setAddingBoard(true)
-    try {
-      await memory.createBoard(name, newBoardDesc.trim() || undefined)
-      setNewBoardName('')
-      setNewBoardDesc('')
-      setShowAddBoard(false)
-    } catch (e) {
-      console.error('[DrawerBoardsPanel] create board failed', e)
-    } finally {
-      setAddingBoard(false)
-    }
-  }
-
-  const handleDeleteBoard = async (id: number) => {
-    if (!confirm('Delete this board and all its items?')) return
-    await memory.deleteBoard(id)
-    if (selectedBoardId === id) setSelectedBoardId(null)
-  }
-
-  const handleAddNote = async () => {
-    const text = newNoteText.trim()
-    if (!text || !selectedBoardId) return
-    setAddingNote(true)
-    try {
-      const note = await memory.addNoteToBoard(selectedBoardId, text)
-      setBoardDetail(prev => prev ? { ...prev, notes: [...prev.notes, note] } : prev)
-      setNewNoteText('')
-    } catch (e) {
-      console.error('[DrawerBoardsPanel] add note failed', e)
-    } finally {
-      setAddingNote(false)
-    }
-  }
-
-  const handleDeleteNote = async (noteId: number) => {
-    if (!selectedBoardId) return
-    await memory.deleteBoardNote(selectedBoardId, noteId)
-    setBoardDetail(prev => prev ? { ...prev, notes: prev.notes.filter((n: BoardNote) => n.id !== noteId) } : prev)
-  }
-
-  const handleRemoveProduct = async (productId: number) => {
-    if (!selectedBoardId || !boardDetail) return
-    await memory.removeProductFromBoard(selectedBoardId, productId)
-    setBoardDetail(prev => prev ? { ...prev, products: prev.products.filter((p: { product_id: number }) => p.product_id !== productId) } : prev)
-  }
-
-  if (selectedBoard) {
-    return (
-      <div className={styles.drawerBoards}>
-        <div className={styles.drawerBoardsBack}>
-          <button className={styles.drawerBackBtn} onClick={() => { setSelectedBoardId(null); setBoardDetail(null) }}>
-            ← Boards
-          </button>
-          <button className={styles.drawerDeleteBtn} onClick={() => handleDeleteBoard(selectedBoard.id)}>
-            Delete
-          </button>
-        </div>
-        <div className={styles.drawerBoardTitle}>
-          <strong>{selectedBoard.name}</strong>
-          {selectedBoard.description && <span className={styles.drawerBoardPurpose}>{selectedBoard.description}</span>}
-        </div>
-        <div className={styles.drawerBoardTabs}>
-          <button
-            className={`${styles.drawerBoardTab} ${boardTab === 'saved' ? styles.drawerBoardTabActive : ''}`}
-            onClick={() => setBoardTab('saved')}
-          >
-            Saved ({selectedBoard.product_count})
-          </button>
-          <button
-            className={`${styles.drawerBoardTab} ${boardTab === 'notes' ? styles.drawerBoardTabActive : ''}`}
-            onClick={() => setBoardTab('notes')}
-          >
-            Notes ({selectedBoard.note_count})
-          </button>
-        </div>
-        {detailLoading ? (
-          <p className={styles.emptyRow}>Loading…</p>
-        ) : boardTab === 'saved' ? (
-          boardDetail?.products.length ? (
-            <ul className={styles.drawerBoardItems}>
-              {boardDetail.products.map((p: { product_id: number; name: string }) => (
-                <li key={p.product_id} className={styles.drawerBoardItem}>
-                  <span className={styles.drawerBoardItemName}>{p.name}</span>
-                  <button className={styles.noteRemove} onClick={() => handleRemoveProduct(p.product_id)}>×</button>
-                </li>
-              ))}
-            </ul>
-          ) : <p className={styles.emptyRow}>No saved items yet.</p>
-        ) : (
-          <div>
-            <div className={styles.addRow}>
-              <input
-                className={styles.addInput}
-                placeholder="Add a note…"
-                value={newNoteText}
-                onChange={e => setNewNoteText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-              />
-              <button className={styles.addBtn} onClick={handleAddNote} disabled={addingNote || !newNoteText.trim()}>Add</button>
-            </div>
-            {boardDetail?.notes.length ? (
-              <ul className={styles.drawerBoardItems}>
-                {boardDetail.notes.map((n: BoardNote) => (
-                  <li key={n.id} className={styles.drawerBoardItem}>
-                    <span className={styles.drawerBoardItemName}>{n.text}</span>
-                    <button className={styles.noteRemove} onClick={() => handleDeleteNote(n.id)}>×</button>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className={styles.emptyRow}>No notes yet.</p>}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className={styles.drawerBoards}>
-      <div className={styles.drawerBoardsHeader}>
-        <button className={styles.addBtn} onClick={() => setShowAddBoard(v => !v)}>+ New Board</button>
-      </div>
-      {showAddBoard && (
-        <div className={styles.drawerBoardForm}>
-          <input
-            className={styles.addInput}
-            placeholder="Board name (required)"
-            value={newBoardName}
-            onChange={e => setNewBoardName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
-            autoFocus
-          />
-          <input
-            className={styles.addInput}
-            placeholder="Purpose (optional)"
-            value={newBoardDesc}
-            onChange={e => setNewBoardDesc(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
-          />
-          <div className={styles.addRow}>
-            <button className={styles.addBtn} onClick={handleAddBoard} disabled={addingBoard || !newBoardName.trim()}>
-              {addingBoard ? 'Creating…' : 'Create'}
-            </button>
-            <button
-              className={styles.addBtn}
-              style={{ background: 'transparent', color: '#555', border: '1.5px solid #d9cebd' }}
-              onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc('') }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {memory.boards.length === 0 ? (
-        <p className={styles.emptyRow}>No boards yet.</p>
-      ) : (
-        <ul className={styles.drawerBoardList}>
-          {memory.boards.map(b => (
-            <li key={b.id}>
-              <button
-                className={styles.drawerBoardRow}
-                onClick={() => { setSelectedBoardId(b.id); setBoardTab('saved') }}
-              >
-                <div className={styles.drawerBoardRowMeta}>
-                  <span className={styles.drawerBoardRowName}>{b.name}</span>
-                  {b.description && <span className={styles.drawerBoardRowDesc}>{b.description}</span>}
-                </div>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   )
 }
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { api, Session, ShippingAddress, ShippingAddressPatch, BoardDetail, BoardNote } from '../api'
+import { api, Session, ShippingAddress, ShippingAddressPatch } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import PrefsSetup from '../components/PrefsSetup'
+import BoardsPanel from '../components/BoardsPanel'
 import styles from './Mason.module.css'
 import { formatDate } from '../lib/format'
 import { track } from '../analytics/posthog'
@@ -129,7 +130,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
           )}
 
           {tab === 'saved' && (
-            <MasonBoardsPanel memory={memory} token={token} />
+            <BoardsPanel memory={memory} token={token} />
           )}
 
           {tab === 'history' && (
@@ -338,222 +339,6 @@ function MasonChatColumn({
   )
 }
 
-function MasonBoardsPanel({ memory, token }: { memory: ReturnType<typeof useMasonMemory>; token: string }) {
-  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null)
-  const [boardDetail, setBoardDetail] = useState<BoardDetail | null>(null)
-  const [boardTab, setBoardTab] = useState<'saved' | 'notes'>('saved')
-  const [showAddBoard, setShowAddBoard] = useState(false)
-  const [newBoardName, setNewBoardName] = useState('')
-  const [newBoardDesc, setNewBoardDesc] = useState('')
-  const [addingBoard, setAddingBoard] = useState(false)
-  const [newNoteText, setNewNoteText] = useState('')
-  const [addingNote, setAddingNote] = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
-
-  const loadBoardDetail = useCallback(async (id: number) => {
-    if (!token) return
-    setDetailLoading(true)
-    try {
-      const detail = await api.getBoard(id, token)
-      setBoardDetail(detail)
-    } catch (e) {
-      console.error('[MasonBoardsPanel] load board detail failed', e)
-    } finally {
-      setDetailLoading(false)
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (selectedBoardId != null) {
-      loadBoardDetail(selectedBoardId)
-    } else {
-      setBoardDetail(null)
-    }
-  }, [selectedBoardId, loadBoardDetail])
-
-  const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
-
-  const handleAddBoard = async () => {
-    const name = newBoardName.trim()
-    if (!name) return
-    setAddingBoard(true)
-    try {
-      await memory.createBoard(name, newBoardDesc.trim() || undefined)
-      setNewBoardName('')
-      setNewBoardDesc('')
-      setShowAddBoard(false)
-    } catch (e) {
-      console.error('[MasonBoardsPanel] create board failed', e)
-    } finally {
-      setAddingBoard(false)
-    }
-  }
-
-  const handleDeleteBoard = async (id: number) => {
-    if (!confirm('Delete this board and all its items?')) return
-    await memory.deleteBoard(id)
-    if (selectedBoardId === id) setSelectedBoardId(null)
-  }
-
-  const handleAddNote = async () => {
-    const text = newNoteText.trim()
-    if (!text || !selectedBoardId) return
-    setAddingNote(true)
-    try {
-      const note = await memory.addNoteToBoard(selectedBoardId, text)
-      setBoardDetail(prev => prev ? { ...prev, notes: [...prev.notes, note] } : prev)
-      setNewNoteText('')
-    } catch (e) {
-      console.error('[MasonBoardsPanel] add note failed', e)
-    } finally {
-      setAddingNote(false)
-    }
-  }
-
-  const handleDeleteNote = async (noteId: number) => {
-    if (!selectedBoardId) return
-    await memory.deleteBoardNote(selectedBoardId, noteId)
-    setBoardDetail(prev => prev ? { ...prev, notes: prev.notes.filter((n: BoardNote) => n.id !== noteId) } : prev)
-  }
-
-  const handleRemoveProduct = async (productId: number) => {
-    if (!selectedBoardId || !boardDetail) return
-    await memory.removeProductFromBoard(selectedBoardId, productId)
-    setBoardDetail(prev => prev ? { ...prev, products: prev.products.filter((p: { product_id: number }) => p.product_id !== productId) } : prev)
-  }
-
-  // Board detail view
-  if (selectedBoard) {
-    return (
-      <div className={styles.boardsPanel}>
-        <div className={styles.boardsPanelBack}>
-          <button className={styles.backLink} onClick={() => { setSelectedBoardId(null); setBoardDetail(null) }}>
-            ← Boards
-          </button>
-          <button className={styles.deleteBoardLink} onClick={() => handleDeleteBoard(selectedBoard.id)}>
-            Delete
-          </button>
-        </div>
-        <div className={styles.boardsPanelTitle}>
-          <strong>{selectedBoard.name}</strong>
-          {selectedBoard.description && <span className={styles.boardsPanelPurpose}>{selectedBoard.description}</span>}
-        </div>
-        <div className={styles.boardsPanelTabs}>
-          <button
-            className={`${styles.boardsPanelTab} ${boardTab === 'saved' ? styles.boardsPanelTabActive : ''}`}
-            onClick={() => setBoardTab('saved')}
-          >
-            Saved ({selectedBoard.product_count})
-          </button>
-          <button
-            className={`${styles.boardsPanelTab} ${boardTab === 'notes' ? styles.boardsPanelTabActive : ''}`}
-            onClick={() => setBoardTab('notes')}
-          >
-            Notes ({selectedBoard.note_count})
-          </button>
-        </div>
-        {detailLoading ? (
-          <p className={styles.empty}>Loading…</p>
-        ) : boardTab === 'saved' ? (
-          boardDetail?.products.length ? (
-            <ul className={styles.boardsPanelItems}>
-              {boardDetail.products.map((p: { product_id: number; name: string; price: number; image_url: string | null; shop_name: string | null }) => (
-                <li key={p.product_id} className={styles.boardsPanelItem}>
-                  <span className={styles.boardsPanelItemName}>{p.name}</span>
-                  <button className={styles.boardsPanelRemove} onClick={() => handleRemoveProduct(p.product_id)}>×</button>
-                </li>
-              ))}
-            </ul>
-          ) : <p className={styles.empty}>No saved items yet.</p>
-        ) : (
-          <div>
-            <div className={styles.addRow}>
-              <input
-                className={styles.addInput}
-                placeholder="Add a note…"
-                value={newNoteText}
-                onChange={e => setNewNoteText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-              />
-              <button className={styles.addBtn} onClick={handleAddNote} disabled={addingNote || !newNoteText.trim()}>Add</button>
-            </div>
-            {boardDetail?.notes.length ? (
-              <ul className={styles.boardsPanelItems}>
-                {boardDetail.notes.map((n: BoardNote) => (
-                  <li key={n.id} className={styles.boardsPanelItem}>
-                    <span className={styles.boardsPanelItemName}>{n.text}</span>
-                    <button className={styles.boardsPanelRemove} onClick={() => handleDeleteNote(n.id)}>×</button>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className={styles.empty}>No notes yet.</p>}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // Board list view
-  return (
-    <div className={styles.boardsPanel}>
-      <div className={styles.boardsPanelHeader}>
-        <button className={styles.addBtn} onClick={() => setShowAddBoard(v => !v)}>+ New Board</button>
-      </div>
-      {showAddBoard && (
-        <div className={styles.boardsPanelForm}>
-          <input
-            className={styles.addInput}
-            placeholder="Board name (required)"
-            value={newBoardName}
-            onChange={e => setNewBoardName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
-            autoFocus
-          />
-          <input
-            className={styles.addInput}
-            placeholder="Purpose / description (optional)"
-            value={newBoardDesc}
-            onChange={e => setNewBoardDesc(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
-          />
-          <div className={styles.addRow}>
-            <button className={styles.addBtn} onClick={handleAddBoard} disabled={addingBoard || !newBoardName.trim()}>
-              {addingBoard ? 'Creating…' : 'Create'}
-            </button>
-            <button
-              className={styles.addBtn}
-              style={{ background: 'transparent', color: '#555', border: '1.5px solid #d9cebd' }}
-              onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc('') }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {memory.loading ? (
-        <p className={styles.empty}>Loading…</p>
-      ) : memory.boards.length === 0 ? (
-        <p className={styles.empty}>No boards yet.</p>
-      ) : (
-        <ul className={styles.boardsPanelList}>
-          {memory.boards.map(b => (
-            <li key={b.id}>
-              <button className={styles.boardsPanelRow} onClick={() => { setSelectedBoardId(b.id); setBoardTab('saved') }}>
-                <div className={styles.boardsPanelRowMeta}>
-                  <span className={styles.boardsPanelRowName}>{b.name}</span>
-                  {b.description && <span className={styles.boardsPanelRowDesc}>{b.description}</span>}
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
 
 function ShippingPanel({
   shipping,
