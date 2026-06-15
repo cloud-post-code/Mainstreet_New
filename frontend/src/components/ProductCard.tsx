@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import styles from './Cards.module.css'
 import { IntentHandler } from '../a2ui/types'
 import { formatCurrency } from '../lib/format'
@@ -14,6 +14,14 @@ interface VariantOption {
   price: number
   quantity: number
   image_url?: string | null
+}
+
+export interface ShuffleSimilarProduct {
+  product_id: number
+  name: string
+  price: number
+  image_url?: string | null
+  shop_name: string
 }
 
 interface Props {
@@ -38,6 +46,10 @@ interface Props {
   default_variant_id?: number
   // When true, hide the option chips and lock the displayed variant.
   lockVariant?: boolean
+  // Save callback — called when user clicks the save button
+  onSave?: () => void
+  // Shuffle callback — returns 6 similar products to display
+  onShuffle?: () => ShuffleSimilarProduct[]
 }
 
 export default function ProductCard(props: Props) {
@@ -75,6 +87,7 @@ export default function ProductCard(props: Props) {
   const showAddToCart = props.showAddToCart ?? false
   const clickable = Boolean(props.onIntent)
   const { add, busy, added, error: errorMsg } = useAddToCart({ successMs: 1200 })
+  const [shuffleProducts, setShuffleProducts] = useState<ShuffleSimilarProduct[] | null>(null)
 
   const showOptions = hasVariants && !props.lockVariant
 
@@ -90,6 +103,17 @@ export default function ProductCard(props: Props) {
         ? { variantId: selectedId }
         : { productId: props.product_id },
     )
+  }
+
+  const onSaveClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    props.onSave?.()
+  }
+
+  const onShuffleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (shuffleProducts) { setShuffleProducts(null); return }
+    if (props.onShuffle) setShuffleProducts(props.onShuffle())
   }
 
   const variantLabel = (v: VariantOption): string =>
@@ -177,15 +201,57 @@ export default function ProductCard(props: Props) {
         </div>
         {showAddToCart && (
           <>
-            <button
-              type="button"
-              className={styles.addBtn}
-              onClick={onAdd}
-              disabled={!inStock || busy}
-            >
-              {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
-            </button>
+            <div className={styles.cardActions}>
+              <button
+                type="button"
+                className={styles.addBtn}
+                onClick={onAdd}
+                disabled={!inStock || busy}
+              >
+                {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
+              </button>
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={onSaveClick}
+                aria-label="Save"
+                title="Save"
+              >
+                ♡
+              </button>
+              {props.onShuffle && (
+                <button
+                  type="button"
+                  className={`${styles.shuffleBtn} ${shuffleProducts ? styles.shuffleActive : ''}`}
+                  onClick={onShuffleClick}
+                  aria-label="Show similar"
+                  title="Show 6 similar items"
+                >
+                  ⇄
+                </button>
+              )}
+            </div>
             {errorMsg && <p className={styles.addError} role="alert">{errorMsg}</p>}
+            {shuffleProducts && shuffleProducts.length > 0 && (
+              <div className={styles.shufflePanel} onClick={e => e.stopPropagation()}>
+                <div className={styles.shufflePanelTitle}>Similar items</div>
+                <div className={styles.shuffleGrid}>
+                  {shuffleProducts.map(p => (
+                    <div key={p.product_id} className={styles.shuffleItem}>
+                      <div className={styles.shuffleImg}>
+                        {p.image_url
+                          ? <img src={p.image_url} alt={p.name} />
+                          : <span>🛍️</span>}
+                      </div>
+                      <div className={styles.shuffleInfo}>
+                        <div className={styles.shuffleName}>{p.name}</div>
+                        <div className={styles.shufflePrice}>{formatCurrency(p.price)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
