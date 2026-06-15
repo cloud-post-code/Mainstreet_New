@@ -1,17 +1,18 @@
 import { MouseEvent, useEffect, useMemo, useState } from 'react'
-import { Session } from '../api'
+import { api, Session } from '../api'
 import { Message } from '../hooks/useAgentStream'
 import PlanDropdown from './PlanDropdown'
 import LiveReasoning from './LiveReasoning'
 import PrefsSetup from './PrefsSetup'
 import BoardsPanel from './BoardsPanel'
+import MasonInboxTab from './MasonInboxTab'
 import { useMason } from '../mason/MasonContext'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
 import { formatDate } from '../lib/format'
 import SavedProductItem from './SavedProductItem'
 
-type TabKey = 'preferences' | 'saved' | 'boards' | 'history'
+type TabKey = 'preferences' | 'saved' | 'boards' | 'history' | 'inbox'
 
 interface PlanStep { step: number; description: string; done: boolean }
 
@@ -37,7 +38,8 @@ interface MasonDrawerProps {
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'history', label: 'History' },
-  { key: 'preferences', label: 'Prefs' },
+  { key: 'preferences', label: 'Preferences' },
+  { key: 'inbox', label: 'Inbox' },
   { key: 'boards', label: 'Boards' },
 ]
 
@@ -56,6 +58,14 @@ export default function MasonDrawer(props: MasonDrawerProps) {
     }
   }, [isOpen])
   const [tab, setTab] = useState<TabKey>('history')
+
+  async function openInboxMessage(id: number) {
+    if (!props.token) return
+    const { session_id } = await api.openInboxMessage(id, props.token)
+    await memory.refreshInbox()
+    props.onSelectSession(session_id)
+    closeDrawer()
+  }
 
   // Latest agent message's events drive the "Now" reasoning view.
   const latestAgentEvents = useMemo(() => {
@@ -154,17 +164,21 @@ export default function MasonDrawer(props: MasonDrawerProps) {
         </div>
 
         <nav className={styles.tabs} role="tablist">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              role="tab"
-              aria-selected={tab === t.key}
-              className={`${styles.tab} ${tab === t.key ? styles.tabActive : ''}`}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TABS.map(t => {
+            const unread = t.key === 'inbox' ? memory.inbox.filter(m => !m.read).length : 0
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={tab === t.key}
+                className={`${styles.tab} ${tab === t.key ? styles.tabActive : ''}`}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+                {unread > 0 && <span className={styles.tabBadge}>{unread}</span>}
+              </button>
+            )
+          })}
         </nav>
 
         <div className={styles.body}>
@@ -214,6 +228,28 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                 <GuestNotice message="Sign in to create boards and organize saved items." />
               ) : (
                 <BoardsPanel memory={memory} token={props.token!} />
+              )}
+            </div>
+          )}
+
+          {tab === 'inbox' && (
+            <div className={styles.section}>
+              {!signedIn ? (
+                <GuestNotice message="Sign in to receive messages and recommendations from Mason." />
+              ) : (
+                <MasonInboxTab
+                  messages={memory.inbox}
+                  onOpen={openInboxMessage}
+                  emptyClass={styles.empty}
+                  listClass={styles.inboxList}
+                  itemClass={styles.inboxItem}
+                  unreadClass={styles.inboxUnread}
+                  dotClass={styles.inboxDot}
+                  bodyClass={styles.inboxBody}
+                  titleClass={styles.inboxTitle}
+                  previewClass={styles.inboxPreview}
+                  dateClass={styles.inboxDate}
+                />
               )}
             </div>
           )}
