@@ -342,6 +342,13 @@ async def _backfill_legacy_prefs(user_id: int, db: AsyncSession) -> UserPreferen
 def _format_prefs_for_prompt(p: dict) -> str:
     """Render structured prefs as a compact prose block for Mason's prompt."""
     lines: list[str] = []
+
+    # Prose lifestyle profile composed from image selections — show first if present
+    ls_top = p.get("lifestyle") or {}
+    profile_text = ls_top.get("profile_text", "")
+    if profile_text:
+        lines.append(f"Profile: {profile_text}")
+
     sizes = p.get("sizes") or {}
     if sizes:
         bits = []

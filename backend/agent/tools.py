@@ -212,8 +212,8 @@ TOOL_DEFINITIONS = [
         "description": (
             "Save a shopping preference for one of the four reserved keys so it shows up in the Prefs panel. "
             "Use this when the user states a durable shopping preference: clothing/shoe sizes, budget caps, "
-            "brands or materials they love, or things they want to avoid. Prefer this over save_note for "
-            "the four canonical fields."
+            "brands or materials they love, or things they want to avoid. Prefer update_preferences over "
+            "this for the four canonical fields."
         ),
         "input_schema": {
             "type": "object",

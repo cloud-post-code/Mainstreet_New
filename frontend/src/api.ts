@@ -184,6 +184,22 @@ export interface MasonLifestyle {
   vibe_notes?: string
   likes_notes?: string
   dislikes_notes?: string
+  // ── selections for onboarding steps ──
+  shopping_vibe_selections?: string[]
+  shopping_vibe_notes?: string
+  price_vibe_selections?: string[]
+  price_vibe_notes?: string
+  homeowner_selection?: string
+  homeowner_notes?: string
+  travel_selections?: string[]
+  travel_notes?: string
+  pets_selections?: string[]
+  gifting_selections?: string[]
+  gifting_notes?: string
+  budget_selection?: string
+  budget_notes?: string
+  // ── composed prose profile (what Mason reads first) ──
+  profile_text?: string
 }
 export interface MasonPrefs {
   sizes: MasonSizes

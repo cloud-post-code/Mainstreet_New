@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MasonPrefsPatch } from '../api'
+import { MasonLifestyle, MasonPrefsPatch } from '../api'
 import styles from './MasonOnboarding.module.css'
 
 interface Props {
@@ -7,11 +7,21 @@ interface Props {
   onSkip: () => void
 }
 
+// ─── Image option type ────────────────────────────────────────────────────────
+
+interface ImgOpt {
+  value: string
+  label: string
+  url: string
+  note: string            // 2–4 word descriptor composed into stored text
+  tags?: string[]         // bonus style_tags
+}
+
 // ─── Step types ────────────────────────────────────────────────────────────────
 
-type StepKind = 'chips' | 'multi-chips' | 'text' | 'image-pick' | 'image-multi' | 'sizing-steps'
+type StepKind = 'image-multi' | 'image-pick' | 'sizing-steps' | 'text'
 
-interface SizingStep {
+interface SizingField {
   id: string
   label: string
   placeholder: string
@@ -19,16 +29,154 @@ interface SizingStep {
 
 interface Step {
   id: string
-  message: string | string[] // array = Mason sends multiple bubbles
+  message: string | string[]
   kind: StepKind
-  options?: string[]
-  images?: Array<{ label: string; url: string; tags: string[] }>
+  images?: ImgOpt[]
+  sizingFields?: SizingField[]
   placeholder?: string
-  sizingSteps?: SizingStep[]
   patchFn: (answer: string | string[]) => Partial<MasonPrefsPatch>
 }
 
-// ─── Mason personality helpers ─────────────────────────────────────────────────
+// ─── Text helpers ─────────────────────────────────────────────────────────────
+
+function joinNatural(items: string[]): string {
+  if (!items.length) return ''
+  if (items.length === 1) return items[0]
+  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1]
+}
+
+function buildNote(opts: ImgOpt[], selected: string[], template: (notes: string[]) => string): string {
+  const notes = selected.map(v => opts.find(o => o.value === v)?.note ?? v).filter(Boolean)
+  return notes.length ? template(notes) : ''
+}
+
+// ─── Image option sets ────────────────────────────────────────────────────────
+
+const STYLE_OPTS: ImgOpt[] = [
+  { value: 'minimalist',  label: 'Clean & minimal',    url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=60&fit=crop', note: 'clean and minimal',            tags: ['minimalist', 'clean', 'simple'] },
+  { value: 'classic',     label: 'Timeless classic',   url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=60&fit=crop', note: 'timeless and classic',        tags: ['classic', 'refined', 'tailored'] },
+  { value: 'streetwear',  label: 'Street cool',        url: 'https://images.unsplash.com/photo-1523398002811-999ca8dec234?w=400&q=60&fit=crop', note: 'street-influenced',           tags: ['streetwear', 'urban', 'edgy'] },
+  { value: 'bohemian',    label: 'Free spirit',        url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=60&fit=crop', note: 'bohemian and free-spirited',  tags: ['bohemian', 'eclectic', 'earthy'] },
+  { value: 'preppy',      label: 'Polished preppy',    url: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&q=60&fit=crop', note: 'polished and preppy',         tags: ['preppy', 'classic', 'put-together'] },
+  { value: 'outdoorsy',   label: 'Outdoorsy',          url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&q=60&fit=crop', note: 'outdoorsy and functional',    tags: ['outdoorsy', 'functional', 'rugged'] },
+  { value: 'luxury',      label: 'Quiet luxury',       url: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=400&q=60&fit=crop', note: 'quietly luxurious',           tags: ['luxury', 'elevated', 'understated'] },
+  { value: 'artsy',       label: 'Creative & artsy',   url: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=400&q=60&fit=crop', note: 'creative and expressive',     tags: ['creative', 'artsy', 'expressive'] },
+  { value: 'athletic',    label: 'Athletic / Sport',   url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=60&fit=crop', note: 'athletic and performance-driven', tags: ['athletic', 'sporty', 'performance'] },
+]
+
+const VIBE_OPTS: ImgOpt[] = [
+  { value: 'clean_simple',   label: 'Clean & simple',   url: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=300&q=80', note: 'clean and simple',   tags: ['minimalist', 'clean'] },
+  { value: 'warm_cozy',      label: 'Warm & cozy',      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&q=80', note: 'warm and cozy',     tags: ['cozy', 'warm', 'natural'] },
+  { value: 'bold_graphic',   label: 'Bold & graphic',   url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80', note: 'bold and graphic',  tags: ['bold', 'graphic', 'statement'] },
+  { value: 'natural_earthy', label: 'Natural & earthy', url: 'https://images.unsplash.com/photo-1490750967868-88df5691cc8a?w=300&q=80', note: 'natural and earthy', tags: ['natural', 'earthy', 'organic'] },
+  { value: 'sleek_modern',   label: 'Sleek & modern',   url: 'https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=300&q=80', note: 'sleek and modern',   tags: ['modern', 'sleek', 'contemporary'] },
+  { value: 'colorful_fun',   label: 'Colorful & fun',   url: 'https://images.unsplash.com/photo-1549289524-06cf8837ace5?w=300&q=80', note: 'colorful and fun',   tags: ['colorful', 'playful', 'vibrant'] },
+]
+
+const HOME_OPTS: ImgOpt[] = [
+  { value: 'warm_rustic',   label: 'Warm & rustic',   url: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80', note: 'warm and rustic',   tags: ['rustic', 'warm', 'natural'] },
+  { value: 'modern_clean',  label: 'Modern & clean',  url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80', note: 'modern and clean',  tags: ['modern', 'minimalist', 'clean'] },
+  { value: 'cozy_eclectic', label: 'Cozy & eclectic', url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80', note: 'cozy and eclectic',  tags: ['cozy', 'eclectic', 'layered'] },
+  { value: 'bright_airy',   label: 'Bright & airy',   url: 'https://images.unsplash.com/photo-1484101403633-562f891dc89a?w=300&q=80', note: 'bright and airy',   tags: ['bright', 'airy', 'open'] },
+]
+
+const SHOPPING_OPTS: ImgOpt[] = [
+  { value: 'know_exactly',  label: 'I know what I want',     url: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&q=80', note: 'purposeful and decisive' },
+  { value: 'browse',        label: 'I browse till it clicks', url: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=300&q=80', note: 'a relaxed browser' },
+  { value: 'discover',      label: 'I love discovering',     url: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=300&q=80', note: 'discovery-oriented' },
+  { value: 'mood',          label: 'Depends on my mood',     url: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=300&q=80', note: 'mood-driven' },
+]
+
+const PRICE_OPTS: ImgOpt[] = [
+  { value: 'budget_first',  label: 'Budget first',         url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=300&q=80', note: 'budget-conscious and value-focused' },
+  { value: 'balanced',      label: 'Balance of price & quality', url: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=300&q=80', note: 'balanced on price and quality' },
+  { value: 'quality_over',  label: 'Quality over price',   url: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=300&q=80', note: 'quality-first and willing to invest' },
+  { value: 'splurge',       label: 'Splurge on things I love', url: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&q=80', note: 'selectively splurging on what matters' },
+]
+
+const FAMILY_OPTS: ImgOpt[] = [
+  { value: 'solo',          label: 'Flying solo',          url: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=300&q=80', note: 'living solo and independently' },
+  { value: 'partner',       label: 'Partner / spouse',     url: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=300&q=80', note: 'with a partner' },
+  { value: 'kids',          label: 'Kids at home',         url: 'https://images.unsplash.com/photo-1536640712-4d4c36ff0e4e?w=300&q=80', note: 'kids at home' },
+  { value: 'roommates',     label: 'Roommates',            url: 'https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=300&q=80', note: 'living with roommates' },
+  { value: 'family',        label: 'Parents / extended family', url: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=300&q=80', note: 'with extended family nearby' },
+]
+
+const HOMEOWNER_OPTS: ImgOpt[] = [
+  { value: 'own', label: 'Own / homeowner', url: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=300&q=80', note: 'a homeowner' },
+  { value: 'rent', label: 'Renting', url: 'https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=300&q=80', note: 'renting their space' },
+]
+
+const WORK_OPTS: ImgOpt[] = [
+  { value: 'home_office',      label: 'Home office',         url: 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=300&q=80', note: 'from a home office' },
+  { value: 'kitchen_table',    label: 'Kitchen table WFH',   url: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=300&q=80', note: 'from wherever at home' },
+  { value: 'corporate_office', label: 'Corporate office',    url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=300&q=80', note: 'from a corporate office' },
+  { value: 'coworking',        label: 'Coworking / café',    url: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=300&q=80', note: 'from coworking spaces and cafés' },
+  { value: 'creative_studio',  label: 'Creative studio',     url: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=300&q=80', note: 'from a creative studio' },
+  { value: 'outdoors_field',   label: 'Outdoors / On-site',  url: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=300&q=80', note: 'outdoors or on-site' },
+  { value: 'always_traveling', label: 'Always traveling',    url: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=300&q=80', note: 'constantly on the road' },
+]
+
+const TRAVEL_OPTS: ImgOpt[] = [
+  { value: 'rarely',          label: 'Rarely — I stay local', url: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=300&q=80', note: 'mostly local' },
+  { value: 'few_times_year',  label: 'A few times a year',    url: 'https://images.unsplash.com/photo-1488085061387-422e29b40080?w=300&q=80', note: 'traveling a few times a year' },
+  { value: 'monthly',         label: 'Monthly or so',         url: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=300&q=80', note: 'traveling monthly' },
+  { value: 'frequently',      label: 'Constantly on the go',  url: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=300&q=80', note: 'constantly traveling' },
+]
+
+const PETS_OPTS: ImgOpt[] = [
+  { value: 'dog',    label: 'Dog',     url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=300&q=80', note: 'a dog' },
+  { value: 'cat',    label: 'Cat',     url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=300&q=80', note: 'a cat' },
+  { value: 'other',  label: 'Other',   url: 'https://images.unsplash.com/photo-1425082661705-1834bfd09dca?w=300&q=80', note: 'other pets' },
+  { value: 'no_pets',label: 'No pets', url: 'https://images.unsplash.com/photo-1554995207-c18c203602cb?w=300&q=80', note: '' },
+]
+
+const HOBBIES_OPTS: ImgOpt[] = [
+  { value: 'hiking',         label: 'Hiking or camping',    url: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=300&q=80', note: 'hiking and camping', tags: ['outdoorsy'] },
+  { value: 'farmers_market', label: 'Farmers markets',      url: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=300&q=80', note: 'farmers markets', tags: ['local', 'artisan'] },
+  { value: 'hosting',        label: 'Hosting dinners',      url: 'https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=300&q=80', note: 'hosting dinners', tags: ['entertaining'] },
+  { value: 'gallery',        label: 'Galleries & museums',  url: 'https://images.unsplash.com/photo-1531058020387-3be344556be6?w=300&q=80', note: 'galleries and museums', tags: ['artsy', 'cultural'] },
+  { value: 'gym_wellness',   label: 'Gym or wellness',      url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=300&q=80', note: 'gym and wellness routines', tags: ['fitness', 'health'] },
+  { value: 'live_music',     label: 'Live music',           url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&q=80', note: 'live music and festivals', tags: ['music'] },
+  { value: 'thrifting',      label: 'Thrifting & antiques', url: 'https://images.unsplash.com/photo-1558171813-7c1df82c0b27?w=300&q=80', note: 'thrifting and antiques', tags: ['vintage'] },
+  { value: 'cooking',        label: 'Cooking or baking',    url: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80', note: 'cooking and baking', tags: ['culinary'] },
+  { value: 'road_trip',      label: 'Road trips',           url: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=300&q=80', note: 'spontaneous road trips', tags: ['adventure'] },
+  { value: 'reading_cafe',   label: 'Coffee & reading',     url: 'https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=300&q=80', note: 'reading at coffee shops', tags: ['bookish'] },
+  { value: 'beach_park',     label: 'Beach or park',        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300&q=80', note: 'beach and park time', tags: ['relaxed', 'outdoor'] },
+  { value: 'shopping',       label: 'Shopping & exploring', url: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=300&q=80', note: 'shopping and exploring', tags: ['fashion'] },
+]
+
+const GIFTING_OPTS: ImgOpt[] = [
+  { value: 'sentimental',    label: 'Sentimental keepsake', url: 'https://images.unsplash.com/photo-1512909006721-3d6018887383?w=300&q=80', note: 'sentimental keepsakes' },
+  { value: 'luxury_splurge', label: 'Luxury splurge',       url: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&q=80', note: 'luxury splurges' },
+  { value: 'useful',         label: 'Useful & practical',   url: 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=300&q=80', note: 'useful and practical gifts' },
+  { value: 'funny',          label: 'Funny & playful',      url: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=300&q=80', note: 'funny and playful gifts' },
+  { value: 'experience',     label: 'An experience',        url: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=300&q=80', note: 'experiences over objects' },
+  { value: 'artisan',        label: 'Local or artisan',     url: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=300&q=80', note: 'local and artisan finds' },
+]
+
+const BUDGET_OPTS: ImgOpt[] = [
+  { value: 'under_25',   label: 'Under $25',   url: 'https://images.unsplash.com/photo-1607082349566-187342175e2f?w=300&q=80', note: 'under $25' },
+  { value: '25_50',      label: '$25–$50',      url: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=300&q=80', note: '$25 to $50' },
+  { value: '50_100',     label: '$50–$100',     url: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=300&q=80', note: '$50 to $100' },
+  { value: '100_200',    label: '$100–$200',    url: 'https://images.unsplash.com/photo-1512909006721-3d6018887383?w=300&q=80', note: '$100 to $200' },
+  { value: '200_plus',   label: '$200+',        url: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=300&q=80', note: '$200 or more' },
+]
+
+// ─── Note composers ───────────────────────────────────────────────────────────
+
+function composeProfileText(notes: Record<string, string>): string {
+  const NOTE_KEYS = [
+    'style_notes', 'vibe_notes', 'home_aesthetic_notes',
+    'shopping_vibe_notes', 'price_vibe_notes',
+    'family_notes', 'homeowner_notes', 'work_setup_notes',
+    'travel_notes', 'pets_notes_text', 'weekend_notes',
+    'gifting_notes', 'budget_notes',
+  ]
+  return NOTE_KEYS.map(k => notes[k] ?? '').filter(Boolean).join(' ')
+}
+
+// ─── Mason personality helpers ────────────────────────────────────────────────
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -37,7 +185,7 @@ function pick<T>(arr: T[]): T {
 const BRIDGE_LINES: Record<string, string[]> = {
   after_style: [
     "Love it — already getting a picture of your vibe.",
-    "That's a solid start. I've got your aesthetic locked in.",
+    "That's a solid aesthetic. I've got you.",
     "Good taste. I can work with this.",
   ],
   after_images: [
@@ -46,12 +194,12 @@ const BRIDGE_LINES: Record<string, string[]> = {
     "Nice. The pattern here tells me a lot.",
   ],
   after_lifestyle: [
-    "That's helpful — context matters a lot when I'm picking things for you.",
-    "Good to know. I'll keep that in mind every time I shop for you.",
+    "That's helpful — context matters when I'm picking things for you.",
+    "Good to know. I'll keep that in mind.",
     "Perfect. That fills in a lot of gaps.",
   ],
   after_sizing: [
-    "Got it — I'll keep your sizes on file so you never have to guess.",
+    "Got it — I'll keep your sizes on file.",
     "Saved. That'll save you a lot of back and forth.",
     "Perfect. I'll use that whenever sizing matters.",
   ],
@@ -59,116 +207,108 @@ const BRIDGE_LINES: Record<string, string[]> = {
     "Good to know. Gift shopping can be the hardest part.",
     "Noted — I'll be ready whenever an occasion comes up.",
   ],
-  generic: [
-    "Got it.",
-    "Makes sense.",
-    "Perfect.",
-    "Noted.",
-  ],
+  generic: ["Got it.", "Makes sense.", "Perfect.", "Noted."],
 }
 
-// ─── Steps definition ──────────────────────────────────────────────────────────
+// ─── Steps ────────────────────────────────────────────────────────────────────
 
 const STEPS: Step[] = [
   {
     id: 'style',
-    message: "First things first — how would you describe your style? Pick everything that feels like you.",
-    kind: 'multi-chips',
-    options: [
-      'Minimalist', 'Classic', 'Streetwear', 'Bohemian', 'Preppy', 'Techwear',
-      'Cottagecore', 'Old Money', 'Vintage', 'Athleisure', 'Maximalist', 'Dark Academia',
-    ],
-    patchFn: (ans) => ({ style_tags: (ans as string[]).map(s => s.toLowerCase()) }),
+    message: "First things first — which of these feels like your style energy? Pick everything that fits.",
+    kind: 'image-multi',
+    images: STYLE_OPTS,
+    patchFn: (ans) => {
+      const selected = ans as string[]
+      const tags = selected.flatMap(v => STYLE_OPTS.find(o => o.value === v)?.tags ?? [])
+      const note = buildNote(STYLE_OPTS, selected, ls => `Their style is ${joinNatural(ls)}.`)
+      return {
+        style_tags: [...new Set([...selected, ...tags])],
+        lifestyle: { style_selections: selected, style_notes: note } as Partial<MasonLifestyle>,
+      }
+    },
   },
   {
     id: 'vibe_images',
     message: "Now — tap everything that catches your eye. Go with your gut.",
     kind: 'image-multi',
-    images: [
-      { label: 'Clean & simple',   url: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=300&q=80', tags: ['minimalist', 'clean'] },
-      { label: 'Warm & cozy',      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&q=80', tags: ['cozy', 'warm', 'natural'] },
-      { label: 'Bold & graphic',   url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80', tags: ['bold', 'graphic', 'statement'] },
-      { label: 'Natural & earthy', url: 'https://images.unsplash.com/photo-1490750967868-88df5691cc8a?w=300&q=80', tags: ['natural', 'earthy', 'organic'] },
-      { label: 'Sleek & modern',   url: 'https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=300&q=80', tags: ['modern', 'sleek', 'contemporary'] },
-      { label: 'Colorful & fun',   url: 'https://images.unsplash.com/photo-1549289524-06cf8837ace5?w=300&q=80', tags: ['colorful', 'playful', 'vibrant'] },
-    ],
+    images: VIBE_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const VIBE_TAGS: Record<string, string[]> = {
-        'Clean & simple':   ['minimalist', 'clean'],
-        'Warm & cozy':      ['cozy', 'warm', 'natural'],
-        'Bold & graphic':   ['bold', 'graphic', 'statement'],
-        'Natural & earthy': ['natural', 'earthy', 'organic'],
-        'Sleek & modern':   ['modern', 'sleek', 'contemporary'],
-        'Colorful & fun':   ['colorful', 'playful', 'vibrant'],
+      const tags = selected.flatMap(v => VIBE_OPTS.find(o => o.value === v)?.tags ?? [])
+      const note = buildNote(VIBE_OPTS, selected, ls => `They are drawn to ${joinNatural(ls)} aesthetics.`)
+      return {
+        style_tags: [...new Set(tags)],
+        lifestyle: { vibe_notes: note } as Partial<MasonLifestyle>,
       }
-      const tagsFromImages = selected.flatMap(label => VIBE_TAGS[label] ?? [])
-      return { style_tags: [...new Set(tagsFromImages)] }
     },
   },
-
-  // ── Interior/home aesthetic ────────────────────────────────────────────────
   {
     id: 'home_aesthetic',
     message: "What about your home — which of these feels most like your space?",
     kind: 'image-multi',
-    images: [
-      { label: 'Warm & rustic',    url: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80', tags: ['rustic', 'warm', 'natural'] },
-      { label: 'Modern & clean',   url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80', tags: ['modern', 'minimalist', 'clean'] },
-      { label: 'Cozy & eclectic',  url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80', tags: ['cozy', 'eclectic', 'layered'] },
-      { label: 'Bright & airy',    url: 'https://images.unsplash.com/photo-1484101403633-562f891dc89a?w=300&q=80', tags: ['bright', 'airy', 'open'] },
-    ],
+    images: HOME_OPTS,
     patchFn: (ans) => {
-      const HOME_TAGS: Record<string, string[]> = {
-        'Warm & rustic':   ['rustic', 'warm', 'natural'],
-        'Modern & clean':  ['modern', 'minimalist', 'clean'],
-        'Cozy & eclectic': ['cozy', 'eclectic', 'layered'],
-        'Bright & airy':   ['bright', 'airy', 'open'],
+      const selected = ans as string[]
+      const tags = selected.flatMap(v => HOME_OPTS.find(o => o.value === v)?.tags ?? [])
+      const note = buildNote(HOME_OPTS, selected, ls => `Their home aesthetic is ${joinNatural(ls)}.`)
+      return {
+        style_tags: [...new Set(tags)],
+        lifestyle: {
+          home_aesthetic: selected.join(', '),
+          home_aesthetic_notes: note,
+        } as Partial<MasonLifestyle>,
       }
-      const tags = (ans as string[]).flatMap(l => HOME_TAGS[l] ?? [])
-      return { lifestyle: { home_aesthetic: (ans as string[]).join(', ') } as MasonPrefsPatch['lifestyle'], style_tags: [...new Set(tags)] }
     },
   },
-
-  // ── Shopping mode ──────────────────────────────────────────────────────────
   {
     id: 'shopping_vibe',
     message: "When you go shopping, what's your usual mode?",
-    kind: 'chips',
-    options: ['I know exactly what I want', 'I browse until something catches me', 'I love discovering new things', 'Depends on my mood'],
+    kind: 'image-multi',
+    images: SHOPPING_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      const discover_known = a.includes('discovering') || a.includes('browse') ? 2 : a.includes('exactly') ? 4 : 3
-      return { discover_known, lifestyle: { discovery_notes: a } as MasonPrefsPatch['lifestyle'] }
+      const selected = ans as string[]
+      const val = selected[0] ?? ''
+      const discover_known = val === 'discover' ? 2 : val === 'browse' ? 3 : val === 'know_exactly' ? 5 : 3
+      const note = buildNote(SHOPPING_OPTS, selected, ls => `When shopping they tend to be ${joinNatural(ls)}.`)
+      return {
+        discover_known,
+        lifestyle: {
+          shopping_vibe_selections: selected,
+          shopping_vibe_notes: note,
+          discovery_notes: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
-
-  // ── Price attitude ─────────────────────────────────────────────────────────
   {
     id: 'price_vibe',
-    message: "How do you think about price when you're buying something for yourself?",
-    kind: 'chips',
-    options: ['Budget first, always', 'Balance of price & quality', 'Quality over price every time', 'Splurge on things I love, save on the rest'],
+    message: "How do you think about price when buying something for yourself?",
+    kind: 'image-multi',
+    images: PRICE_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      let quality_price = 3
-      if (a.includes('Budget')) quality_price = 1
-      else if (a.includes('Quality over')) quality_price = 5
-      else if (a.includes('Balance')) quality_price = 3
-      else if (a.includes('Splurge')) quality_price = 4
-      return { quality_price, lifestyle: { quality_notes: a } as MasonPrefsPatch['lifestyle'] }
+      const selected = ans as string[]
+      const val = selected[0] ?? ''
+      const quality_price = val === 'budget_first' ? 1 : val === 'balanced' ? 3 : val === 'quality_over' ? 5 : val === 'splurge' ? 4 : 3
+      const note = buildNote(PRICE_OPTS, selected, ls => `On price they are ${joinNatural(ls)}.`)
+      return {
+        quality_price,
+        lifestyle: {
+          price_vibe_selections: selected,
+          price_vibe_notes: note,
+          quality_notes: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
-
-  // ── Sizing (guided steps) ──────────────────────────────────────────────────
   {
     id: 'sizing',
     message: [
       "Quick one — let's get your sizing on file so I never have to guess.",
-      "Pick what applies to you. You can skip anything that doesn't.",
+      "Fill in what applies. Skip anything that doesn't.",
     ],
     kind: 'sizing-steps',
-    sizingSteps: [
+    sizingFields: [
       { id: 'shirt',  label: 'Shirt / Top',  placeholder: 'XS / S / M / L / XL / XXL' },
       { id: 'waist',  label: 'Pants waist',  placeholder: 'e.g. 32' },
       { id: 'inseam', label: 'Inseam',       placeholder: 'e.g. 30' },
@@ -176,7 +316,6 @@ const STEPS: Step[] = [
       { id: 'dress',  label: 'Dress / Suit', placeholder: 'e.g. 6 or 38R' },
     ],
     patchFn: (ans) => {
-      // ans is a JSON string: { shirt, waist, inseam, shoe, dress }
       try {
         const vals = JSON.parse(ans as string) as Record<string, string>
         const sizes: MasonPrefsPatch['sizes'] = {}
@@ -189,84 +328,122 @@ const STEPS: Step[] = [
       } catch { return {} }
     },
   },
-
-  // ── Family & home ──────────────────────────────────────────────────────────
   {
     id: 'family',
-    message: "Who's at home with you? (Helps me shop for the right people.)",
-    kind: 'multi-chips',
-    options: ['Live alone', 'Partner / spouse', 'Kids', 'Roommates', 'Parents / family'],
+    message: "Who's at home with you?",
+    kind: 'image-multi',
+    images: FAMILY_OPTS,
     patchFn: (ans) => {
-      return { lifestyle: { family_notes: (ans as string[]).join(', ') } as MasonPrefsPatch['lifestyle'] }
+      const selected = ans as string[]
+      const note = buildNote(FAMILY_OPTS, selected, ls => `At home they live ${joinNatural(ls)}.`)
+      return {
+        lifestyle: {
+          family_life_selections: selected,
+          family_life_notes: note,
+          family_notes: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
   {
     id: 'homeowner',
     message: "Do you own your home or rent?",
-    kind: 'chips',
-    options: ['Own / homeowner', 'Renting', 'Other'],
+    kind: 'image-pick',
+    images: HOMEOWNER_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      const housing: MasonLifestyleHousing = a.includes('Own') ? 'homeowner' : a.includes('Rent') ? 'renter' : 'renter'
-      return { lifestyle: { housing } as MasonPrefsPatch['lifestyle'] }
+      const val = (ans as string[])[0] ?? ans as string
+      const housing: 'homeowner' | 'renter' = val === 'own' ? 'homeowner' : 'renter'
+      const note = buildNote(HOMEOWNER_OPTS, [val], ls => `They are ${joinNatural(ls)}.`)
+      return {
+        lifestyle: {
+          housing,
+          homeowner_selection: val,
+          homeowner_notes: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
-
-  // ── Work & travel ──────────────────────────────────────────────────────────
   {
     id: 'work_env',
     message: "How do you work most days?",
-    kind: 'chips',
-    options: ['From home', 'Hybrid (office + home)', 'In the office', 'Outdoors / field work', 'Varies'],
+    kind: 'image-multi',
+    images: WORK_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      const work_env = a.includes('home') ? 'wfh' : a.includes('Hybrid') ? 'hybrid' : a.includes('office') ? 'office' : a.includes('Outdoor') ? 'outdoor' : 'hybrid'
-      return { lifestyle: { work_env } as MasonPrefsPatch['lifestyle'] }
+      const selected = ans as string[]
+      const val = selected[0] ?? ''
+      const work_env = val === 'home_office' || val === 'kitchen_table' ? 'wfh'
+        : val === 'corporate_office' ? 'office'
+        : val === 'coworking' ? 'hybrid'
+        : val === 'outdoors_field' ? 'outdoor'
+        : 'hybrid'
+      const note = buildNote(WORK_OPTS, selected, ls => `They work ${joinNatural(ls)}.`)
+      return {
+        lifestyle: {
+          work_setup_selections: selected,
+          work_setup_notes: note,
+          work_env,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
   {
     id: 'travel',
     message: "How much do you travel?",
-    kind: 'chips',
-    options: ['Rarely — I stay local', 'A few times a year', 'Monthly or so', 'Constantly on the go'],
+    kind: 'image-multi',
+    images: TRAVEL_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      const travel = a.includes('Rarely') ? 'rarely' : a.includes('few') ? 'few_times_year' : a.includes('Monthly') ? 'monthly' : 'frequently'
-      return { lifestyle: { travel } as MasonPrefsPatch['lifestyle'] }
+      const selected = ans as string[]
+      const val = selected[0] ?? ''
+      const travel = val === 'rarely' ? 'rarely' : val === 'few_times_year' ? 'few_times_year' : val === 'monthly' ? 'monthly' : 'frequently'
+      const note = buildNote(TRAVEL_OPTS, selected, ls => `They travel ${joinNatural(ls)}.`)
+      return {
+        lifestyle: {
+          travel_selections: selected,
+          travel_notes: note,
+          travel,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
-
-  // ── Pets ───────────────────────────────────────────────────────────────────
   {
     id: 'pets',
     message: "Any pets?",
-    kind: 'multi-chips',
-    options: ['Dog', 'Cat', 'Other', 'No pets'],
+    kind: 'image-multi',
+    images: PETS_OPTS,
     patchFn: (ans) => {
-      const selected = (ans as string[]).filter(s => s !== 'No pets')
-      if (selected.length === 0) return {}
-      return { lifestyle: { pets: selected.map(s => s.toLowerCase()) } as MasonPrefsPatch['lifestyle'] }
+      const selected = (ans as string[]).filter(s => s !== 'no_pets')
+      if (!selected.length) return {}
+      const pets = selected.map(s => s)
+      const note = buildNote(PETS_OPTS, selected, ls => `They have ${joinNatural(ls)} at home.`)
+      return {
+        lifestyle: {
+          pets,
+          pets_selections: selected,
+          pets_notes_text: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
-
-  // ── Hobbies ────────────────────────────────────────────────────────────────
   {
     id: 'hobbies',
     message: "What takes up real time in your life outside of work? Pick anything that applies.",
-    kind: 'multi-chips',
-    options: [
-      'Running / cycling', 'Gym / lifting', 'Yoga / pilates', 'Hiking / outdoors',
-      'Cooking / baking', 'Reading', 'Gaming', 'Music', 'Travel', 'Art / crafts',
-      'Golf', 'Team sports', 'Gardening', 'Photography',
-    ],
+    kind: 'image-multi',
+    images: HOBBIES_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const hobbies = selected.map(h => h.toLowerCase().split('/')[0].trim())
-      return { lifestyle: { hobbies } as MasonPrefsPatch['lifestyle'] }
+      const hobbies = selected.map(v => HOBBIES_OPTS.find(o => o.value === v)?.note ?? v)
+      const tags = selected.flatMap(v => HOBBIES_OPTS.find(o => o.value === v)?.tags ?? [])
+      const note = buildNote(HOBBIES_OPTS, selected, ls => `On weekends they enjoy ${joinNatural(ls)}.`)
+      return {
+        style_tags: [...new Set(tags)],
+        lifestyle: {
+          weekend_selections: selected,
+          weekend_notes: note,
+          hobbies,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
-
-  // ── Brands / likes ─────────────────────────────────────────────────────────
   {
     id: 'loves',
     message: "Any brands or materials you absolutely love? I'll always keep them in mind.",
@@ -291,36 +468,46 @@ const STEPS: Step[] = [
       return { dislikes: items }
     },
   },
-
-  // ── Gifting ────────────────────────────────────────────────────────────────
   {
     id: 'gifting',
-    message: "Do you shop for gifts often?",
-    kind: 'chips',
-    options: ["All the time — it's my thing", 'Sometimes, for the people I love', 'Occasionally, when I have to', 'Rarely'],
+    message: "When giving a gift, what's your move?",
+    kind: 'image-multi',
+    images: GIFTING_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      return { lifestyle: { freeform_notes: `Gifting: ${a}` } as MasonPrefsPatch['lifestyle'] }
+      const selected = ans as string[]
+      const note = buildNote(GIFTING_OPTS, selected, ls => `When giving gifts they gravitate toward ${joinNatural(ls)}.`)
+      return {
+        lifestyle: {
+          gifting_selections: selected,
+          gifting_notes: note,
+          gift_mood_selections: selected,
+          gift_mood_notes: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
   {
     id: 'budget',
     message: "What's a typical budget when you're buying a gift for someone?",
-    kind: 'chips',
-    options: ['Under $25', '$25–$50', '$50–$100', '$100–$200', '$200+'],
+    kind: 'image-pick',
+    images: BUDGET_OPTS,
     patchFn: (ans) => {
-      const a = ans as string
-      const map: Record<string, number> = { 'Under $25': 20, '$25–$50': 40, '$50–$100': 75, '$100–$200': 150, '$200+': 250 }
-      const def = map[a] ?? 50
-      return { gift_budget: { default: def, freeform: a } as MasonPrefsPatch['gift_budget'] }
+      const val = (ans as string[])[0] ?? ans as string
+      const map: Record<string, number> = { under_25: 20, '25_50': 40, '50_100': 75, '100_200': 150, '200_plus': 250 }
+      const def = map[val] ?? 50
+      const note = buildNote(BUDGET_OPTS, [val], ls => `Their typical gift budget is ${joinNatural(ls)}.`)
+      return {
+        gift_budget: { default: def, freeform: note } as MasonPrefsPatch['gift_budget'],
+        lifestyle: {
+          budget_selection: val,
+          budget_notes: note,
+        } as Partial<MasonLifestyle>,
+      }
     },
   },
 ]
 
-// Tiny alias so patchFn can reference the housing union without importing
-type MasonLifestyleHousing = 'homeowner' | 'renter'
-
-// Which step IDs get a bridge line before the NEXT step fires
+// Which step IDs get a bridge line before the NEXT step
 const BRIDGE_AFTER: Record<string, keyof typeof BRIDGE_LINES> = {
   vibe_images:    'after_images',
   home_aesthetic: 'after_lifestyle',
@@ -330,7 +517,7 @@ const BRIDGE_AFTER: Record<string, keyof typeof BRIDGE_LINES> = {
 
 // ─── Message types ─────────────────────────────────────────────────────────────
 
-type Message =
+type Msg =
   | { role: 'mason'; text: string; id: string }
   | { role: 'user'; text: string; id: string }
   | { role: 'typing'; id: string }
@@ -338,10 +525,9 @@ type Message =
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function MasonOnboarding({ onComplete, onSkip }: Props) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Msg[]>([])
   const [stepIdx, setStepIdx] = useState(-1)
   const [typing, setTyping] = useState(false)
-  const [selectedChips, setSelectedChips] = useState<string[]>([])
   const [selectedImages, setSelectedImages] = useState<string[]>([])
   const [textVal, setTextVal] = useState('')
   const [sizingVals, setSizingVals] = useState<Record<string, string>>({})
@@ -350,6 +536,7 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const msgCounter = useRef(0)
+  const prevStepIdx = useRef(-1)
 
   function nextId() {
     msgCounter.current += 1
@@ -400,7 +587,6 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const prevStepIdx = useRef(-1)
   useEffect(() => {
     if (stepIdx < 0 || stepIdx === prevStepIdx.current) return
     if (stepIdx >= STEPS.length) return
@@ -411,7 +597,6 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
       for (let i = 0; i < msgs.length; i++) {
         await masonSays(msgs[i], i === 0 ? 500 : 600)
       }
-      setSelectedChips([])
       setSelectedImages([])
       setTextVal('')
       setSizingVals({})
@@ -435,11 +620,20 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
     const answerText = Array.isArray(answer) ? answer.join(', ') : answer
 
     if (answerText.trim() && answerText !== '(skipped)') {
-      userSays(answerText)
+      // Show labels not raw values in the user bubble
+      const step_ = STEPS[stepIdx]
+      if (step_.images) {
+        const selectedVals = Array.isArray(answer) ? answer : [answer]
+        const labels = selectedVals.map(v => step_.images!.find(o => o.value === v)?.label ?? v)
+        userSays(labels.join(', '))
+      } else {
+        userSays(answerText)
+      }
     }
 
     const newPatch = step.patchFn(answer)
-    setPatch(prev => mergedPatch(prev, newPatch))
+    const nextPatch = mergedPatch(patch, newPatch)
+    setPatch(nextPatch)
 
     const bridgeKey = BRIDGE_AFTER[step.id]
     if (bridgeKey) {
@@ -448,56 +642,52 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
 
     const next = stepIdx + 1
     if (next >= STEPS.length) {
-      setPatch(prev => {
-        const finalPatch = mergedPatch(prev, newPatch)
-        // Slight delay so the bridge line reads before completion
-        setTimeout(async () => {
-          await masonSays(pick([
-            "You're all set! I've got a clear picture of you now.",
-            "Perfect — that's everything I need.",
-            "Done! I've got a solid sense of your taste.",
-          ]), 600)
-          await masonSays(pick([
-            "Every recommendation from here on is tailored just for you. Let's shop! 🛍️",
-            "I'll put all of this to work. Let's find you something great. 🛍️",
-            "Time to go find you some great things. 🛍️",
-          ]), 1000)
-          setTimeout(() => {
-            onComplete(finalPatch)
-            setDone(true)
-          }, 800)
-        }, 300)
-        return finalPatch
-      })
+      // Compose profile_text from all lifestyle notes
+      const ls = (nextPatch.lifestyle ?? {}) as Record<string, string>
+      const noteKeys = [
+        'style_notes', 'vibe_notes', 'home_aesthetic_notes',
+        'shopping_vibe_notes', 'price_vibe_notes',
+        'family_notes', 'homeowner_notes', 'work_setup_notes',
+        'travel_notes', 'pets_notes_text', 'weekend_notes',
+        'gifting_notes', 'budget_notes',
+      ]
+      const profile_text = noteKeys.map(k => ls[k] ?? '').filter(Boolean).join(' ')
+      const finalPatch = mergedPatch(nextPatch, { lifestyle: { profile_text } as Partial<MasonLifestyle> })
+
+      setTimeout(async () => {
+        await masonSays(pick([
+          "You're all set! I've got a clear picture of you now.",
+          "Perfect — that's everything I need.",
+          "Done! I've got a solid sense of your taste.",
+        ]), 600)
+        await masonSays(pick([
+          "Every recommendation from here on is tailored just for you. Let's shop! 🛍️",
+          "I'll put all of this to work. Let's find you something great. 🛍️",
+          "Time to go find you some great things. 🛍️",
+        ]), 1000)
+        setTimeout(() => {
+          onComplete(finalPatch)
+          setDone(true)
+        }, 800)
+      }, 300)
     } else {
       setStepIdx(next)
     }
   }
 
-  function handleChipClick(option: string) {
-    advance(option)
-  }
-
-  function handleMultiChipToggle(option: string) {
-    setSelectedChips(prev =>
-      prev.includes(option) ? prev.filter(c => c !== option) : [...prev, option]
-    )
-  }
-
-  function handleMultiChipConfirm() {
-    if (selectedChips.length === 0) return
-    advance(selectedChips)
-  }
-
-  function handleImageToggle(label: string) {
+  function handleImageToggle(value: string) {
     setSelectedImages(prev =>
-      prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
     )
   }
 
   function handleImageConfirm() {
-    if (selectedImages.length === 0) return
+    if (!selectedImages.length) return
     advance(selectedImages)
+  }
+
+  function handleImagePick(value: string) {
+    advance([value])
   }
 
   function handleTextSend() {
@@ -532,7 +722,6 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
 
   return (
     <div className={styles.wrap}>
-      {/* Header */}
       <div className={styles.header}>
         <img className={styles.avatar} src="/mason/mason-1.png" alt="Mason" />
         <div className={styles.headerText}>
@@ -542,7 +731,6 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
         <button className={styles.skipAll} onClick={onSkip}>Skip for now</button>
       </div>
 
-      {/* Progress dots */}
       {stepIdx >= 0 && (
         <div className={styles.progressDots}>
           {STEPS.map((_, i) => (
@@ -554,7 +742,6 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
         </div>
       )}
 
-      {/* Messages */}
       <div className={styles.messages}>
         {messages.map(msg => {
           if (msg.role === 'typing') {
@@ -577,59 +764,24 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
               </div>
             )
           }
-          return (
-            <div key={msg.id} className={styles.userBubble}>{msg.text}</div>
-          )
+          return <div key={msg.id} className={styles.userBubble}>{msg.text}</div>
         })}
         <div ref={bottomRef} />
       </div>
 
-      {/* Interaction area */}
       {isInteractive && (
         <div className={styles.interactionArea}>
-          {currentStep.kind === 'chips' && (
-            <div className={styles.chipRow}>
-              {currentStep.options!.map(opt => (
-                <button key={opt} className={styles.chip} onClick={() => handleChipClick(opt)}>
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {currentStep.kind === 'multi-chips' && (
-            <>
-              <div className={styles.chipRow}>
-                {currentStep.options!.map(opt => (
-                  <button
-                    key={opt}
-                    className={`${styles.chip} ${selectedChips.includes(opt) ? styles.selected : ''}`}
-                    onClick={() => handleMultiChipToggle(opt)}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-              {selectedChips.length > 0 && (
-                <div className={styles.confirmRow}>
-                  <button className={styles.confirmBtn} onClick={handleMultiChipConfirm}>
-                    That's me →
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
           {currentStep.kind === 'image-multi' && (
             <>
               <div className={styles.imageGrid}>
                 {currentStep.images!.map(img => (
-                  <div key={img.label} className={styles.imageOptionWrap}>
+                  <div key={img.value} className={styles.imageOptionWrap}>
                     <button
-                      className={`${styles.imageOption} ${selectedImages.includes(img.label) ? styles.selected : ''}`}
-                      onClick={() => handleImageToggle(img.label)}
+                      className={`${styles.imageOption} ${selectedImages.includes(img.value) ? styles.selected : ''}`}
+                      onClick={() => handleImageToggle(img.value)}
                     >
                       <img src={img.url} alt={img.label} />
+                      {selectedImages.includes(img.value) && <span className={styles.imageCheck}>✓</span>}
                     </button>
                     <span className={styles.imageLabel}>{img.label}</span>
                   </div>
@@ -638,7 +790,7 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
               {selectedImages.length > 0 && (
                 <div className={styles.confirmRow}>
                   <button className={styles.confirmBtn} onClick={handleImageConfirm}>
-                    Love these →
+                    {currentStep.id === 'vibe_images' ? 'These are me →' : "That's me →"}
                   </button>
                 </div>
               )}
@@ -648,10 +800,10 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
           {currentStep.kind === 'image-pick' && (
             <div className={styles.imageGrid}>
               {currentStep.images!.map(img => (
-                <div key={img.label} className={styles.imageOptionWrap}>
+                <div key={img.value} className={styles.imageOptionWrap}>
                   <button
                     className={styles.imageOption}
-                    onClick={() => advance(img.label)}
+                    onClick={() => handleImagePick(img.value)}
                   >
                     <img src={img.url} alt={img.label} />
                   </button>
@@ -674,9 +826,7 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
                   autoFocus
                   rows={1}
                 />
-                <button className={styles.sendBtn} onClick={handleTextSend}>
-                  ↑
-                </button>
+                <button className={styles.sendBtn} onClick={handleTextSend}>↑</button>
               </div>
               <div className={styles.chipRow}>
                 <button className={styles.chip} onClick={() => advance('(skipped)')}>Skip</button>
@@ -687,7 +837,7 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
           {currentStep.kind === 'sizing-steps' && (
             <>
               <div className={styles.sizingGrid}>
-                {currentStep.sizingSteps!.map(s => (
+                {currentStep.sizingFields!.map(s => (
                   <div key={s.id} className={styles.sizingRow}>
                     <label className={styles.sizingLabel}>{s.label}</label>
                     <input
@@ -701,9 +851,7 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
               </div>
               <div className={styles.confirmRow}>
                 <button className={styles.chip} onClick={() => advance('(skipped)')}>Skip sizing</button>
-                <button className={styles.confirmBtn} onClick={handleSizingConfirm}>
-                  Save sizes →
-                </button>
+                <button className={styles.confirmBtn} onClick={handleSizingConfirm}>Save sizes →</button>
               </div>
             </>
           )}
