@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MasonPrefsPatch } from '../api'
+import { MasonGiftBudget, MasonPrefsPatch } from '../api'
 import styles from './PrefsInterview.module.css'
 
 interface Props {
@@ -32,7 +32,7 @@ const TOPICS: Topic[] = [
     questions: [
       'When you\'re about to buy something, what\'s going through your head?',
       'How do you typically think about price — do you anchor on a number, shop by feel, or compare options?',
-      'Is there a category where you always splurge, and one where you always go budget?',
+      'Is there a category where you always splurge?',
     ],
   },
   {
@@ -72,7 +72,6 @@ const TOPICS: Topic[] = [
     questions: [
       'How do you approach buying a gift — do you go personal, practical, experiential?',
       'What\'s a gift you gave recently that felt really right? What made it work?',
-      'How do you think about budget when it comes to gifts — does it change by person or occasion?',
     ],
   },
   {
@@ -222,25 +221,6 @@ function parsePrefsFromAnswers(answers: Record<string, string>): MasonPrefsPatch
 
   if (Object.keys(lifestyle).length > 0) patch.lifestyle = lifestyle as MasonPrefsPatch['lifestyle']
 
-  // --- Gift budget: extract numbers from gifting answer ---
-  const giftingRaw = answers.gifting ?? ''
-  const giftNums = giftingRaw.match(/\$?\d+/g)
-  if (giftNums && giftNums.length > 0) {
-    const nums = giftNums.map(n => parseInt(n.replace('$', ''), 10)).filter(n => !isNaN(n))
-    const giftBudget: Record<string, unknown> = { freeform: giftingRaw.trim() }
-    if (nums.length === 1) {
-      giftBudget.default = nums[0]
-    } else {
-      giftBudget.default = Math.round(nums.reduce((a, b) => a + b, 0) / nums.length)
-      const gl = giftingRaw.toLowerCase()
-      if (gl.includes('birthday') && nums[0]) giftBudget.birthday = nums[0]
-      if ((gl.includes('holiday') || gl.includes('christmas')) && nums[1]) giftBudget.holiday = nums[1]
-    }
-    patch.gift_budget = giftBudget as MasonPrefsPatch['gift_budget']
-  } else if (giftingRaw.trim()) {
-    patch.gift_budget = { freeform: giftingRaw.trim() } as MasonPrefsPatch['gift_budget']
-  }
-
   // Store quality/discovery raw answers in lifestyle freeform for Mason context
   const qualityRaw = answers.quality ?? ''
   const discoveryRaw = answers.discovery ?? ''
@@ -249,6 +229,36 @@ function parsePrefsFromAnswers(answers: Record<string, string>): MasonPrefsPatch
     if (qualityRaw.trim()) existing.quality_notes = qualityRaw.trim()
     if (discoveryRaw.trim()) existing.discovery_notes = discoveryRaw.trim()
     patch.lifestyle = existing as MasonPrefsPatch['lifestyle']
+  }
+
+  // --- Gift budget: extract dollar amounts from gifting/recipients answers ---
+  const giftingRaw = `${answers.gifting ?? ''} ${answers.recipients ?? ''}`.trim()
+  if (giftingRaw) {
+    const giftBudget: MasonGiftBudget = {}
+
+    // Context-specific: "birthday" + nearby dollar amount
+    const birthdayMatch = /birthday[^.!?]*?\$?\b(\d{1,4})\b/i.exec(giftingRaw)
+    if (birthdayMatch) giftBudget.birthday = parseInt(birthdayMatch[1], 10)
+
+    const holidayMatch = /(?:holiday|christmas|hanukkah|xmas)[^.!?]*?\$?\b(\d{1,4})\b/i.exec(giftingRaw)
+    if (holidayMatch) giftBudget.holiday = parseInt(holidayMatch[1], 10)
+
+    const anniversaryMatch = /anniversary[^.!?]*?\$?\b(\d{1,4})\b/i.exec(giftingRaw)
+    if (anniversaryMatch) giftBudget.anniversary = parseInt(anniversaryMatch[1], 10)
+
+    // Generic dollar amounts for default budget
+    if (!giftBudget.birthday && !giftBudget.holiday && !giftBudget.anniversary) {
+      const dollarMatch = /\$?\b(\d{1,4})\b(?:\s*(?:dollars?|bucks?|per gift|each|average))?/i.exec(giftingRaw)
+      if (dollarMatch) {
+        const n = parseInt(dollarMatch[1], 10)
+        if (n >= 5 && n <= 2000) giftBudget.default = n
+      }
+    }
+
+    // Always store raw gifting answer as freeform for Mason context
+    giftBudget.freeform = giftingRaw.slice(0, 400)
+
+    patch.gift_budget = giftBudget
   }
 
   return patch
