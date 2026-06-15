@@ -674,15 +674,6 @@
 }
 .inboxItem:hover { background: rgba(15, 24, 5, 0.06); }
 .inboxUnread { background: #fffbef; }
-.unread { background: #fffbef; }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ms-primary, #015237);
-  flex-shrink: 0;
-  margin-top: 5px;
-}
 .inboxDot {
   width: 8px;
   height: 8px;

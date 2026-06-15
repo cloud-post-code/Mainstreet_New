@@ -254,24 +254,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
             </div>
           )}
 
-          {tab === 'inbox' && (
-            <div className={styles.section}>
-              <MasonInboxTab
-                messages={memory.inbox}
-                onOpen={id => openInboxMessage(id)}
-                emptyClass={styles.empty}
-                listClass={styles.inboxList}
-                itemClass={styles.inboxItem}
-                unreadClass={styles.unread}
-                dotClass={styles.dot}
-                bodyClass={styles.inboxBody}
-                titleClass={styles.inboxTitle}
-                previewClass={styles.inboxPreview}
-                dateClass={styles.inboxDate}
-              />
-            </div>
-          )}
-
           {tab === 'history' && (
             <div className={styles.section}>
               {props.token ? (
