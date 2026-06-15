@@ -37,19 +37,6 @@ interface Step {
   patchFn: (answer: string | string[]) => Partial<MasonPrefsPatch>
 }
 
-// ─── Text helpers ─────────────────────────────────────────────────────────────
-
-function joinNatural(items: string[]): string {
-  if (!items.length) return ''
-  if (items.length === 1) return items[0]
-  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1]
-}
-
-function buildNote(opts: ImgOpt[], selected: string[], template: (notes: string[]) => string): string {
-  const notes = selected.map(v => opts.find(o => o.value === v)?.note ?? v).filter(Boolean)
-  return notes.length ? template(notes) : ''
-}
-
 // ─── Image option sets ────────────────────────────────────────────────────────
 
 const STYLE_OPTS: ImgOpt[] = [
@@ -163,19 +150,6 @@ const BUDGET_OPTS: ImgOpt[] = [
   { value: '200_plus',   label: '$200+',        url: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=300&q=80', note: '$200 or more' },
 ]
 
-// ─── Note composers ───────────────────────────────────────────────────────────
-
-function composeProfileText(notes: Record<string, string>): string {
-  const NOTE_KEYS = [
-    'style_notes', 'vibe_notes', 'home_aesthetic_notes',
-    'shopping_vibe_notes', 'price_vibe_notes',
-    'family_notes', 'homeowner_notes', 'work_setup_notes',
-    'travel_notes', 'pets_notes_text', 'weekend_notes',
-    'gifting_notes', 'budget_notes',
-  ]
-  return NOTE_KEYS.map(k => notes[k] ?? '').filter(Boolean).join(' ')
-}
-
 // ─── Mason personality helpers ────────────────────────────────────────────────
 
 function pick<T>(arr: T[]): T {
@@ -220,11 +194,10 @@ const STEPS: Step[] = [
     images: STYLE_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const tags = selected.flatMap(v => STYLE_OPTS.find(o => o.value === v)?.tags ?? [])
-      const note = buildNote(STYLE_OPTS, selected, ls => `Their style is ${joinNatural(ls)}.`)
+      const labelTags = selected.map(v => STYLE_OPTS.find(o => o.value === v)?.label ?? v)
+      const bonusTags = selected.flatMap(v => STYLE_OPTS.find(o => o.value === v)?.tags ?? [])
       return {
-        style_tags: [...new Set([...selected, ...tags])],
-        lifestyle: { style_selections: selected, style_notes: note } as Partial<MasonLifestyle>,
+        style_tags: [...new Set([...labelTags, ...bonusTags])],
       }
     },
   },
@@ -235,11 +208,10 @@ const STEPS: Step[] = [
     images: VIBE_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const tags = selected.flatMap(v => VIBE_OPTS.find(o => o.value === v)?.tags ?? [])
-      const note = buildNote(VIBE_OPTS, selected, ls => `They are drawn to ${joinNatural(ls)} aesthetics.`)
+      const labelTags = selected.map(v => VIBE_OPTS.find(o => o.value === v)?.label ?? v)
+      const bonusTags = selected.flatMap(v => VIBE_OPTS.find(o => o.value === v)?.tags ?? [])
       return {
-        style_tags: [...new Set(tags)],
-        lifestyle: { vibe_notes: note } as Partial<MasonLifestyle>,
+        style_tags: [...new Set([...labelTags, ...bonusTags])],
       }
     },
   },
@@ -250,14 +222,11 @@ const STEPS: Step[] = [
     images: HOME_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const tags = selected.flatMap(v => HOME_OPTS.find(o => o.value === v)?.tags ?? [])
-      const note = buildNote(HOME_OPTS, selected, ls => `Their home aesthetic is ${joinNatural(ls)}.`)
+      const labelTags = selected.map(v => HOME_OPTS.find(o => o.value === v)?.label ?? v)
+      const bonusTags = selected.flatMap(v => HOME_OPTS.find(o => o.value === v)?.tags ?? [])
       return {
-        style_tags: [...new Set(tags)],
-        lifestyle: {
-          home_aesthetic: selected.join(', '),
-          home_aesthetic_notes: note,
-        } as Partial<MasonLifestyle>,
+        style_tags: [...new Set([...labelTags, ...bonusTags])],
+        lifestyle: { home_aesthetic: selected.join(', ') } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -270,15 +239,7 @@ const STEPS: Step[] = [
       const selected = ans as string[]
       const val = selected[0] ?? ''
       const discover_known = val === 'discover' ? 2 : val === 'browse' ? 3 : val === 'know_exactly' ? 5 : 3
-      const note = buildNote(SHOPPING_OPTS, selected, ls => `When shopping they tend to be ${joinNatural(ls)}.`)
-      return {
-        discover_known,
-        lifestyle: {
-          shopping_vibe_selections: selected,
-          shopping_vibe_notes: note,
-          discovery_notes: note,
-        } as Partial<MasonLifestyle>,
-      }
+      return { discover_known }
     },
   },
   {
@@ -290,15 +251,7 @@ const STEPS: Step[] = [
       const selected = ans as string[]
       const val = selected[0] ?? ''
       const quality_price = val === 'budget_first' ? 1 : val === 'balanced' ? 3 : val === 'quality_over' ? 5 : val === 'splurge' ? 4 : 3
-      const note = buildNote(PRICE_OPTS, selected, ls => `On price they are ${joinNatural(ls)}.`)
-      return {
-        quality_price,
-        lifestyle: {
-          price_vibe_selections: selected,
-          price_vibe_notes: note,
-          quality_notes: note,
-        } as Partial<MasonLifestyle>,
-      }
+      return { quality_price }
     },
   },
   {
@@ -335,13 +288,10 @@ const STEPS: Step[] = [
     images: FAMILY_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const note = buildNote(FAMILY_OPTS, selected, ls => `At home they live ${joinNatural(ls)}.`)
+      const labelTags = selected.map(v => FAMILY_OPTS.find(o => o.value === v)?.label ?? v)
       return {
-        lifestyle: {
-          family_life_selections: selected,
-          family_life_notes: note,
-          family_notes: note,
-        } as Partial<MasonLifestyle>,
+        style_tags: [...new Set(labelTags)],
+        lifestyle: { family_notes: labelTags.join(', ') } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -353,13 +303,10 @@ const STEPS: Step[] = [
     patchFn: (ans) => {
       const val = (ans as string[])[0] ?? ans as string
       const housing: 'homeowner' | 'renter' = val === 'own' ? 'homeowner' : 'renter'
-      const note = buildNote(HOMEOWNER_OPTS, [val], ls => `They are ${joinNatural(ls)}.`)
+      const label = HOMEOWNER_OPTS.find(o => o.value === val)?.label ?? val
       return {
-        lifestyle: {
-          housing,
-          homeowner_selection: val,
-          homeowner_notes: note,
-        } as Partial<MasonLifestyle>,
+        style_tags: [label],
+        lifestyle: { housing } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -376,13 +323,10 @@ const STEPS: Step[] = [
         : val === 'coworking' ? 'hybrid'
         : val === 'outdoors_field' ? 'outdoor'
         : 'hybrid'
-      const note = buildNote(WORK_OPTS, selected, ls => `They work ${joinNatural(ls)}.`)
+      const labelTags = selected.map(v => WORK_OPTS.find(o => o.value === v)?.label ?? v)
       return {
-        lifestyle: {
-          work_setup_selections: selected,
-          work_setup_notes: note,
-          work_env,
-        } as Partial<MasonLifestyle>,
+        style_tags: [...new Set(labelTags)],
+        lifestyle: { work_env } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -395,13 +339,10 @@ const STEPS: Step[] = [
       const selected = ans as string[]
       const val = selected[0] ?? ''
       const travel = val === 'rarely' ? 'rarely' : val === 'few_times_year' ? 'few_times_year' : val === 'monthly' ? 'monthly' : 'frequently'
-      const note = buildNote(TRAVEL_OPTS, selected, ls => `They travel ${joinNatural(ls)}.`)
+      const labelTags = selected.map(v => TRAVEL_OPTS.find(o => o.value === v)?.label ?? v)
       return {
-        lifestyle: {
-          travel_selections: selected,
-          travel_notes: note,
-          travel,
-        } as Partial<MasonLifestyle>,
+        style_tags: [...new Set(labelTags)],
+        lifestyle: { travel } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -414,13 +355,8 @@ const STEPS: Step[] = [
       const selected = (ans as string[]).filter(s => s !== 'no_pets')
       if (!selected.length) return {}
       const pets = selected.map(s => s)
-      const note = buildNote(PETS_OPTS, selected, ls => `They have ${joinNatural(ls)} at home.`)
       return {
-        lifestyle: {
-          pets,
-          pets_selections: selected,
-          pets_notes_text: note,
-        } as Partial<MasonLifestyle>,
+        lifestyle: { pets } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -431,16 +367,12 @@ const STEPS: Step[] = [
     images: HOBBIES_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
+      const labelTags = selected.map(v => HOBBIES_OPTS.find(o => o.value === v)?.label ?? v)
+      const bonusTags = selected.flatMap(v => HOBBIES_OPTS.find(o => o.value === v)?.tags ?? [])
       const hobbies = selected.map(v => HOBBIES_OPTS.find(o => o.value === v)?.note ?? v)
-      const tags = selected.flatMap(v => HOBBIES_OPTS.find(o => o.value === v)?.tags ?? [])
-      const note = buildNote(HOBBIES_OPTS, selected, ls => `On weekends they enjoy ${joinNatural(ls)}.`)
       return {
-        style_tags: [...new Set(tags)],
-        lifestyle: {
-          weekend_selections: selected,
-          weekend_notes: note,
-          hobbies,
-        } as Partial<MasonLifestyle>,
+        style_tags: [...new Set([...labelTags, ...bonusTags])],
+        lifestyle: { hobbies } as Partial<MasonLifestyle>,
       }
     },
   },
@@ -475,14 +407,9 @@ const STEPS: Step[] = [
     images: GIFTING_OPTS,
     patchFn: (ans) => {
       const selected = ans as string[]
-      const note = buildNote(GIFTING_OPTS, selected, ls => `When giving gifts they gravitate toward ${joinNatural(ls)}.`)
+      const labelTags = selected.map(v => GIFTING_OPTS.find(o => o.value === v)?.label ?? v)
       return {
-        lifestyle: {
-          gifting_selections: selected,
-          gifting_notes: note,
-          gift_mood_selections: selected,
-          gift_mood_notes: note,
-        } as Partial<MasonLifestyle>,
+        style_tags: [...new Set(labelTags)],
       }
     },
   },
@@ -495,13 +422,9 @@ const STEPS: Step[] = [
       const val = (ans as string[])[0] ?? ans as string
       const map: Record<string, number> = { under_25: 20, '25_50': 40, '50_100': 75, '100_200': 150, '200_plus': 250 }
       const def = map[val] ?? 50
-      const note = buildNote(BUDGET_OPTS, [val], ls => `Their typical gift budget is ${joinNatural(ls)}.`)
+      const label = BUDGET_OPTS.find(o => o.value === val)?.label ?? val
       return {
-        gift_budget: { default: def, freeform: note } as MasonPrefsPatch['gift_budget'],
-        lifestyle: {
-          budget_selection: val,
-          budget_notes: note,
-        } as Partial<MasonLifestyle>,
+        gift_budget: { default: def, freeform: label } as MasonPrefsPatch['gift_budget'],
       }
     },
   },
@@ -642,16 +565,9 @@ export default function MasonOnboarding({ onComplete, onSkip }: Props) {
 
     const next = stepIdx + 1
     if (next >= STEPS.length) {
-      // Compose profile_text from all lifestyle notes
-      const ls = (nextPatch.lifestyle ?? {}) as Record<string, string>
-      const noteKeys = [
-        'style_notes', 'vibe_notes', 'home_aesthetic_notes',
-        'shopping_vibe_notes', 'price_vibe_notes',
-        'family_notes', 'homeowner_notes', 'work_setup_notes',
-        'travel_notes', 'pets_notes_text', 'weekend_notes',
-        'gifting_notes', 'budget_notes',
-      ]
-      const profile_text = noteKeys.map(k => ls[k] ?? '').filter(Boolean).join(' ')
+      // Compose profile_text from style_tags — the single source of truth
+      const tags = nextPatch.style_tags ?? []
+      const profile_text = tags.length ? `Style words: ${tags.join(', ')}.` : ''
       const finalPatch = mergedPatch(nextPatch, { lifestyle: { profile_text } as Partial<MasonLifestyle> })
 
       setTimeout(async () => {

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, Product } from '../api'
-import ProductCard from '../components/ProductCard'
+import ProductCard, { ShuffleSimilarProduct } from '../components/ProductCard'
 import ShopCard from '../components/ShopCard'
+import ProductModal, { ProductModalData } from '../components/ProductModal'
 import styles from './Discover.module.css'
 import { useModalDismiss } from '../hooks/useModalDismiss'
 
@@ -61,6 +62,40 @@ const descTags = (d: Product['description']) =>
     ? ((d as Record<string, unknown>).tags as unknown[]).filter((x): x is string => typeof x === 'string')
     : undefined
 
+function productToModalData(p: Product): ProductModalData {
+  return {
+    product_id: p.id,
+    name: p.name,
+    price: Number(p.price_range?.min ?? 0),
+    image_url: p.image_url,
+    shop_id: p.shop_id,
+    shop_name: p.shop_name ?? '',
+    description_summary: descSummary(p.description),
+    tags: descTags(p.description),
+    variants: p.variants.map(v => ({
+      variant_id: v.id,
+      option_names: v.option_names,
+      option_values: v.option_values,
+      variant_label: v.variant_label,
+      price: Number(v.price),
+      quantity: Number.POSITIVE_INFINITY,
+      image_url: v.image_url,
+    })),
+    default_variant_id: p.default_variant_id ?? undefined,
+  }
+}
+
+function getSimilar(products: Product[], excludeId: number): ShuffleSimilarProduct[] {
+  const pool = products.filter(p => p.id !== excludeId)
+  return sampleN(pool, 6).map(p => ({
+    product_id: p.id,
+    name: p.name,
+    price: Number(p.price_range?.min ?? 0),
+    image_url: p.image_url,
+    shop_name: p.shop_name ?? '',
+  }))
+}
+
 export default function Discover() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -79,7 +114,7 @@ export default function Discover() {
   const [allShops, setAllShops] = useState<ShopFull[]>([])
   const [shopsLoading, setShopsLoading] = useState(false)
   const [shopsError, setShopsError] = useState<string | null>(null)
-  const [modalProduct, setModalProduct] = useState<Product | null>(null)
+  const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
@@ -379,10 +414,10 @@ export default function Discover() {
                       <div
                         key={`opts-${p.id}`}
                         className={styles.cardClickable}
-                        onClick={() => setModalProduct(p)}
+                        onClick={() => setModalProduct(productToModalData(p))}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct(p) } }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct(productToModalData(p)) } }}
                       >
                         <ProductCard
                           product_id={p.id}
@@ -405,6 +440,8 @@ export default function Discover() {
                           }))}
                           default_variant_id={p.default_variant_id ?? undefined}
                           display_mode="parent"
+                          onSave={() => setModalProduct(productToModalData(p))}
+                          onShuffle={() => getSimilar(products, p.id)}
                         />
                       </div>
                     ))}
@@ -421,10 +458,10 @@ export default function Discover() {
                   <div
                     key={p.id}
                     className={styles.cardClickable}
-                    onClick={() => setModalProduct(p)}
+                    onClick={() => setModalProduct(productToModalData(p))}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct(p) } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct(productToModalData(p)) } }}
                   >
                   <ProductCard
                     product_id={p.id}
@@ -448,6 +485,8 @@ export default function Discover() {
                     }))}
                     default_variant_id={p.default_variant_id ?? undefined}
                     display_mode="parent"
+                    onSave={() => setModalProduct(productToModalData(p))}
+                    onShuffle={() => getSimilar(products, p.id)}
                   />
                   </div>
                 ))}
@@ -505,47 +544,10 @@ export default function Discover() {
       </main>
 
       {modalProduct && (
-        <div
-          className={styles.modalBackdrop}
-          onClick={() => setModalProduct(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${modalProduct.name} details`}
-        >
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className={styles.modalClose}
-              onClick={() => setModalProduct(null)}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <ProductCard
-              product_id={modalProduct.id}
-              name={modalProduct.name}
-              price={Number(modalProduct.price_range?.min ?? 0)}
-              image_url={modalProduct.image_url ?? undefined}
-              shop_name={modalProduct.shop_name ?? ''}
-              shop_id={modalProduct.shop_id}
-              description_summary={descSummary(modalProduct.description)}
-              tags={descTags(modalProduct.description)}
-              layout="hero"
-              showAddToCart
-              variants={modalProduct.variants.map(v => ({
-                variant_id: v.id,
-                option_names: v.option_names,
-                option_values: v.option_values,
-                variant_label: v.variant_label,
-                price: Number(v.price),
-                quantity: Number.POSITIVE_INFINITY,
-                image_url: v.image_url,
-              }))}
-              default_variant_id={modalProduct.default_variant_id ?? undefined}
-              display_mode="parent"
-            />
-          </div>
-        </div>
+        <ProductModal
+          product={modalProduct}
+          onClose={() => setModalProduct(null)}
+        />
       )}
     </div>
   )

@@ -167,10 +167,19 @@
 .productCardCompact .tags { display: none; }
 .productCardCompact .price { font-size: 0.9rem; }
 .productCardCompact .stock { font-size: 0.65rem; }
-.productCardCompact .addBtn {
+.productCardCompact .cardActions {
   margin-top: 0.4rem;
-  padding: 0.4rem 0.5rem;
-  font-size: 0.75rem;
+  gap: 0.25rem;
+}
+.productCardCompact .addBtn {
+  padding: 0.35rem 0.4rem;
+  font-size: 0.72rem;
+}
+.productCardCompact .saveBtn,
+.productCardCompact .shuffleBtn {
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
 }
 
 /* ── Option chips ── */
@@ -310,24 +319,152 @@
   border-width: 1.5px;
 }
 
-.addBtn {
+/* ── Card action row (add + save + shuffle) ── */
+.cardActions {
+  display: flex;
+  gap: 0.4rem;
   margin-top: 0.6rem;
-  width: 100%;
-  padding: 0.65rem 0.75rem;
+  align-items: stretch;
+}
+
+.addBtn {
+  flex: 1;
+  padding: 0.6rem 0.6rem;
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   border: none;
   border-radius: 8px;
   background: var(--ms-primary, #015237);
   color: var(--ms-cream, #f1e9d8);
   cursor: pointer;
   transition: opacity 0.15s ease;
+  white-space: nowrap;
 }
 .addBtn:hover:not(:disabled) { opacity: 0.9; }
 .addBtn:disabled {
   background: rgba(15, 24, 5, 0.2);
   cursor: not-allowed;
+}
+
+.saveBtn,
+.shuffleBtn {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(15, 24, 5, 0.18);
+  background: #fff;
+  color: var(--ms-dark, #0f1805);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.13s, border-color 0.13s, color 0.13s;
+  line-height: 1;
+}
+
+.saveBtn:hover {
+  border-color: var(--ms-terra, #be6e46);
+  color: var(--ms-terra, #be6e46);
+  background: rgba(190, 110, 70, 0.07);
+}
+
+.shuffleBtn:hover {
+  border-color: var(--ms-primary, #015237);
+  color: var(--ms-primary, #015237);
+  background: rgba(1, 82, 55, 0.06);
+}
+
+.shuffleActive {
+  background: var(--ms-primary, #015237);
+  border-color: var(--ms-primary, #015237);
+  color: var(--ms-cream, #f1e9d8);
+}
+.shuffleActive:hover {
+  background: var(--ms-primary, #015237);
+  color: var(--ms-cream, #f1e9d8);
+}
+
+/* ── Shuffle panel ── */
+.shufflePanel {
+  margin-top: 0.5rem;
+  background: rgba(241, 233, 216, 0.6);
+  border: 1px solid rgba(122, 158, 126, 0.3);
+  border-radius: 10px;
+  padding: 0.6rem 0.65rem 0.65rem;
+  animation: shuffleFadeIn 0.18s ease;
+}
+
+@keyframes shuffleFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.shufflePanelTitle {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(15, 24, 5, 0.5);
+  margin-bottom: 0.45rem;
+}
+
+.shuffleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.shuffleItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid rgba(122, 158, 126, 0.2);
+  transition: box-shadow 0.12s;
+}
+.shuffleItem:hover { box-shadow: 0 2px 8px rgba(15, 24, 5, 0.1); }
+
+.shuffleImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--ms-cream, #f1e9d8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 1.25rem;
+}
+.shuffleImg img { width: 100%; height: 100%; object-fit: cover; }
+
+.shuffleInfo {
+  padding: 0.25rem 0.3rem 0.3rem;
+}
+
+.shuffleName {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ms-dark, #0f1805);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.shufflePrice {
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ms-primary, #015237);
+  margin-top: 0.1rem;
 }
 
 .addError {
