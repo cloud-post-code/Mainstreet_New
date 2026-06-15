@@ -404,3 +404,208 @@
 }
 
 .sendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Boards panel (inline, within Mason tabs) */
+.boardsPanel {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boardsPanelHeader {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.boardsPanelForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fffdf7;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.boardsPanelList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.boardsPanelRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f9f3e3;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: background 120ms;
+  gap: 8px;
+  color: #1a1a1a;
+}
+
+.boardsPanelRow:hover {
+  background: #f0e8d6;
+}
+
+.boardsPanelRowMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.boardsPanelRowName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boardsPanelRowDesc {
+  font-size: 0.78rem;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boardsPanelBack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.backLink {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: opacity 120ms;
+}
+
+.backLink:hover {
+  opacity: 0.7;
+}
+
+.deleteBoardLink {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #c0392b;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: opacity 120ms;
+}
+
+.deleteBoardLink:hover {
+  opacity: 0.7;
+}
+
+.boardsPanelTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.boardsPanelTitle strong {
+  font-size: 0.95rem;
+  color: #1a1a1a;
+}
+
+.boardsPanelPurpose {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.boardsPanelTabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e5dccb;
+  padding-bottom: 0;
+}
+
+.boardsPanelTab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 120ms, border-color 120ms;
+}
+
+.boardsPanelTabActive {
+  color: #015237;
+  font-weight: 600;
+  border-bottom-color: #015237;
+}
+
+.boardsPanelItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.boardsPanelItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #f9f3e3;
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.boardsPanelItemName {
+  flex: 1;
+  font-size: 0.82rem;
+  color: #333;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boardsPanelRemove {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #bbb;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 120ms;
+}
+
+.boardsPanelRemove:hover {
+  color: #c0392b;
+}

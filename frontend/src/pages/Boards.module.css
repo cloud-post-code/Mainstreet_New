@@ -123,41 +123,79 @@
   margin: 0;
 }
 
+.backBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 120ms;
+}
+
+.backBtn:hover {
+  opacity: 0.7;
+}
+
+.deleteBoardBtn {
+  appearance: none;
+  border: 1.5px solid #e5dccb;
+  background: transparent;
+  color: #c0392b;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+
+.deleteBoardBtn:hover {
+  background: #fde;
+  border-color: #c0392b;
+}
+
+.boardDetailHeader {
+  margin-bottom: 20px;
+}
+
+.boardDetailPurpose {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 4px 0 0;
+}
+
 .boardList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
-.boardCard {
-  background: #fffdf7;
-  border: 1px solid #e5dccb;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.boardHeader {
+.boardRow {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  background: transparent;
-  border: 0;
+  background: #fffdf7;
+  border: 1px solid #e5dccb;
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
   font: inherit;
-  transition: background 120ms;
+  transition: background 120ms, border-color 120ms;
   gap: 12px;
 }
 
-.boardHeader:hover {
+.boardRow:hover {
   background: #f9f3e3;
-}
-
-.boardHeaderActive {
-  background: #f9f3e3;
-  border-bottom: 1px solid #e5dccb;
+  border-color: #c8b99a;
 }
 
 .boardMeta {

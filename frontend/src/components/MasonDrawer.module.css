@@ -652,3 +652,189 @@
   transform: translateY(-2px);
   box-shadow: 0 8px 18px rgba(15, 24, 5, 0.28);
 }
+
+/* Drawer boards panel */
+.drawerBoards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawerBoardsHeader {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawerBoardForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fffdf7;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.drawerBoardList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.drawerBoardRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  background: #f9f3e3;
+  border: 1px solid #e5dccb;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: #1a1a1a;
+  transition: background 120ms;
+  gap: 6px;
+}
+
+.drawerBoardRow:hover {
+  background: #f0e8d6;
+}
+
+.drawerBoardRowMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.drawerBoardRowName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawerBoardRowDesc {
+  font-size: 0.75rem;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawerBoardsBack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawerBackBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 0;
+  transition: opacity 120ms;
+}
+
+.drawerBackBtn:hover {
+  opacity: 0.7;
+}
+
+.drawerDeleteBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #c0392b;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 3px 0;
+  transition: opacity 120ms;
+}
+
+.drawerDeleteBtn:hover {
+  opacity: 0.7;
+}
+
+.drawerBoardTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawerBoardTitle strong {
+  font-size: 0.9rem;
+  color: #1a1a1a;
+}
+
+.drawerBoardPurpose {
+  font-size: 0.76rem;
+  color: #777;
+}
+
+.drawerBoardTabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e5dccb;
+}
+
+.drawerBoardTab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 120ms, border-color 120ms;
+}
+
+.drawerBoardTabActive {
+  color: #015237;
+  font-weight: 600;
+  border-bottom-color: #015237;
+}
+
+.drawerBoardItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drawerBoardItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: #f9f3e3;
+  border-radius: 5px;
+  padding: 6px 8px;
+}
+
+.drawerBoardItemName {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #333;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

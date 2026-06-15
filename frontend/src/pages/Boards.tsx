@@ -47,13 +47,14 @@ function BoardsInner({ token }: { token: string }) {
     }
   }, [selectedBoardId, loadBoardDetail])
 
-  const handleSelectBoard = (id: number) => {
-    if (selectedBoardId === id) {
-      setSelectedBoardId(null)
-    } else {
-      setSelectedBoardId(id)
-      setBoardTab('saved')
-    }
+  const handleOpenBoard = (id: number) => {
+    setSelectedBoardId(id)
+    setBoardTab('saved')
+  }
+
+  const handleBack = () => {
+    setSelectedBoardId(null)
+    setBoardDetail(null)
   }
 
   const handleAddBoard = async () => {
@@ -107,12 +108,70 @@ function BoardsInner({ token }: { token: string }) {
 
   const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
 
+  // Board detail view
+  if (selectedBoard) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.header}>
+          <button className={styles.backBtn} onClick={handleBack}>
+            ← Boards
+          </button>
+          <button
+            className={styles.deleteBoardBtn}
+            onClick={() => handleDeleteBoard(selectedBoard.id)}
+            title="Delete board"
+          >
+            Delete
+          </button>
+        </div>
+
+        <div className={styles.boardDetailHeader}>
+          <h1 className={styles.title}>{selectedBoard.name}</h1>
+          {selectedBoard.description && (
+            <p className={styles.boardDetailPurpose}>{selectedBoard.description}</p>
+          )}
+        </div>
+
+        <div className={styles.detailTabs}>
+          <button
+            className={`${styles.detailTab} ${boardTab === 'saved' ? styles.detailTabActive : ''}`}
+            onClick={() => setBoardTab('saved')}
+          >
+            Saved ({selectedBoard.product_count})
+          </button>
+          <button
+            className={`${styles.detailTab} ${boardTab === 'notes' ? styles.detailTabActive : ''}`}
+            onClick={() => setBoardTab('notes')}
+          >
+            Notes ({selectedBoard.note_count})
+          </button>
+        </div>
+
+        {detailLoading ? (
+          <p className={styles.empty}>Loading…</p>
+        ) : boardTab === 'saved' ? (
+          <SavedTab products={boardDetail?.products ?? []} onRemove={handleRemoveProduct} />
+        ) : (
+          <NotesTab
+            notes={boardDetail?.notes ?? []}
+            newNoteText={newNoteText}
+            addingNote={addingNote}
+            onNoteChange={setNewNoteText}
+            onAddNote={handleAddNote}
+            onDeleteNote={handleDeleteNote}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // Board list view
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Boards</h1>
         <button className={styles.addBtn} onClick={() => setShowAddBoard(v => !v)}>
-          + Add Board
+          + New Board
         </button>
       </div>
 
@@ -151,63 +210,22 @@ function BoardsInner({ token }: { token: string }) {
       ) : (
         <div className={styles.boardList}>
           {memory.boards.map(board => (
-            <div key={board.id} className={styles.boardCard}>
-              <button
-                className={`${styles.boardHeader} ${selectedBoardId === board.id ? styles.boardHeaderActive : ''}`}
-                onClick={() => handleSelectBoard(board.id)}
-              >
-                <div className={styles.boardMeta}>
-                  <span className={styles.boardName}>{board.name}</span>
-                  {board.description && <span className={styles.boardDesc}>{board.description}</span>}
-                </div>
-                <div className={styles.boardCounts}>
-                  <span>{board.product_count} saved</span>
-                  <span>{board.note_count} notes</span>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={e => { e.stopPropagation(); handleDeleteBoard(board.id) }}
-                    title="Delete board"
-                  >×</button>
-                </div>
-              </button>
-
-              {selectedBoardId === board.id && (
-                <div className={styles.boardDetail}>
-                  <div className={styles.detailTabs}>
-                    <button
-                      className={`${styles.detailTab} ${boardTab === 'saved' ? styles.detailTabActive : ''}`}
-                      onClick={() => setBoardTab('saved')}
-                    >
-                      Saved ({board.product_count})
-                    </button>
-                    <button
-                      className={`${styles.detailTab} ${boardTab === 'notes' ? styles.detailTabActive : ''}`}
-                      onClick={() => setBoardTab('notes')}
-                    >
-                      Notes ({board.note_count})
-                    </button>
-                  </div>
-
-                  {detailLoading ? (
-                    <p className={styles.detailEmpty}>Loading…</p>
-                  ) : boardTab === 'saved' ? (
-                    <SavedTab
-                      products={boardDetail?.products ?? []}
-                      onRemove={handleRemoveProduct}
-                    />
-                  ) : (
-                    <NotesTab
-                      notes={boardDetail?.notes ?? []}
-                      newNoteText={newNoteText}
-                      addingNote={addingNote}
-                      onNoteChange={setNewNoteText}
-                      onAddNote={handleAddNote}
-                      onDeleteNote={handleDeleteNote}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
+            <button
+              key={board.id}
+              className={styles.boardRow}
+              onClick={() => handleOpenBoard(board.id)}
+            >
+              <div className={styles.boardMeta}>
+                <span className={styles.boardName}>{board.name}</span>
+                {board.description && <span className={styles.boardDesc}>{board.description}</span>}
+              </div>
+              <div className={styles.boardCounts}>
+                <span>{board.product_count} saved · {board.note_count} notes</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
           ))}
         </div>
       )}
