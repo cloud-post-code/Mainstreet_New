@@ -358,6 +358,115 @@
   background: rgba(1, 82, 55, 0.04);
 }
 
+/* ── Image pick grid ─────────────────────────────────────────────────────── */
+
+.imagePick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.imagePick[data-cols="2"] { grid-template-columns: repeat(2, 1fr); }
+.imagePick[data-cols="4"] { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 480px) {
+  .imagePick[data-cols="4"] { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 380px) {
+  .imagePick,
+  .imagePick[data-cols="3"] { grid-template-columns: repeat(2, 1fr); }
+}
+
+.imagePickBtn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  background: transparent;
+  border: 2px solid rgba(1, 82, 55, 0.14);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.imagePickBtn:hover {
+  border-color: rgba(1, 82, 55, 0.36);
+  box-shadow: 0 2px 8px rgba(1, 82, 55, 0.10);
+}
+.imagePickBtnOn {
+  border-color: var(--ms-primary, #015237);
+  box-shadow: 0 0 0 1px var(--ms-primary, #015237), 0 2px 8px rgba(1, 82, 55, 0.15);
+}
+
+.imagePickImg {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.15s;
+}
+.imagePickBtnOn .imagePickImg {
+  opacity: 0.85;
+}
+
+.imagePickLabel {
+  display: block;
+  width: 100%;
+  padding: 6px 6px 7px;
+  font-family: 'Lora', serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: center;
+  color: var(--ms-dark, #0f1805);
+  background: #fff;
+  border-top: 1px solid rgba(1, 82, 55, 0.08);
+}
+.imagePickBtnOn .imagePickLabel {
+  background: var(--ms-primary, #015237);
+  color: #fff;
+  border-top-color: var(--ms-primary, #015237);
+}
+
+.imagePickCheck {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 18px;
+  height: 18px;
+  background: var(--ms-primary, #015237);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* ── Textarea ────────────────────────────────────────────────────────────── */
+
+.textarea {
+  width: 100%;
+  padding: 9px 11px;
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  border: 1px solid rgba(1, 82, 55, 0.18);
+  border-radius: 8px;
+  background: #fafaf8;
+  outline: none;
+  color: var(--ms-dark, #0f1805);
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.55;
+  transition: border-color 0.15s, background 0.15s;
+}
+.textarea:focus {
+  border-color: var(--ms-primary, #015237);
+  background: #fff;
+}
+.textarea::placeholder { color: #bbb5a8; }
+
 /* ── Inline input (fallback) ─────────────────────────────────────────────── */
 
 .inlineInput {
