@@ -22,12 +22,15 @@ function BoardsInner({ token }: { token: string }) {
   const [showAddBoard, setShowAddBoard] = useState(false)
   const [newBoardName, setNewBoardName] = useState('')
   const [newBoardDesc, setNewBoardDesc] = useState('')
+  const [newBoardImage, setNewBoardImage] = useState<File | null>(null)
+  const [newBoardImagePreview, setNewBoardImagePreview] = useState<string | null>(null)
   const [addingBoard, setAddingBoard] = useState(false)
   const [newNoteText, setNewNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
+  const newBoardImageRef = useRef<HTMLInputElement>(null)
 
   const loadBoardDetail = useCallback(async (id: number) => {
     setDetailLoading(true)
@@ -64,15 +67,29 @@ function BoardsInner({ token }: { token: string }) {
     if (!name) return
     setAddingBoard(true)
     try {
-      await memory.createBoard(name, newBoardDesc.trim() || undefined)
+      const board = await memory.createBoard(name, newBoardDesc.trim() || undefined)
+      if (newBoardImage && board?.id) {
+        await api.uploadBoardCover(board.id, newBoardImage, token).catch(() => {})
+        memory.refresh()
+      }
       setNewBoardName('')
       setNewBoardDesc('')
+      setNewBoardImage(null)
+      setNewBoardImagePreview(null)
       setShowAddBoard(false)
     } catch (e) {
       console.error('[Boards] create board failed', e)
     } finally {
       setAddingBoard(false)
     }
+  }
+
+  const handleNewBoardImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setNewBoardImage(file)
+    const url = URL.createObjectURL(file)
+    setNewBoardImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return url })
   }
 
   const handleDeleteBoard = async (id: number) => {
@@ -240,11 +257,41 @@ function BoardsInner({ token }: { token: string }) {
             onChange={e => setNewBoardDesc(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
           />
+          <div
+            className={styles.newBoardImagePicker}
+            onClick={() => newBoardImageRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && newBoardImageRef.current?.click()}
+          >
+            {newBoardImagePreview ? (
+              <img src={newBoardImagePreview} alt="Cover preview" className={styles.newBoardImagePreview} />
+            ) : (
+              <span className={styles.newBoardImageLabel}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                Add cover photo
+              </span>
+            )}
+            {newBoardImagePreview && (
+              <span className={styles.newBoardImageChange}>Change</span>
+            )}
+          </div>
+          <input
+            ref={newBoardImageRef}
+            type="file"
+            accept="image/*"
+            className={styles.coverInput}
+            onChange={handleNewBoardImageChange}
+          />
           <div className={styles.addFormActions}>
             <button className={styles.saveBtn} onClick={handleAddBoard} disabled={addingBoard || !newBoardName.trim()}>
               {addingBoard ? 'Creating…' : 'Create Board'}
             </button>
-            <button className={styles.cancelBtn} onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc('') }}>
+            <button className={styles.cancelBtn} onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc(''); setNewBoardImage(null); setNewBoardImagePreview(null) }}>
               Cancel
             </button>
           </div>

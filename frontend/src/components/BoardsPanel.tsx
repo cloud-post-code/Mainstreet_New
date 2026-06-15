@@ -15,12 +15,15 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
   const [showAddBoard, setShowAddBoard] = useState(false)
   const [newBoardName, setNewBoardName] = useState('')
   const [newBoardDesc, setNewBoardDesc] = useState('')
+  const [newBoardImage, setNewBoardImage] = useState<File | null>(null)
+  const [newBoardImagePreview, setNewBoardImagePreview] = useState<string | null>(null)
   const [addingBoard, setAddingBoard] = useState(false)
   const [newNoteText, setNewNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
+  const newBoardImageRef = useRef<HTMLInputElement>(null)
 
   const loadBoardDetail = useCallback(async (id: number) => {
     setDetailLoading(true)
@@ -49,15 +52,29 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
     if (!name) return
     setAddingBoard(true)
     try {
-      await memory.createBoard(name, newBoardDesc.trim() || undefined)
+      const board = await memory.createBoard(name, newBoardDesc.trim() || undefined)
+      if (newBoardImage && board?.id) {
+        await api.uploadBoardCover(board.id, newBoardImage, token).catch(() => {})
+        memory.refresh()
+      }
       setNewBoardName('')
       setNewBoardDesc('')
+      setNewBoardImage(null)
+      setNewBoardImagePreview(null)
       setShowAddBoard(false)
     } catch (e) {
       console.error('[BoardsPanel] create board failed', e)
     } finally {
       setAddingBoard(false)
     }
+  }
+
+  const handleNewBoardImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setNewBoardImage(file)
+    const url = URL.createObjectURL(file)
+    setNewBoardImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return url })
   }
 
   const handleDeleteBoard = async (id: number) => {
@@ -118,9 +135,11 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
           <button className={styles.backBtn} onClick={() => { setSelectedBoardId(null); setBoardDetail(null) }}>
             ← Boards
           </button>
-          <button className={styles.deleteBtn} onClick={() => handleDeleteBoard(selectedBoard.id)}>
-            Delete
-          </button>
+          {!selectedBoard.is_default && (
+            <button className={styles.deleteBtn} onClick={() => handleDeleteBoard(selectedBoard.id)}>
+              Delete
+            </button>
+          )}
         </div>
 
         {/* Cover image */}
@@ -234,6 +253,36 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
             onChange={e => setNewBoardDesc(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddBoard()}
           />
+          <div
+            className={styles.newBoardImagePicker}
+            onClick={() => newBoardImageRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && newBoardImageRef.current?.click()}
+          >
+            {newBoardImagePreview ? (
+              <img src={newBoardImagePreview} alt="Cover preview" className={styles.newBoardImagePreview} />
+            ) : (
+              <span className={styles.newBoardImageLabel}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                Add cover photo
+              </span>
+            )}
+            {newBoardImagePreview && (
+              <span className={styles.newBoardImageChange}>Change</span>
+            )}
+          </div>
+          <input
+            ref={newBoardImageRef}
+            type="file"
+            accept="image/*"
+            className={styles.coverInput}
+            onChange={handleNewBoardImageChange}
+          />
           <div className={styles.addRow}>
             <button className={styles.addBtn} onClick={handleAddBoard} disabled={addingBoard || !newBoardName.trim()}>
               {addingBoard ? 'Creating…' : 'Create'}
@@ -241,7 +290,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
             <button
               className={styles.addBtn}
               style={{ background: 'transparent', color: '#555', border: '1.5px solid #d9cebd' }}
-              onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc('') }}
+              onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc(''); setNewBoardImage(null); setNewBoardImagePreview(null) }}
             >
               Cancel
             </button>
@@ -271,7 +320,10 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
                   )}
                 </div>
                 <div className={styles.rowMeta}>
-                  <span className={styles.rowName}>{b.name}</span>
+                  <span className={styles.rowName}>
+                    {b.name}
+                    {b.is_default && <span className={styles.defaultBadge}>Default</span>}
+                  </span>
                   {b.description && <span className={styles.rowDesc}>{b.description}</span>}
                 </div>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
