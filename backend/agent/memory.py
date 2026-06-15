@@ -5,13 +5,17 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from agent.prompt_safety import wrap_untrusted
-from db.models import AgentTurn, UserMemory, SavedProduct, Product, UserPreferences
+from db.models import AgentTurn, UserMemory, SavedProduct, Product, UserPreferences, Board, BoardProduct, BoardNote
 
 MAX_SHORT_TERM_TURNS = 20   # last N turns loaded into context
 MAX_LONG_TERM_KEYS = 50     # cap per user
 MAX_MEMORY_VALUE_CHARS = 500
 MAX_SAVED_PRODUCTS = 200    # cap per user
 MAX_PROMPT_SAVED_PRODUCTS = 50  # newest N surfaced in the system prompt
+MAX_BOARDS = 50
+MAX_BOARD_NOTE_CHARS = 500
+MAX_BOARDS_IN_PROMPT = 10
+MAX_PRODUCTS_PER_BOARD_IN_PROMPT = 20
 
 # Reserved key prefixes / names inside user_memory so the same table can host
 # multiple kinds of long-term memory without colliding.
@@ -121,9 +125,9 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     """Return long-term memory as a formatted string for the system prompt.
 
     Memory is grouped so Mason can act on each kind appropriately:
-      - Notes (free-form facts about the user)
+      - Boards (named collections of saved products + notes)
+      - Notes (free-form facts about the user not attached to a board)
       - Preferences (sizes / budget / likes / dislikes)
-      - Saved products (ids the user told Mason to remember)
       - Other (legacy keys saved via save_preference for arbitrary keys)
     """
     result = await db.execute(
@@ -146,12 +150,30 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     prefs = await get_prefs(user_id, db)
     pref_block = _format_prefs_for_prompt(prefs)
 
-    saved = await list_saved_products(user_id, db, limit=MAX_PROMPT_SAVED_PRODUCTS)
+    boards = await list_boards(user_id, db)
 
-    if not notes and not pref_block and not legacy_prefs and not saved and not other:
+    if not notes and not pref_block and not legacy_prefs and not boards and not other:
         return ""
 
     sections: list[str] = []
+
+    if boards:
+        board_lines: list[str] = []
+        for b in boards[:MAX_BOARDS_IN_PROMPT]:
+            board_detail = await get_board(user_id, b["id"], db)
+            header = f"**{b['name']}** (board_id={b['id']})"
+            if b.get("description"):
+                header += f" — \"{b['description']}\""
+            board_lines.append(header)
+            if board_detail["notes"]:
+                board_lines.append("  Notes:")
+                for n in board_detail["notes"]:
+                    board_lines.append(f"  - {n['text']}")
+            if board_detail["products"]:
+                board_lines.append("  Products:")
+                for p in board_detail["products"][:MAX_PRODUCTS_PER_BOARD_IN_PROMPT]:
+                    board_lines.append(f"  - #{p['product_id']} {p['name']} ({p['shop_name'] or 'unknown shop'})")
+        sections.append("### Boards\n" + "\n".join(board_lines))
 
     if notes:
         sections.append(
@@ -163,12 +185,6 @@ async def load_long_term(user_id: int, db: AsyncSession) -> str:
     if legacy_prefs:
         pref_lines = [f"- {k}: {legacy_prefs[k]}" for k in ("sizes", "budget", "likes", "dislikes") if k in legacy_prefs]
         sections.append("### Legacy preferences (free-text)\n" + "\n".join(pref_lines))
-    if saved:
-        saved_lines = [
-            f"- #{p['product_id']} {p['name']} ({p['shop_name'] or 'unknown shop'})"
-            for p in saved
-        ]
-        sections.append("### Saved products\n" + "\n".join(saved_lines))
     if other:
         other_lines = [f"- {k}: {v}" for k, v in other]
         sections.append("### Other remembered facts\n" + "\n".join(other_lines))
@@ -572,6 +588,318 @@ async def _evict_if_full(user_id: int, db: AsyncSession):
     if len(rows) >= MAX_LONG_TERM_KEYS:
         await db.delete(rows[0])
         await db.flush()
+
+
+# ── Boards ──────────────────────────────────────────────────────────────────
+
+async def list_boards(user_id: int, db: AsyncSession) -> list[dict]:
+    """Return all boards for a user with note/product counts (no heavy data)."""
+    result = await db.execute(
+        select(Board).where(Board.user_id == user_id).order_by(Board.created_at.asc())
+    )
+    boards = result.scalars().all()
+    out = []
+    for b in boards:
+        note_count = (await db.execute(
+            select(func.count(BoardNote.id)).where(BoardNote.board_id == b.id)
+        )).scalar() or 0
+        product_count = (await db.execute(
+            select(func.count(BoardProduct.id)).where(BoardProduct.board_id == b.id)
+        )).scalar() or 0
+        out.append({
+            "id": b.id,
+            "name": b.name,
+            "description": b.description,
+            "note_count": note_count,
+            "product_count": product_count,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+            "updated_at": b.updated_at.isoformat() if b.updated_at else None,
+        })
+    return out
+
+
+async def get_board(user_id: int, board_id: int, db: AsyncSession) -> dict | None:
+    """Return a board with its notes and products."""
+    from db.models import Shop, ProductVariant
+    result = await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )
+    board = result.scalars().first()
+    if not board:
+        return None
+
+    notes_result = await db.execute(
+        select(BoardNote).where(BoardNote.board_id == board_id).order_by(BoardNote.created_at.asc())
+    )
+    notes = [
+        {"id": n.id, "text": n.text, "created_at": n.created_at.isoformat() if n.created_at else None}
+        for n in notes_result.scalars().all()
+    ]
+
+    products_result = await db.execute(
+        select(BoardProduct, Product, Shop.name.label("shop_name"))
+        .join(Product, Product.id == BoardProduct.product_id)
+        .join(Shop, Shop.id == Product.shop_id)
+        .where(BoardProduct.board_id == board_id)
+        .order_by(BoardProduct.saved_at.desc())
+    )
+    rows = products_result.all()
+    pids = [p.id for _, p, _ in rows]
+    variants_by_pid: dict[int, list] = {}
+    if pids:
+        v_result = await db.execute(
+            select(ProductVariant).where(ProductVariant.product_id.in_(pids)).order_by(ProductVariant.variant_index)
+        )
+        for v in v_result.scalars().all():
+            variants_by_pid.setdefault(v.product_id, []).append(v)
+
+    products = []
+    for bp, product, shop_name in rows:
+        variants = variants_by_pid.get(product.id, [])
+        default = next((v for v in variants if v.id == product.default_variant_id), None) or (variants[0] if variants else None)
+        products.append({
+            "product_id": product.id,
+            "name": product.name,
+            "price": float(default.price) if default and default.price is not None else 0.0,
+            "quantity": (default.quantity if default else 0) or 0,
+            "image_url": default.image_url if default else None,
+            "shop_id": product.shop_id,
+            "shop_name": shop_name,
+            "saved_at": bp.saved_at.isoformat() if bp.saved_at else None,
+        })
+
+    return {
+        "id": board.id,
+        "name": board.name,
+        "description": board.description,
+        "notes": notes,
+        "products": products,
+        "created_at": board.created_at.isoformat() if board.created_at else None,
+        "updated_at": board.updated_at.isoformat() if board.updated_at else None,
+    }
+
+
+async def create_board(user_id: int, name: str, description: str | None, db: AsyncSession) -> dict:
+    """Create a new board. Raises ValueError if name already exists or cap reached."""
+    name = (name or "").strip()[:200]
+    if not name:
+        raise ValueError("board name required")
+
+    count = (await db.execute(
+        select(func.count(Board.id)).where(Board.user_id == user_id)
+    )).scalar() or 0
+    if count >= MAX_BOARDS:
+        raise ValueError(f"board limit reached ({MAX_BOARDS})")
+
+    existing = (await db.execute(
+        select(Board).where(Board.user_id == user_id, func.lower(Board.name) == name.lower())
+    )).scalars().first()
+    if existing:
+        return {
+            "id": existing.id,
+            "name": existing.name,
+            "description": existing.description,
+            "note_count": 0,
+            "product_count": 0,
+            "created_at": existing.created_at.isoformat() if existing.created_at else None,
+            "updated_at": existing.updated_at.isoformat() if existing.updated_at else None,
+        }
+
+    board = Board(user_id=user_id, name=name, description=description)
+    db.add(board)
+    await db.flush()
+    await db.refresh(board)
+    return {
+        "id": board.id,
+        "name": board.name,
+        "description": board.description,
+        "note_count": 0,
+        "product_count": 0,
+        "created_at": board.created_at.isoformat() if board.created_at else None,
+        "updated_at": board.updated_at.isoformat() if board.updated_at else None,
+    }
+
+
+async def update_board(user_id: int, board_id: int, patch: dict, db: AsyncSession) -> dict | None:
+    """Patch board name/description. Returns updated board summary or None."""
+    result = await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )
+    board = result.scalars().first()
+    if not board:
+        return None
+    if "name" in patch and patch["name"]:
+        board.name = str(patch["name"]).strip()[:200]
+    if "description" in patch:
+        board.description = patch["description"]
+    await db.flush()
+    await db.refresh(board)
+    note_count = (await db.execute(
+        select(func.count(BoardNote.id)).where(BoardNote.board_id == board.id)
+    )).scalar() or 0
+    product_count = (await db.execute(
+        select(func.count(BoardProduct.id)).where(BoardProduct.board_id == board.id)
+    )).scalar() or 0
+    return {
+        "id": board.id,
+        "name": board.name,
+        "description": board.description,
+        "note_count": note_count,
+        "product_count": product_count,
+        "created_at": board.created_at.isoformat() if board.created_at else None,
+        "updated_at": board.updated_at.isoformat() if board.updated_at else None,
+    }
+
+
+async def delete_board(user_id: int, board_id: int, db: AsyncSession) -> bool:
+    result = await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )
+    board = result.scalars().first()
+    if not board:
+        return False
+    await db.delete(board)
+    await db.flush()
+    return True
+
+
+async def save_product_to_board(user_id: int, board_id: int, product_id: int, db: AsyncSession) -> bool:
+    """Save a product to a board. Returns True if newly saved."""
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if not board:
+        raise ValueError(f"board {board_id} not found")
+
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalars().first()
+    if not product:
+        raise ValueError(f"product {product_id} not found")
+
+    existing = (await db.execute(
+        select(BoardProduct).where(BoardProduct.board_id == board_id, BoardProduct.product_id == product_id)
+    )).scalars().first()
+    if existing:
+        return False
+
+    db.add(BoardProduct(board_id=board_id, product_id=product_id))
+    await db.flush()
+    return True
+
+
+async def remove_product_from_board(user_id: int, board_id: int, product_id: int, db: AsyncSession) -> bool:
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if not board:
+        return False
+    row = (await db.execute(
+        select(BoardProduct).where(BoardProduct.board_id == board_id, BoardProduct.product_id == product_id)
+    )).scalars().first()
+    if not row:
+        return False
+    await db.delete(row)
+    await db.flush()
+    return True
+
+
+async def add_note_to_board(user_id: int, board_id: int, text: str, db: AsyncSession) -> dict:
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if not board:
+        raise ValueError(f"board {board_id} not found")
+
+    text = (text or "").strip()[:MAX_BOARD_NOTE_CHARS]
+    if not text:
+        raise ValueError("empty note")
+
+    existing = (await db.execute(
+        select(BoardNote).where(
+            BoardNote.board_id == board_id,
+            func.lower(func.trim(BoardNote.text)) == text.lower(),
+        ).limit(1)
+    )).scalars().first()
+    if existing:
+        return {"id": existing.id, "board_id": board_id, "text": existing.text,
+                "created_at": existing.created_at.isoformat() if existing.created_at else None}
+
+    note = BoardNote(board_id=board_id, text=text)
+    db.add(note)
+    await db.flush()
+    await db.refresh(note)
+    return {"id": note.id, "board_id": board_id, "text": note.text,
+            "created_at": note.created_at.isoformat() if note.created_at else None}
+
+
+async def delete_board_note(user_id: int, board_id: int, note_id: int, db: AsyncSession) -> bool:
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if not board:
+        return False
+    row = (await db.execute(
+        select(BoardNote).where(BoardNote.id == note_id, BoardNote.board_id == board_id)
+    )).scalars().first()
+    if not row:
+        return False
+    await db.delete(row)
+    await db.flush()
+    return True
+
+
+async def get_or_create_default_board(user_id: int, db: AsyncSession) -> dict:
+    """Return the user's first board, creating a 'Saved' board (with migration) if none exist."""
+    boards = await list_boards(user_id, db)
+    if boards:
+        return boards[0]
+
+    board = Board(user_id=user_id, name="Saved", description="Your saved items")
+    db.add(board)
+    await db.flush()
+    await db.refresh(board)
+
+    # Migrate existing SavedProduct rows
+    existing_saved = (await db.execute(
+        select(SavedProduct).where(SavedProduct.user_id == user_id)
+    )).scalars().all()
+    for sp in existing_saved:
+        db.add(BoardProduct(board_id=board.id, product_id=sp.product_id))
+    if existing_saved:
+        await db.flush()
+
+    # Migrate existing UserMemory note rows
+    existing_notes = (await db.execute(
+        select(UserMemory).where(
+            UserMemory.user_id == user_id,
+            UserMemory.key.like(f"{NOTE_KEY_PREFIX}%"),
+        )
+    )).scalars().all()
+    for m in existing_notes:
+        text = _note_text(m.value)[:MAX_BOARD_NOTE_CHARS]
+        if text:
+            db.add(BoardNote(board_id=board.id, text=text))
+    if existing_notes:
+        await db.flush()
+
+    return {
+        "id": board.id,
+        "name": board.name,
+        "description": board.description,
+        "note_count": len(existing_notes),
+        "product_count": len(existing_saved),
+        "created_at": board.created_at.isoformat() if board.created_at else None,
+        "updated_at": board.updated_at.isoformat() if board.updated_at else None,
+    }
+
+
+async def find_board_by_name(user_id: int, name: str, db: AsyncSession) -> dict | None:
+    """Look up a board by name (case-insensitive)."""
+    result = (await db.execute(
+        select(Board).where(Board.user_id == user_id, func.lower(Board.name) == name.lower().strip())
+    )).scalars().first()
+    if not result:
+        return None
+    return {"id": result.id, "name": result.name, "description": result.description}
 
 
 async def save_turn(
