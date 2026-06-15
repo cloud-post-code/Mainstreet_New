@@ -64,6 +64,7 @@ def _fake_db_all(rows):
 def _board(**kw):
     defaults = dict(
         id=1, user_id=10, name="My Home", description="Home stuff",
+        cover_image_url=None, is_default=False,
         created_at=None, updated_at=None,
     )
     defaults.update(kw)
@@ -634,53 +635,69 @@ class TestGetOrCreateDefaultBoard:
 
     def test_returns_existing_board_without_creating(self):
         """
-        If list_boards() returns at least one board, the function returns
-        that first board immediately — no db.add, no migration.
-        Safe to call repeatedly: second call returns the same board, not a new one.
+        If an is_default board exists, return it immediately — no db.add, no migration.
         """
         from agent.memory import get_or_create_default_board
 
-        existing = {"id": 1, "name": "Saved", "description": "Your saved items",
-                    "note_count": 2, "product_count": 5, "created_at": None, "updated_at": None}
+        existing = _board(id=1, name="My Board", description="Your saved items", is_default=True, created_at=None, updated_at=None)
 
-        with patch("agent.memory.list_boards", AsyncMock(return_value=[existing])):
-            db = MagicMock()
-            db.add = MagicMock()
-            result = _run(get_or_create_default_board(user_id=10, db=db))
+        # db.execute calls: is_default query, note_count, product_count
+        default_result = MagicMock()
+        default_result.scalars.return_value.first.return_value = existing
+        note_count_result = MagicMock()
+        note_count_result.scalar.return_value = 2
+        product_count_result = MagicMock()
+        product_count_result.scalar.return_value = 5
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[default_result, note_count_result, product_count_result])
+        db.add = MagicMock()
+
+        result = _run(get_or_create_default_board(user_id=10, db=db))
 
         assert result["id"] == 1
         db.add.assert_not_called()
 
     def test_creates_default_board_when_none_exist(self):
         """
-        No boards exist → creates Board(name="Saved", description="Your saved items").
+        No is_default board exists → creates Board(name="My Board", is_default=True).
         The board is added via db.add and flushed before migration runs.
         """
         from agent.memory import get_or_create_default_board
 
-        created_board = _board(id=99, name="Saved", description="Your saved items")
+        db = MagicMock()
 
-        with patch("agent.memory.list_boards", AsyncMock(return_value=[])):
-            db = MagicMock()
+        # execute calls: is_default check (None), SavedProduct query, UserMemory notes query
+        no_default_result = MagicMock()
+        no_default_result.scalars.return_value.first.return_value = None
+        saved_result = MagicMock()
+        saved_result.scalars.return_value.all.return_value = []
+        notes_result = MagicMock()
+        notes_result.scalars.return_value.all.return_value = []
 
-            # execute calls: SavedProduct query, UserMemory notes query
-            saved_result = MagicMock()
-            saved_result.scalars.return_value.all.return_value = []
-            notes_result = MagicMock()
-            notes_result.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(side_effect=[no_default_result, saved_result, notes_result])
+        db.add = MagicMock()
+        db.flush = AsyncMock()
 
-            db.execute = AsyncMock(side_effect=[saved_result, notes_result])
-            db.add = MagicMock()
-            db.flush = AsyncMock()
-            db.refresh = AsyncMock()
+        # Use a real Board-like object so db.refresh can set its id
+        added_board = None
+        original_add = db.add.side_effect
 
-            with patch("agent.memory.Board") as MockBoard:
-                MockBoard.return_value = created_board
-                _run(get_or_create_default_board(user_id=10, db=db))
+        def capture_add(obj):
+            nonlocal added_board
+            if hasattr(obj, "name") and hasattr(obj, "is_default"):
+                added_board = obj
+                obj.id = 99
 
-        MockBoard.assert_called_once_with(
-            user_id=10, name="Saved", description="Your saved items"
-        )
+        db.add.side_effect = capture_add
+        db.refresh = AsyncMock()
+
+        result = _run(get_or_create_default_board(user_id=10, db=db))
+
+        assert added_board is not None
+        assert added_board.name == "My Board"
+        assert added_board.is_default is True
+        assert added_board.user_id == 10
         db.add.assert_called()
 
     def test_migrates_existing_saved_products(self):
@@ -698,29 +715,33 @@ class TestGetOrCreateDefaultBoard:
         sp1 = _saved_product(product_id=10)
         sp2 = _saved_product(product_id=20)
 
-        with patch("agent.memory.list_boards", AsyncMock(return_value=[])):
-            db = MagicMock()
+        db = MagicMock()
 
-            saved_result = MagicMock()
-            saved_result.scalars.return_value.all.return_value = [sp1, sp2]
-            notes_result = MagicMock()
-            notes_result.scalars.return_value.all.return_value = []
+        no_default_result = MagicMock()
+        no_default_result.scalars.return_value.first.return_value = None
+        saved_result = MagicMock()
+        saved_result.scalars.return_value.all.return_value = [sp1, sp2]
+        notes_result = MagicMock()
+        notes_result.scalars.return_value.all.return_value = []
 
-            db.execute = AsyncMock(side_effect=[saved_result, notes_result])
-            db.add = MagicMock()
-            db.flush = AsyncMock()
-            db.refresh = AsyncMock()
+        db.execute = AsyncMock(side_effect=[no_default_result, saved_result, notes_result])
+        added_objects = []
 
-            with patch("agent.memory.Board") as MockBoard, \
-                 patch("agent.memory.BoardProduct") as MockBP:
-                MockBoard.return_value = created_board
-                _run(get_or_create_default_board(user_id=10, db=db))
+        def capture_add(obj):
+            if hasattr(obj, "name") and hasattr(obj, "is_default"):
+                obj.id = 99
+            added_objects.append(obj)
 
-        # BoardProduct should be called once per saved product
-        assert MockBP.call_count == 2
-        calls = MockBP.call_args_list
-        product_ids = {c.kwargs.get("product_id") or c.args[0] if c.args else None for c in calls}
-        # Both product_ids were processed
+        db.add = MagicMock(side_effect=capture_add)
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        _run(get_or_create_default_board(user_id=10, db=db))
+
+        # BoardProduct should be added once per saved product
+        from db.models import BoardProduct
+        board_products = [o for o in added_objects if isinstance(o, BoardProduct)]
+        assert len(board_products) == 2
         assert db.add.call_count >= 3  # 1 Board + 2 BoardProducts
 
     def test_migrates_existing_notes(self):
@@ -736,28 +757,33 @@ class TestGetOrCreateDefaultBoard:
         created_board = _board(id=99, name="Saved")
         note = _memory_note(value={"text": "Likes earthy tones"})
 
-        with patch("agent.memory.list_boards", AsyncMock(return_value=[])):
-            db = MagicMock()
+        db = MagicMock()
 
-            saved_result = MagicMock()
-            saved_result.scalars.return_value.all.return_value = []
-            notes_result = MagicMock()
-            notes_result.scalars.return_value.all.return_value = [note]
+        no_default_result = MagicMock()
+        no_default_result.scalars.return_value.first.return_value = None
+        saved_result = MagicMock()
+        saved_result.scalars.return_value.all.return_value = []
+        notes_result = MagicMock()
+        notes_result.scalars.return_value.all.return_value = [note]
 
-            db.execute = AsyncMock(side_effect=[saved_result, notes_result])
-            db.add = MagicMock()
-            db.flush = AsyncMock()
-            db.refresh = AsyncMock()
+        db.execute = AsyncMock(side_effect=[no_default_result, saved_result, notes_result])
+        added_objects = []
 
-            with patch("agent.memory.Board") as MockBoard, \
-                 patch("agent.memory.BoardNote") as MockNote:
-                MockBoard.return_value = created_board
-                _run(get_or_create_default_board(user_id=10, db=db))
+        def capture_add(obj):
+            if hasattr(obj, "name") and hasattr(obj, "is_default"):
+                obj.id = 99
+            added_objects.append(obj)
 
-        # BoardNote should be constructed with the note text
-        MockNote.assert_called_once()
-        note_text_arg = MockNote.call_args.kwargs.get("text") or MockNote.call_args.args[1] if MockNote.call_args.args else None
-        assert note_text_arg == "Likes earthy tones" or MockNote.call_count == 1
+        db.add = MagicMock(side_effect=capture_add)
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        _run(get_or_create_default_board(user_id=10, db=db))
+
+        from db.models import BoardNote
+        board_notes = [o for o in added_objects if isinstance(o, BoardNote)]
+        assert len(board_notes) == 1
+        assert board_notes[0].text == "Likes earthy tones"
 
     def test_skips_empty_note_text_during_migration(self):
         """
@@ -774,26 +800,32 @@ class TestGetOrCreateDefaultBoard:
         # Empty string value — _note_text("") returns "" which is falsy → skipped
         bad_note = _memory_note(value="")
 
-        with patch("agent.memory.list_boards", AsyncMock(return_value=[])):
-            db = MagicMock()
+        db = MagicMock()
 
-            saved_result = MagicMock()
-            saved_result.scalars.return_value.all.return_value = []
-            notes_result = MagicMock()
-            notes_result.scalars.return_value.all.return_value = [bad_note]
+        no_default_result = MagicMock()
+        no_default_result.scalars.return_value.first.return_value = None
+        saved_result = MagicMock()
+        saved_result.scalars.return_value.all.return_value = []
+        notes_result = MagicMock()
+        notes_result.scalars.return_value.all.return_value = [bad_note]
 
-            db.execute = AsyncMock(side_effect=[saved_result, notes_result])
-            db.add = MagicMock()
-            db.flush = AsyncMock()
-            db.refresh = AsyncMock()
+        db.execute = AsyncMock(side_effect=[no_default_result, saved_result, notes_result])
+        added_objects = []
 
-            with patch("agent.memory.Board") as MockBoard, \
-                 patch("agent.memory.BoardNote") as MockNote:
-                MockBoard.return_value = created_board
-                _run(get_or_create_default_board(user_id=10, db=db))
+        def capture_add(obj):
+            if hasattr(obj, "name") and hasattr(obj, "is_default"):
+                obj.id = 99
+            added_objects.append(obj)
 
-        # BoardNote should NOT be constructed for the whitespace-only text
-        MockNote.assert_not_called()
+        db.add = MagicMock(side_effect=capture_add)
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        _run(get_or_create_default_board(user_id=10, db=db))
+
+        from db.models import BoardNote
+        board_notes = [o for o in added_objects if isinstance(o, BoardNote)]
+        assert len(board_notes) == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1080,17 +1112,21 @@ class TestToolExecution:
                                        user_id=None, session_id=1, db=db))
         assert result["saved"] is False
 
-    def test_save_note_to_board_requires_board_id(self):
+    def test_save_note_to_board_falls_back_to_default_board(self):
         """
-        tool_input missing board_id → {"saved": False, "reason": "board_id required"}.
-        No DB call. Mason must always provide board_id when saving a board note.
+        tool_input missing board_id → falls back to get_or_create_default_board.
+        board_id is now optional; omitting it saves the note to My Board.
         """
         from agent.tools import execute_tool
+        from unittest.mock import patch, AsyncMock
         db = MagicMock()
-        result, _ = _run(execute_tool("save_note_to_board", {"text": "nice rug"},
-                                       user_id=10, session_id=1, db=db))
-        assert result["saved"] is False
-        assert result["reason"] == "board_id required"
+        default_board = {"id": 7, "name": "My Board", "is_default": True}
+        note_result = {"id": 1, "board_id": 7, "text": "nice rug", "created_at": None}
+        with patch("agent.tools.memory_get_or_create_default_board", AsyncMock(return_value=default_board)), \
+             patch("agent.tools.memory_add_note_to_board", AsyncMock(return_value=note_result)):
+            result, _ = _run(execute_tool("save_note_to_board", {"text": "nice rug"},
+                                          user_id=10, session_id=1, db=db))
+        assert result["saved"] is True
 
     def test_save_note_to_board_propagates_value_error(self):
         """
