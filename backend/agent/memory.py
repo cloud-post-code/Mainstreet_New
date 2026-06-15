@@ -610,6 +610,7 @@ async def list_boards(user_id: int, db: AsyncSession) -> list[dict]:
             "id": b.id,
             "name": b.name,
             "description": b.description,
+            "cover_image_url": b.cover_image_url,
             "note_count": note_count,
             "product_count": product_count,
             "created_at": b.created_at.isoformat() if b.created_at else None,
@@ -672,6 +673,7 @@ async def get_board(user_id: int, board_id: int, db: AsyncSession) -> dict | Non
         "id": board.id,
         "name": board.name,
         "description": board.description,
+        "cover_image_url": board.cover_image_url,
         "notes": notes,
         "products": products,
         "created_at": board.created_at.isoformat() if board.created_at else None,
@@ -699,6 +701,7 @@ async def create_board(user_id: int, name: str, description: str | None, db: Asy
             "id": existing.id,
             "name": existing.name,
             "description": existing.description,
+            "cover_image_url": existing.cover_image_url,
             "note_count": 0,
             "product_count": 0,
             "created_at": existing.created_at.isoformat() if existing.created_at else None,
@@ -713,6 +716,7 @@ async def create_board(user_id: int, name: str, description: str | None, db: Asy
         "id": board.id,
         "name": board.name,
         "description": board.description,
+        "cover_image_url": board.cover_image_url,
         "note_count": 0,
         "product_count": 0,
         "created_at": board.created_at.isoformat() if board.created_at else None,
@@ -732,6 +736,8 @@ async def update_board(user_id: int, board_id: int, patch: dict, db: AsyncSessio
         board.name = str(patch["name"]).strip()[:200]
     if "description" in patch:
         board.description = patch["description"]
+    if "cover_image_url" in patch:
+        board.cover_image_url = patch["cover_image_url"]
     await db.flush()
     await db.refresh(board)
     note_count = (await db.execute(
@@ -744,6 +750,7 @@ async def update_board(user_id: int, board_id: int, patch: dict, db: AsyncSessio
         "id": board.id,
         "name": board.name,
         "description": board.description,
+        "cover_image_url": board.cover_image_url,
         "note_count": note_count,
         "product_count": product_count,
         "created_at": board.created_at.isoformat() if board.created_at else None,
@@ -885,6 +892,7 @@ async def get_or_create_default_board(user_id: int, db: AsyncSession) -> dict:
         "id": board.id,
         "name": board.name,
         "description": board.description,
+        "cover_image_url": board.cover_image_url,
         "note_count": len(existing_notes),
         "product_count": len(existing_saved),
         "created_at": board.created_at.isoformat() if board.created_at else None,

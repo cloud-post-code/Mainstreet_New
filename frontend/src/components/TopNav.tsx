@@ -58,13 +58,7 @@ export default function TopNav() {
         >
           Mason
         </Link>
-        <Link
-          to="/boards"
-          className={`${styles.link} ${isActive('/boards') ? styles.active : ''}`}
-        >
-          Boards
-        </Link>
-        <Link
+<Link
           to="/discover"
           className={`${styles.link} ${isActive('/discover') ? styles.active : ''}`}
         >

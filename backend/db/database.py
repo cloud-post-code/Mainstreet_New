@@ -209,3 +209,6 @@ async def create_tables():
         await conn.execute(text(
             "ALTER TABLE boards ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now()"
         ))
+        await conn.execute(text(
+            "ALTER TABLE boards ADD COLUMN IF NOT EXISTS cover_image_url text"
+        ))

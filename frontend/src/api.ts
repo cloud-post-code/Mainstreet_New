@@ -106,6 +106,7 @@ export interface Board {
   id: number
   name: string
   description: string | null
+  cover_image_url: string | null
   note_count: number
   product_count: number
   created_at: string | null
@@ -156,20 +157,34 @@ export interface MasonLifestyle {
   freeform_notes?: string
   discovery_notes?: string
   quality_notes?: string
-  color_palette?: string[]
-  weekend_vibes?: string[]
-  shop_style?: string
-  dream_home?: string
-  dream_scene?: string
-  dream_car?: string
-  gift_mood?: string
+  // ── image-quiz selections (raw keys, for UI re-hydration) ──
+  style_selections?: string[]
+  color_selections?: string[]
+  dream_home_selections?: string[]
+  dream_scene_selections?: string[]
+  weekend_selections?: string[]
+  dream_car_selections?: string[]
+  gift_mood_selections?: string[]
+  area_selections?: string[]
+  material_selections?: string[]
+  work_setup_selections?: string[]
+  family_life_selections?: string[]
+  // ── human-readable notes written from quiz answers (what Mason reads) ──
+  style_notes?: string
+  color_notes?: string
+  dream_home_notes?: string
+  dream_scene_notes?: string
+  weekend_notes?: string
+  dream_car_notes?: string
+  gift_mood_notes?: string
+  area_notes?: string
+  material_notes?: string
+  work_setup_notes?: string
+  family_life_notes?: string
+  // ── misc freeform ──
   vibe_notes?: string
-  materials?: string[]
-  work_setup?: string[]
-  family_life?: string[]
   likes_notes?: string
   dislikes_notes?: string
-  style_notes?: string
 }
 export interface MasonPrefs {
   sizes: MasonSizes
@@ -467,6 +482,15 @@ export const api = {
     request<Board>(`/api/mason/boards/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }, token),
   deleteBoard: (id: number, token: string) =>
     request<void>(`/api/mason/boards/${id}`, { method: 'DELETE' }, token),
+  uploadBoardCover: (boardId: number, file: File, token: string): Promise<{ cover_image_url: string }> => {
+    const form = new FormData()
+    form.append('file', file)
+    return fetch(`/api/mason/boards/${boardId}/cover-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    }).then(r => { if (!r.ok) throw new Error('Upload failed'); return r.json() })
+  },
   addProductToBoard: (boardId: number, product_id: number, token: string) =>
     request<{ board_id: number; product_id: number; newly_saved: boolean }>(
       `/api/mason/boards/${boardId}/products`,

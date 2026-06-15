@@ -5,8 +5,9 @@ All endpoints require an authenticated user. Storage lives in `user_memory`
 data on each turn via `agent.memory.load_long_term`, so anything written here
 shows up in Mason's context next turn.
 """
+import uuid
 from typing import Optional, Any, List, Dict
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,20 @@ from auth import get_current_user
 from db.database import get_db
 from db.models import User
 from agent import memory as mem
+from agent.upload_safety import read_capped, validate_image_bytes
+from agent.uploads import public_api_base, upload_root
+
+MAX_BOARD_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB
+
+
+def _board_covers_dir():
+    d = upload_root() / "board_covers"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _board_cover_url(filename: str, base: str) -> str:
+    return f"{base.rstrip('/')}/uploads/board_covers/{filename}"
 
 router = APIRouter(prefix="/api/mason", tags=["mason-memory"])
 
@@ -241,6 +256,27 @@ async def update_board(
         raise HTTPException(status_code=404, detail="Board not found")
     await db.commit()
     return board
+
+
+@router.post("/boards/{board_id}/cover-image")
+async def upload_board_cover(
+    board_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    board = await mem.get_board(current_user.id, board_id, db)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    body = await read_capped(file, MAX_BOARD_IMAGE_BYTES)
+    _, ext = validate_image_bytes(body)
+    filename = f"{uuid.uuid4().hex}{ext}"
+    (_board_covers_dir() / filename).write_bytes(body)
+    image_url = _board_cover_url(filename, public_api_base(request))
+    updated = await mem.update_board(current_user.id, board_id, {"cover_image_url": image_url}, db)
+    await db.commit()
+    return {"cover_image_url": updated["cover_image_url"] if updated else image_url}
 
 
 @router.delete("/boards/{board_id}", status_code=204)
