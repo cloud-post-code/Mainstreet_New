@@ -10,6 +10,7 @@ import styles from './Mason.module.css'
 import { formatDate } from '../lib/format'
 import { track } from '../analytics/posthog'
 import MasonFeedback from '../components/MasonFeedback'
+import MasonInboxTab from '../components/MasonInboxTab'
 
 type TabKey = 'shipping' | 'preferences' | 'saved' | 'history' | 'inbox'
 
@@ -18,7 +19,7 @@ const SESSIONS_PAGE_SIZE = 50
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'saved', label: 'Boards' },
   { key: 'history', label: 'History' },
-  { key: 'preferences', label: 'Index' },
+  { key: 'preferences', label: 'Preferences' },
   { key: 'inbox', label: 'Inbox' },
   { key: 'shipping', label: 'Shipping' },
 ]
@@ -167,28 +168,19 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
           )}
 
           {tab === 'inbox' && (
-            memory.inbox.length === 0 ? (
-              <p className={styles.empty}>No messages yet.</p>
-            ) : (
-              <ul className={styles.inboxList}>
-                {memory.inbox.map(msg => (
-                  <li
-                    key={msg.id}
-                    className={`${styles.inboxItem} ${msg.read ? '' : styles.unread}`}
-                    onClick={() => openInboxMessage(msg.id)}
-                  >
-                    {!msg.read && <span className={styles.dot} aria-label="Unread" />}
-                    <div className={styles.inboxBody}>
-                      <p className={styles.inboxTitle}>{msg.title}</p>
-                      <p className={styles.inboxPreview}>{msg.preview}</p>
-                      <div className={styles.inboxDate}>
-                        {formatDate(msg.created_at)}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )
+            <MasonInboxTab
+              messages={memory.inbox}
+              onOpen={openInboxMessage}
+              emptyClass={styles.empty}
+              listClass={styles.inboxList}
+              itemClass={styles.inboxItem}
+              unreadClass={styles.unread}
+              dotClass={styles.dot}
+              bodyClass={styles.inboxBody}
+              titleClass={styles.inboxTitle}
+              previewClass={styles.inboxPreview}
+              dateClass={styles.inboxDate}
+            />
           )}
         </div>
       </section>
