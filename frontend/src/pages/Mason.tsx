@@ -16,10 +16,10 @@ type TabKey = 'shipping' | 'preferences' | 'saved' | 'history' | 'inbox'
 const SESSIONS_PAGE_SIZE = 50
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'inbox', label: 'Inbox' },
-  { key: 'history', label: 'History' },
-  { key: 'preferences', label: 'Prefs' },
   { key: 'saved', label: 'Boards' },
+  { key: 'history', label: 'History' },
+  { key: 'preferences', label: 'Index' },
+  { key: 'inbox', label: 'Inbox' },
   { key: 'shipping', label: 'Shipping' },
 ]
 
@@ -33,7 +33,7 @@ export default function Mason() {
 
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
-  const [tab, setTab] = useState<TabKey>('inbox')
+  const [tab, setTab] = useState<TabKey>('saved')
   const [sessions, setSessions] = useState<Session[]>([])
   const [sessionsHasMore, setSessionsHasMore] = useState(false)
   const [sessionsLoadingMore, setSessionsLoadingMore] = useState(false)

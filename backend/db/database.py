@@ -212,3 +212,11 @@ async def create_tables():
         await conn.execute(text(
             "ALTER TABLE boards ADD COLUMN IF NOT EXISTS cover_image_url text"
         ))
+        await conn.execute(text(
+            "ALTER TABLE boards ADD COLUMN IF NOT EXISTS is_default boolean NOT NULL DEFAULT false"
+        ))
+        # One-time migration: rename existing "Saved" boards → "My Board", mark is_default=true
+        await conn.execute(text(
+            "UPDATE boards SET name = 'My Board', is_default = true "
+            "WHERE lower(name) = 'saved' AND is_default = false"
+        ))
