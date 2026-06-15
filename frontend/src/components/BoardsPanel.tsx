@@ -213,7 +213,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
         <p className={styles.empty}>No boards yet.</p>
       ) : (
         <ul className={styles.list}>
-          {memory.boards.map(b => (
+          {[...memory.boards].sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0)).map(b => (
             <li key={b.id}>
               <button className={styles.row} onClick={() => { setSelectedBoardId(b.id); setBoardTab('saved') }}>
                 <div className={styles.rowCover}>

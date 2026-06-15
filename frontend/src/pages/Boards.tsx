@@ -212,7 +212,7 @@ function BoardsInner({ token }: { token: string }) {
         <p className={styles.empty}>No boards yet. Create one to organize your saved items.</p>
       ) : (
         <div className={styles.boardList}>
-          {memory.boards.map(board => (
+          {[...memory.boards].sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0)).map(board => (
             <button
               key={board.id}
               className={styles.boardRow}
