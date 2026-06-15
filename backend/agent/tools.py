@@ -17,6 +17,13 @@ from agent.memory import (
     get_prefs as memory_get_prefs,
     set_prefs as memory_set_prefs,
     list_saved_products as memory_list_saved,
+    list_boards as memory_list_boards,
+    get_board as memory_get_board,
+    create_board as memory_create_board,
+    save_product_to_board as memory_save_product_to_board,
+    add_note_to_board as memory_add_note_to_board,
+    get_or_create_default_board as memory_get_or_create_default_board,
+    find_board_by_name as memory_find_board_by_name,
 )
 from db.models import AgentSession, InboxMessage
 from agent.embeddings import (
@@ -225,6 +232,87 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "update_preferences",
+        "description": (
+            "Save or update the user's structured preferences profile. Use this proactively "
+            "whenever the conversation reveals something durable about the user's style, sizes, "
+            "budget, lifestyle, likes, or dislikes. Always tell the user what you are saving "
+            "(e.g. 'I've noted your shoe size — saving that to your profile'). "
+            "Accepts a partial patch — only include fields you want to update. "
+            "JSONB fields (sizes, lifestyle, gift_budget) are shallow-merged; "
+            "arrays (style_tags, likes, dislikes) REPLACE the existing list so call "
+            "list_preferences first when you need to append. Prefer this over save_preference."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "style_tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Aesthetic style tags (e.g. ['minimalist', 'classic']). Replaces existing list.",
+                },
+                "likes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Brands, materials, or things the user likes. Replaces existing list.",
+                },
+                "dislikes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Things to avoid. Replaces existing list.",
+                },
+                "personal_budget": {
+                    "type": "integer",
+                    "description": "Typical per-item or monthly personal shopping budget in dollars.",
+                },
+                "sizes": {
+                    "type": "object",
+                    "description": "Clothing/shoe sizes. Shallow-merged. Keys: shirt, waist, inseam, shoe, dress, hat, ring, freeform.",
+                    "properties": {
+                        "shirt":   {"type": "string"},
+                        "waist":   {"type": "string"},
+                        "inseam":  {"type": "string"},
+                        "shoe":    {"type": "string"},
+                        "dress":   {"type": "string"},
+                        "hat":     {"type": "string"},
+                        "ring":    {"type": "string"},
+                        "freeform": {"type": "string"},
+                    },
+                },
+                "gift_budget": {
+                    "type": "object",
+                    "description": "Gift budget per occasion. Shallow-merged. Keys: default, birthday, holiday, anniversary (integers, dollars), freeform (string).",
+                    "properties": {
+                        "default":     {"type": "integer"},
+                        "birthday":    {"type": "integer"},
+                        "holiday":     {"type": "integer"},
+                        "anniversary": {"type": "integer"},
+                        "freeform":    {"type": "string"},
+                    },
+                },
+                "lifestyle": {
+                    "type": "object",
+                    "description": (
+                        "Lifestyle context. Shallow-merged. Keys: housing ('homeowner'|'renter'|'condo'), "
+                        "area ('urban'|'suburban'|'rural'), work_env ('wfh'|'hybrid'|'office'|'outdoor'), "
+                        "pets (string[]), pets_notes, hobbies (string[]), cooking ('rarely'|'sometimes'|'often'|'daily'), "
+                        "travel ('rarely'|'few_times_year'|'monthly'|'frequently'), fitness (string[]), "
+                        "family_notes, home_aesthetic, freeform_notes, color_palette (string[]), "
+                        "weekend_vibes (string[]), shop_style."
+                    ),
+                },
+                "quality_price": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "description": "Quality vs price slider: 1=budget-focused, 5=premium-first.",
+                },
+                "bulk_individual": {"type": "integer", "minimum": 1, "maximum": 5},
+                "discover_known":  {"type": "integer", "minimum": 1, "maximum": 5},
+            },
+        },
+    },
+    {
         "name": "save_note",
         "description": (
             "Record a durable fact about the user as a Note so future conversations can use it. "
@@ -245,16 +333,88 @@ TOOL_DEFINITIONS = [
     {
         "name": "save_product",
         "description": (
-            "Save a product to the user's Saved list so they can find it later. Use when the user "
-            "expresses lasting interest in a specific product (\"I love this\", \"save this for later\", "
-            "\"add this to my list\", \"keep this in mind\"). Resolve the product_id with search_products "
-            "first if they referenced it by name."
+            "Save a product to the user's default Saved board. Prefer save_to_board when you know "
+            "which board the user wants. Use this as a fallback when no board context is available."
         ),
         "input_schema": {
             "type": "object",
             "required": ["product_id"],
             "properties": {
                 "product_id": {"type": "integer", "description": "Product ID to save."},
+            },
+        },
+    },
+    {
+        "name": "list_boards",
+        "description": (
+            "Return all of the user's boards (id, name, description, note_count, product_count). "
+            "Call this before save_to_board or save_note_to_board when you need to pick the right board."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "create_board",
+        "description": (
+            "Create a new board for the user. Use when the user starts a distinct new shopping context "
+            "(a gift, a room, an occasion) that doesn't fit an existing board. "
+            "Do not create duplicate boards — call list_boards first to check."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+                "name": {"type": "string", "description": "Short board name, e.g. 'Mom's Birthday' or 'Living Room'"},
+                "description": {"type": "string", "description": "Optional one-sentence purpose of the board"},
+            },
+        },
+    },
+    {
+        "name": "save_to_board",
+        "description": (
+            "Save a product to a specific board. This is the preferred way to save products. "
+            "If the user has no boards, a default 'Saved' board is created automatically. "
+            "Provide board_id (preferred) or board_name to target a specific board. "
+            "If context is ambiguous and the user has multiple boards, use ask_save_to_board instead."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["product_id"],
+            "properties": {
+                "product_id": {"type": "integer", "description": "Product ID to save"},
+                "board_id": {"type": "integer", "description": "Target board ID (preferred)"},
+                "board_name": {"type": "string", "description": "Board name to look up (if board_id not known)"},
+            },
+        },
+    },
+    {
+        "name": "save_note_to_board",
+        "description": (
+            "Save a contextual note to a specific board. Reason about which board fits based on the "
+            "current shopping context — do not ask the user. For durable user facts not tied to any "
+            "board (e.g. size, pets, lifestyle), use save_note instead."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["board_id", "text"],
+            "properties": {
+                "board_id": {"type": "integer", "description": "Board to attach the note to"},
+                "text": {"type": "string", "description": "Note text, under 500 characters"},
+            },
+        },
+    },
+    {
+        "name": "ask_save_to_board",
+        "description": (
+            "Render a board-picker card so the user can choose which board to save a product to. "
+            "Use this instead of save_to_board when the user has multiple boards and context is too "
+            "ambiguous to pick confidently. Do NOT use for notes — route those silently with save_note_to_board."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["product_id", "product_name"],
+            "properties": {
+                "product_id": {"type": "integer", "description": "Product ID to save"},
+                "product_name": {"type": "string", "description": "Product name for display in the picker card"},
             },
         },
     },
@@ -271,9 +431,15 @@ _FAST_TOOL_NAMES = {
     "render_ui",
     "add_to_cart",
     "view_cart",
+    "update_preferences",
     "save_preference",
     "save_note",
     "save_product",
+    "list_boards",
+    "create_board",
+    "save_to_board",
+    "save_note_to_board",
+    "ask_save_to_board",
 }
 FAST_TOOL_DEFINITIONS = [t for t in TOOL_DEFINITIONS if t["name"] in _FAST_TOOL_NAMES]
 
@@ -284,10 +450,18 @@ FAST_TOOL_DEFINITIONS = [t for t in TOOL_DEFINITIONS if t["name"] in _FAST_TOOL_
 
 _SAVE_NOTE_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_note")
 _SAVE_PREF_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_preference")
+_UPDATE_PREFS_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "update_preferences")
+_LIST_BOARDS_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "list_boards")
+_CREATE_BOARD_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "create_board")
+_SAVE_NOTE_TO_BOARD_DEF = next(t for t in TOOL_DEFINITIONS if t["name"] == "save_note_to_board")
 
 MASON_MEMORY_TOOL_DEFINITIONS = [
     _SAVE_NOTE_DEF,
     _SAVE_PREF_DEF,
+    _UPDATE_PREFS_DEF,
+    _LIST_BOARDS_DEF,
+    _CREATE_BOARD_DEF,
+    _SAVE_NOTE_TO_BOARD_DEF,
     {
         "name": "delete_note",
         "description": (
@@ -473,6 +647,22 @@ async def execute_tool(
                 # Fallback: still write through the legacy user_memory store.
                 await save_preference(user_id, key, value, db)
             return {"saved": True, "key": key}, None
+        if tool_name == "update_preferences":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            allowed = {
+                "style_tags", "likes", "dislikes", "personal_budget",
+                "sizes", "gift_budget", "lifestyle",
+                "quality_price", "bulk_individual", "discover_known",
+            }
+            patch = {k: v for k, v in tool_input.items() if k in allowed}
+            if not patch:
+                return {"saved": False, "reason": "empty_patch"}, None
+            try:
+                updated = await memory_set_prefs(user_id, patch, db)
+            except Exception as e:
+                return {"saved": False, "reason": str(e)}, None
+            return {"saved": True, "updated_fields": list(patch.keys()), "prefs": updated}, None
         if tool_name == "save_note":
             if user_id is None:
                 return {"saved": False, "reason": "not_logged_in"}, None
@@ -485,10 +675,94 @@ async def execute_tool(
             if user_id is None:
                 return {"saved": False, "reason": "not_logged_in"}, None
             try:
-                created = await memory_save_product(user_id, int(tool_input["product_id"]), db)
+                # Redirect to default board if boards exist, otherwise legacy path
+                board = await memory_get_or_create_default_board(user_id, db)
+                created = await memory_save_product_to_board(user_id, board["id"], int(tool_input["product_id"]), db)
             except ValueError as ve:
                 return {"saved": False, "reason": str(ve)}, None
             return {"saved": True, "product_id": int(tool_input["product_id"]), "newly_saved": created}, None
+        if tool_name == "list_boards":
+            if user_id is None:
+                return {"boards": [], "reason": "not_logged_in"}, None
+            return {"boards": await memory_list_boards(user_id, db)}, None
+        if tool_name == "create_board":
+            if user_id is None:
+                return {"created": False, "reason": "not_logged_in"}, None
+            try:
+                board = await memory_create_board(
+                    user_id,
+                    str(tool_input.get("name") or ""),
+                    tool_input.get("description"),
+                    db,
+                )
+            except ValueError as ve:
+                return {"created": False, "reason": str(ve)}, None
+            return {"created": True, "board": board}, None
+        if tool_name == "save_to_board":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            product_id = int(tool_input.get("product_id") or 0)
+            board_id = tool_input.get("board_id")
+            board_name = tool_input.get("board_name")
+            try:
+                if board_id:
+                    target_board_id = int(board_id)
+                elif board_name:
+                    found = await memory_find_board_by_name(user_id, str(board_name), db)
+                    if found:
+                        target_board_id = found["id"]
+                    else:
+                        new_board = await memory_create_board(user_id, str(board_name), None, db)
+                        target_board_id = new_board["id"]
+                else:
+                    default = await memory_get_or_create_default_board(user_id, db)
+                    target_board_id = default["id"]
+                newly_saved = await memory_save_product_to_board(user_id, target_board_id, product_id, db)
+            except ValueError as ve:
+                return {"saved": False, "reason": str(ve)}, None
+            return {"saved": True, "product_id": product_id, "board_id": target_board_id, "newly_saved": newly_saved}, None
+        if tool_name == "save_note_to_board":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            board_id = tool_input.get("board_id")
+            text = str(tool_input.get("text") or "").strip()
+            if not board_id:
+                return {"saved": False, "reason": "board_id required"}, None
+            try:
+                note = await memory_add_note_to_board(user_id, int(board_id), text, db)
+            except ValueError as ve:
+                return {"saved": False, "reason": str(ve)}, None
+            return {"saved": True, "note": note}, None
+        if tool_name == "ask_save_to_board":
+            if user_id is None:
+                return {"saved": False, "reason": "not_logged_in"}, None
+            product_id = int(tool_input.get("product_id") or 0)
+            product_name = str(tool_input.get("product_name") or "this product")
+            boards = await memory_list_boards(user_id, db)
+            if not boards:
+                default = await memory_get_or_create_default_board(user_id, db)
+                boards = [default]
+            import uuid as _uuid
+            question_id = f"board_pick_{_uuid.uuid4().hex[:8]}"
+            payload = {
+                "root": question_id,
+                "components": [
+                    {
+                        "id": question_id,
+                        "type": "board_picker",
+                        "props": {
+                            "question_id": question_id,
+                            "product_id": product_id,
+                            "product_name": product_name,
+                            "boards": [
+                                {"id": b["id"], "name": b["name"], "description": b.get("description")}
+                                for b in boards
+                            ],
+                        },
+                    }
+                ],
+            }
+            return payload, "ui_tree"
         if tool_name == "add_to_cart":
             return await cart_service.add_item(
                 variant_id=int(tool_input["variant_id"]) if tool_input.get("variant_id") is not None else None,

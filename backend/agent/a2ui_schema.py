@@ -24,6 +24,7 @@ ALLOWED_TYPES: set[str] = {
     "plan",
     "mason_discover_card",
     "style_question_card",
+    "board_picker",
 }
 
 CONTAINER_TYPES: set[str] = {"stack", "product_grid"}
@@ -44,6 +45,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     "plan": ("steps",),
     "mason_discover_card": ("products",),
     "style_question_card": ("question_id", "products"),
+    "board_picker": ("question_id", "product_id", "product_name", "boards"),
 }
 
 VALID_GRID_LAYOUTS = {"recommendation", "comparison", "curated", "hero", "trio", "quad", "showcase"}
