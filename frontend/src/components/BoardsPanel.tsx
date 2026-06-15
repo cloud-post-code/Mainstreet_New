@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, BoardDetail, BoardNote } from '../api'
+import { BoardNote } from '../api'
+import { useBoardsState } from '../mason/useBoardsState'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './BoardsPanel.module.css'
 
@@ -9,122 +9,32 @@ interface BoardsPanelProps {
 }
 
 export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
-  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null)
-  const [boardDetail, setBoardDetail] = useState<BoardDetail | null>(null)
-  const [boardTab, setBoardTab] = useState<'saved' | 'notes'>('saved')
-  const [showAddBoard, setShowAddBoard] = useState(false)
-  const [newBoardName, setNewBoardName] = useState('')
-  const [newBoardDesc, setNewBoardDesc] = useState('')
-  const [newBoardImage, setNewBoardImage] = useState<File | null>(null)
-  const [newBoardImagePreview, setNewBoardImagePreview] = useState<string | null>(null)
-  const [addingBoard, setAddingBoard] = useState(false)
-  const [newNoteText, setNewNoteText] = useState('')
-  const [addingNote, setAddingNote] = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [uploadingCover, setUploadingCover] = useState(false)
-  const coverInputRef = useRef<HTMLInputElement>(null)
-  const newBoardImageRef = useRef<HTMLInputElement>(null)
-
-  const loadBoardDetail = useCallback(async (id: number) => {
-    setDetailLoading(true)
-    try {
-      const detail = await api.getBoard(id, token)
-      setBoardDetail(detail)
-    } catch (e) {
-      console.error('[BoardsPanel] load board detail failed', e)
-    } finally {
-      setDetailLoading(false)
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (selectedBoardId != null) {
-      loadBoardDetail(selectedBoardId)
-    } else {
-      setBoardDetail(null)
-    }
-  }, [selectedBoardId, loadBoardDetail])
+  const {
+    selectedBoardId, setSelectedBoardId,
+    boardDetail, setBoardDetail,
+    boardTab, setBoardTab,
+    showAddBoard, setShowAddBoard,
+    newBoardName, setNewBoardName,
+    newBoardDesc, setNewBoardDesc,
+    newBoardImagePreview,
+    addingBoard,
+    newBoardImageRef,
+    newNoteText, setNewNoteText,
+    addingNote,
+    detailLoading,
+    uploadingCover,
+    coverInputRef,
+    handleAddBoard,
+    handleNewBoardImageChange,
+    handleDeleteBoard,
+    handleCoverUpload,
+    handleAddNote,
+    handleDeleteNote,
+    handleRemoveProduct,
+    resetNewBoardForm,
+  } = useBoardsState(memory, token)
 
   const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
-
-  const handleAddBoard = async () => {
-    const name = newBoardName.trim()
-    if (!name) return
-    setAddingBoard(true)
-    try {
-      const board = await memory.createBoard(name, newBoardDesc.trim() || undefined)
-      if (newBoardImage && board?.id) {
-        await api.uploadBoardCover(board.id, newBoardImage, token).catch(() => {})
-        memory.refresh()
-      }
-      setNewBoardName('')
-      setNewBoardDesc('')
-      setNewBoardImage(null)
-      setNewBoardImagePreview(null)
-      setShowAddBoard(false)
-    } catch (e) {
-      console.error('[BoardsPanel] create board failed', e)
-    } finally {
-      setAddingBoard(false)
-    }
-  }
-
-  const handleNewBoardImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setNewBoardImage(file)
-    const url = URL.createObjectURL(file)
-    setNewBoardImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return url })
-  }
-
-  const handleDeleteBoard = async (id: number) => {
-    if (!confirm('Delete this board and all its items?')) return
-    await memory.deleteBoard(id)
-    if (selectedBoardId === id) setSelectedBoardId(null)
-  }
-
-  const handleAddNote = async () => {
-    const text = newNoteText.trim()
-    if (!text || !selectedBoardId) return
-    setAddingNote(true)
-    try {
-      const note = await memory.addNoteToBoard(selectedBoardId, text)
-      setBoardDetail(prev => prev ? { ...prev, notes: [...prev.notes, note] } : prev)
-      setNewNoteText('')
-    } catch (e) {
-      console.error('[BoardsPanel] add note failed', e)
-    } finally {
-      setAddingNote(false)
-    }
-  }
-
-  const handleDeleteNote = async (noteId: number) => {
-    if (!selectedBoardId) return
-    await memory.deleteBoardNote(selectedBoardId, noteId)
-    setBoardDetail(prev => prev ? { ...prev, notes: prev.notes.filter((n: BoardNote) => n.id !== noteId) } : prev)
-  }
-
-  const handleRemoveProduct = async (productId: number) => {
-    if (!selectedBoardId || !boardDetail) return
-    await memory.removeProductFromBoard(selectedBoardId, productId)
-    setBoardDetail(prev => prev ? { ...prev, products: prev.products.filter((p: { product_id: number }) => p.product_id !== productId) } : prev)
-  }
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !selectedBoardId) return
-    setUploadingCover(true)
-    try {
-      const result = await api.uploadBoardCover(selectedBoardId, file, token)
-      memory.refresh()
-      setBoardDetail(prev => prev ? { ...prev, cover_image_url: result.cover_image_url } : prev)
-    } catch (e) {
-      console.error('[BoardsPanel] cover upload failed', e)
-    } finally {
-      setUploadingCover(false)
-      if (coverInputRef.current) coverInputRef.current.value = ''
-    }
-  }
 
   // Board detail view
   if (selectedBoard) {
@@ -290,7 +200,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
             <button
               className={styles.addBtn}
               style={{ background: 'transparent', color: '#555', border: '1.5px solid #d9cebd' }}
-              onClick={() => { setShowAddBoard(false); setNewBoardName(''); setNewBoardDesc(''); setNewBoardImage(null); setNewBoardImagePreview(null) }}
+              onClick={resetNewBoardForm}
             >
               Cancel
             </button>
