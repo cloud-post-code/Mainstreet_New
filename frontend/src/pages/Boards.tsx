@@ -4,7 +4,6 @@ import { Board, BoardNote, MasonSavedProduct } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useBoardsState } from '../mason/useBoardsState'
 import { useMasonMemory } from '../mason/useMasonMemory'
-import { formatCurrency } from '../lib/format'
 import ProductModal, { ProductModalData } from '../components/ProductModal'
 import styles from './Boards.module.css'
 
@@ -269,32 +268,28 @@ function BoardsInner({ token }: { token: string }) {
 function SavedTab({ products, onRemove, onOpen }: { products: MasonSavedProduct[]; onRemove: (id: number) => void; onOpen: (p: MasonSavedProduct) => void }) {
   if (!products.length) return <p className={styles.detailEmpty}>No saved items yet.</p>
   return (
-    <ul className={styles.productList}>
+    <div className={styles.savedGrid}>
       {products.map(p => (
-        <li
+        <div
           key={p.product_id}
-          className={styles.productItem}
+          className={styles.savedTile}
           onClick={() => onOpen(p)}
           role="button"
           tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(p) } }}
-          style={{ cursor: 'pointer' }}
         >
-          <div className={styles.productThumb}>
-            {p.image_url && <img src={p.image_url} alt="" />}
-          </div>
-          <div className={styles.productBody}>
-            <p className={styles.productName}>{p.name}</p>
-            <p className={styles.productSub}>{p.shop_name ?? 'Unknown shop'} · {formatCurrency(p.price)}</p>
-          </div>
+          {p.image_url
+            ? <img src={p.image_url} alt={p.name} className={styles.savedTileImg} />
+            : <div className={styles.savedTilePlaceholder}>🛍️</div>
+          }
           <button
-            className={styles.removeBtn}
+            className={styles.savedTileRemove}
             onClick={e => { e.stopPropagation(); onRemove(p.product_id) }}
             title="Remove"
           >×</button>
-        </li>
+        </div>
       ))}
-    </ul>
+    </div>
   )
 }
 

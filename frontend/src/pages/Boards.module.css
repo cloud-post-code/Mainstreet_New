@@ -432,78 +432,66 @@
   margin: 0;
 }
 
-/* Saved tab */
-.productList {
-  list-style: none;
-  margin: 0;
-  padding: 8px 0;
+/* Saved tab — 2-column image grid */
+.savedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 12px;
 }
 
-.productItem {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #f0e8d6;
-}
-
-.productItem:last-child {
-  border-bottom: 0;
-}
-
-.productThumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
-  background: #f0e8d6;
+.savedTile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
   overflow: hidden;
-  flex-shrink: 0;
+  background: #f0e8d6;
+  cursor: pointer;
 }
 
-.productThumb img {
+.savedTile:hover .savedTileRemove {
+  opacity: 1;
+}
+
+.savedTileImg {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  transition: transform 0.18s ease;
 }
 
-.productBody {
-  flex: 1;
-  min-width: 0;
+.savedTile:hover .savedTileImg {
+  transform: scale(1.04);
 }
 
-.productName {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.savedTilePlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
 }
 
-.productSub {
-  font-size: 0.78rem;
-  color: #888;
-  margin: 0;
-}
-
-.removeBtn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #bbb;
-  font-size: 1.2rem;
+.savedTileRemove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: color 120ms, background 120ms;
-  flex-shrink: 0;
-}
-
-.removeBtn:hover {
-  color: #c0392b;
-  background: #fde;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
 /* Notes tab */
