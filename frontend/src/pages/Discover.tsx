@@ -490,7 +490,6 @@ export default function Discover() {
                     }))}
                     default_variant_id={p.default_variant_id ?? undefined}
                     display_mode="parent"
-                    onShuffle={() => getSimilar(products, p.id)}
                   />
                   </div>
                 ))}

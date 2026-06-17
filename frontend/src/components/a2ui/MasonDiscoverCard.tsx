@@ -102,7 +102,7 @@ export default function MasonDiscoverCard({
               variants={p.variants}
               default_variant_id={p.default_variant_id}
               layout="grid"
-              showAddToCart={false}
+              showAddToCart
             />
           </div>
         ))}

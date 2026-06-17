@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Board, BoardNote, MasonSavedProduct } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useBoardsState } from '../mason/useBoardsState'
 import { useMasonMemory } from '../mason/useMasonMemory'
 import { formatCurrency } from '../lib/format'
+import ProductModal, { ProductModalData } from '../components/ProductModal'
 import styles from './Boards.module.css'
 
 export default function Boards() {
@@ -51,10 +53,13 @@ function BoardsInner({ token }: { token: string }) {
     setBoardDetail(null)
   }
 
+  const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
+
   // Board detail view
   if (selectedBoard) {
     const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url
     return (
+      <>
       <div className={styles.page}>
         <div className={styles.header}>
           <button className={styles.backBtn} onClick={handleBack}>
@@ -123,7 +128,11 @@ function BoardsInner({ token }: { token: string }) {
         {detailLoading ? (
           <p className={styles.empty}>Loading…</p>
         ) : boardTab === 'saved' ? (
-          <SavedTab products={boardDetail?.products ?? []} onRemove={handleRemoveProduct} />
+          <SavedTab
+            products={boardDetail?.products ?? []}
+            onRemove={handleRemoveProduct}
+            onOpen={p => setModalProduct({ product_id: p.product_id, name: p.name, price: p.price, image_url: p.image_url, shop_id: p.shop_id, shop_name: p.shop_name ?? '' })}
+          />
         ) : (
           <NotesTab
             notes={boardDetail?.notes ?? []}
@@ -135,6 +144,14 @@ function BoardsInner({ token }: { token: string }) {
           />
         )}
       </div>
+      {modalProduct && (
+        <ProductModal
+          product={modalProduct}
+          memory={memory}
+          onClose={() => setModalProduct(null)}
+        />
+      )}
+      </>
     )
   }
 
@@ -249,12 +266,20 @@ function BoardsInner({ token }: { token: string }) {
   )
 }
 
-function SavedTab({ products, onRemove }: { products: MasonSavedProduct[]; onRemove: (id: number) => void }) {
+function SavedTab({ products, onRemove, onOpen }: { products: MasonSavedProduct[]; onRemove: (id: number) => void; onOpen: (p: MasonSavedProduct) => void }) {
   if (!products.length) return <p className={styles.detailEmpty}>No saved items yet.</p>
   return (
     <ul className={styles.productList}>
       {products.map(p => (
-        <li key={p.product_id} className={styles.productItem}>
+        <li
+          key={p.product_id}
+          className={styles.productItem}
+          onClick={() => onOpen(p)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(p) } }}
+          style={{ cursor: 'pointer' }}
+        >
           <div className={styles.productThumb}>
             {p.image_url && <img src={p.image_url} alt="" />}
           </div>
@@ -262,7 +287,11 @@ function SavedTab({ products, onRemove }: { products: MasonSavedProduct[]; onRem
             <p className={styles.productName}>{p.name}</p>
             <p className={styles.productSub}>{p.shop_name ?? 'Unknown shop'} · {formatCurrency(p.price)}</p>
           </div>
-          <button className={styles.removeBtn} onClick={() => onRemove(p.product_id)} title="Remove">×</button>
+          <button
+            className={styles.removeBtn}
+            onClick={e => { e.stopPropagation(); onRemove(p.product_id) }}
+            title="Remove"
+          >×</button>
         </li>
       ))}
     </ul>
