@@ -537,11 +537,19 @@ async def list_boards(user_id: int, db: AsyncSession) -> list[dict]:
         product_count = (await db.execute(
             select(func.count(BoardProduct.id)).where(BoardProduct.board_id == b.id)
         )).scalar() or 0
+        first_product_image = (await db.execute(
+            select(Product.image_url)
+            .join(BoardProduct, BoardProduct.product_id == Product.id)
+            .where(BoardProduct.board_id == b.id)
+            .order_by(BoardProduct.saved_at.asc())
+            .limit(1)
+        )).scalar()
         out.append({
             "id": b.id,
             "name": b.name,
             "description": b.description,
             "cover_image_url": b.cover_image_url,
+            "first_product_image_url": first_product_image,
             "is_default": b.is_default,
             "note_count": note_count,
             "product_count": product_count,

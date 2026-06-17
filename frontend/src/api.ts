@@ -105,6 +105,7 @@ export interface Board {
   name: string
   description: string | null
   cover_image_url: string | null
+  first_product_image_url?: string | null
   is_default: boolean
   note_count: number
   product_count: number
