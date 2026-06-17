@@ -38,6 +38,13 @@ export class MaxBackgroundRunsError extends Error {
   }
 }
 
+export class TurnAlreadyInProgressError extends Error {
+  constructor() {
+    super('A turn is already in progress for this session')
+    this.name = 'TurnAlreadyInProgressError'
+  }
+}
+
 /**
  * Mason turns are now durable jobs: POST /api/agent/turn returns a `run_id` and
  * the backend runs the turn detached from this socket. We attach to it via
@@ -175,6 +182,7 @@ export function useAgentStream(sessionId: number | null) {
       if (res.status === 429) {
         const body = await res.json().catch(() => ({}))
         if (body?.detail === 'max_background_turns') throw new MaxBackgroundRunsError()
+        if (body?.detail === 'A turn is already in progress for this session') throw new TurnAlreadyInProgressError()
         throw new Error(typeof body?.detail === 'string' ? body.detail : 'Rate limited')
       }
       if (!res.ok) throw new Error('Failed to start turn')
@@ -192,6 +200,8 @@ export function useAgentStream(sessionId: number | null) {
                     type: 'text',
                     content: e instanceof MaxBackgroundRunsError
                       ? "You've got 3 Mason chats running already — finish or cancel one before starting another."
+                      : e instanceof TurnAlreadyInProgressError
+                      ? "Mason is still thinking — please wait a moment before sending another message."
                       : 'Something went wrong. Please try again.',
                   },
                 ],

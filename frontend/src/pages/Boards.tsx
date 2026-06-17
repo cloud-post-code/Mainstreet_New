@@ -56,7 +56,7 @@ function BoardsInner({ token }: { token: string }) {
 
   // Board detail view
   if (selectedBoard) {
-    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url
+    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url ?? boardDetail?.products[0]?.image_url ?? selectedBoard.first_product_image_url
     return (
       <>
       <div className={styles.page}>
@@ -235,8 +235,8 @@ function BoardsInner({ token }: { token: string }) {
               onClick={() => handleOpenBoard(board.id)}
             >
               <div className={styles.boardCover}>
-                {board.cover_image_url ? (
-                  <img src={board.cover_image_url} alt="" className={styles.boardCoverImg} />
+                {(board.cover_image_url ?? board.first_product_image_url) ? (
+                  <img src={(board.cover_image_url ?? board.first_product_image_url)!} alt="" className={styles.boardCoverImg} />
                 ) : (
                   <div className={styles.boardCoverPlaceholder}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -323,7 +323,14 @@ function NotesTab({
         <ul className={styles.noteList}>
           {notes.map(n => (
             <li key={n.id} className={styles.noteItem}>
-              <span className={styles.noteText}>{n.text}</span>
+              <div className={styles.noteBody}>
+                <span className={styles.noteText}>{n.text}</span>
+                {n.created_at && (
+                  <span className={styles.noteDate}>
+                    {new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
               <button className={styles.removeBtn} onClick={() => onDeleteNote(n.id)} title="Remove note">×</button>
             </li>
           ))}

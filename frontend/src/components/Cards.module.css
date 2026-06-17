@@ -178,9 +178,9 @@
 .productCardCompact .saveBtn,
 .productCardCompact .iconBtn,
 .productCardCompact .shuffleBtn {
-  width: 28px;
-  height: 28px;
-  font-size: 0.85rem;
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
 }
 
 /* ── Option chips ── */
@@ -328,13 +328,13 @@
 
 .iconBtn {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   border: 1.5px solid rgba(15, 24, 5, 0.18);
   background: #fff;
   color: var(--ms-dark, #0f1805);
-  font-size: 1rem;
+  font-size: 0.85rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -416,17 +416,17 @@
 /* ── Card action row (add + save + shuffle) ── */
 .cardActions {
   display: flex;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-  align-items: stretch;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  align-items: center;
 }
 
 .addBtn {
   flex: 1;
-  padding: 0.6rem 0.6rem;
+  padding: 0.4rem 0.5rem;
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   border: none;
   border-radius: 8px;
   background: var(--ms-primary, #015237);
@@ -444,13 +444,13 @@
 .saveBtn,
 .shuffleBtn {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   border: 1.5px solid rgba(15, 24, 5, 0.18);
   background: #fff;
   color: var(--ms-dark, #0f1805);
-  font-size: 1rem;
+  font-size: 0.85rem;
   cursor: pointer;
   display: flex;
   align-items: center;

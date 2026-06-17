@@ -49,8 +49,8 @@ interface Props {
   default_variant_id?: number
   // When true, hide the option chips and lock the displayed variant.
   lockVariant?: boolean
-  // Shuffle callback — returns 6 similar products to display
-  onShuffle?: () => ShuffleSimilarProduct[]
+  // Shuffle callback — async, queries Mason/search for 6 similar products
+  onShuffle?: () => Promise<ShuffleSimilarProduct[]>
 }
 
 export default function ProductCard(props: Props) {
@@ -110,6 +110,7 @@ export default function ProductCard(props: Props) {
   const clickable = Boolean(props.onIntent)
   const { add, busy, added, error: errorMsg } = useAddToCart({ successMs: 1200 })
   const [shuffleProducts, setShuffleProducts] = useState<ShuffleSimilarProduct[] | null>(null)
+  const [shuffleLoading, setShuffleLoading] = useState(false)
 
   const showOptions = hasVariants && !props.lockVariant
 
@@ -156,10 +157,17 @@ export default function ProductCard(props: Props) {
     }
   }
 
-  const onShuffleClick = (e: React.MouseEvent) => {
+  const onShuffleClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (shuffleProducts) { setShuffleProducts(null); return }
-    if (props.onShuffle) setShuffleProducts(props.onShuffle())
+    if (!props.onShuffle) return
+    setShuffleLoading(true)
+    try {
+      const results = await props.onShuffle()
+      setShuffleProducts(results)
+    } finally {
+      setShuffleLoading(false)
+    }
   }
 
   const variantLabel = (v: VariantOption): string =>
@@ -296,8 +304,9 @@ export default function ProductCard(props: Props) {
                   onClick={onShuffleClick}
                   aria-label="Show similar"
                   title="Show 6 similar items"
+                  disabled={shuffleLoading}
                 >
-                  ⇄
+                  {shuffleLoading ? '…' : '⇄'}
                 </button>
               )}
             </div>

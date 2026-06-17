@@ -53,6 +53,22 @@ async def _count_user_active_runs(db: AsyncSession, user_id: int) -> int:
     return (await db.execute(q)).scalar() or 0
 
 
+async def _session_has_live_task(db: AsyncSession, session_id: int) -> bool:
+    """Return True only if there is an asyncio task currently running for this session.
+
+    Uses _active_tasks (in-process registry) as the authoritative source. If
+    session.processing is True but no live task exists (e.g. the task already
+    finished but failed to clear the flag, or the process restarted), we treat
+    the lock as stale.
+    """
+    q = select(AgentTurnRun.id).where(
+        AgentTurnRun.session_id == session_id,
+        AgentTurnRun.status == "running",
+    )
+    run_ids = (await db.execute(q)).scalars().all()
+    return any(rid in _active_tasks for rid in run_ids)
+
+
 async def start_turn_run(
     db: AsyncSession,
     *,
@@ -68,15 +84,13 @@ async def start_turn_run(
     has a non-stale in-flight turn.
     """
     if session.processing:
-        now = datetime.now(timezone.utc)
-        last = session.updated_at
-        if last is not None and last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-        if last is None or (now - last).total_seconds() < STALE_PROCESSING_SECONDS:
+        if await _session_has_live_task(db, session.id):
             raise HTTPException(
                 status_code=429,
                 detail="A turn is already in progress for this session",
             )
+        # No live task found — lock is stale (task finished without clearing flag,
+        # or process restarted). Fall through and clear it by starting a new run.
         logger.warning("Clearing stale processing lock for session %s", session.id)
 
     if user_id is not None:

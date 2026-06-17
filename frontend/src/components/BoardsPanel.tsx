@@ -41,7 +41,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
 
   // Board detail view
   if (selectedBoard) {
-    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url
+    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url ?? boardDetail?.products[0]?.image_url ?? selectedBoard.first_product_image_url
     return (
       <>
       <div className={styles.boards}>
@@ -127,7 +127,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
             </div>
           ) : <p className={styles.empty}>No saved items yet.</p>
         ) : (
-          <div>
+          <div className={styles.notesSection}>
             <div className={styles.addRow}>
               <input
                 className={styles.addInput}
@@ -142,8 +142,15 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
               <ul className={styles.items}>
                 {boardDetail.notes.map((n: BoardNote) => (
                   <li key={n.id} className={styles.item}>
-                    <span className={styles.itemName}>{n.text}</span>
-                    <button className={styles.removeBtn} onClick={() => handleDeleteNote(n.id)}>×</button>
+                    <div className={styles.itemBody}>
+                      <span className={styles.itemName}>{n.text}</span>
+                      {n.created_at && (
+                        <span className={styles.itemDate}>
+                          {new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                    <button className={styles.removeBtn} onClick={() => handleDeleteNote(n.id)} title="Remove note">×</button>
                   </li>
                 ))}
               </ul>
@@ -234,16 +241,17 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
       ) : memory.boards.length === 0 ? (
         <p className={styles.empty}>No boards yet.</p>
       ) : (
-        <ul className={styles.list}>
-          {[...memory.boards].sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0)).map(b => (
-            <li key={b.id}>
-              <button className={styles.row} onClick={() => { setSelectedBoardId(b.id); setBoardTab('saved') }}>
-                <div className={styles.rowCover}>
-                  {b.cover_image_url ? (
-                    <img src={b.cover_image_url} alt="" className={styles.rowCoverImg} />
+        <div className={styles.boardGrid}>
+          {[...memory.boards].sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0)).map(b => {
+            const thumbUrl = b.cover_image_url ?? b.first_product_image_url
+            return (
+              <button key={b.id} className={styles.boardTile} onClick={() => { setSelectedBoardId(b.id); setBoardTab('saved') }}>
+                <div className={styles.boardTileImg}>
+                  {thumbUrl ? (
+                    <img src={thumbUrl} alt="" className={styles.boardTileImgEl} />
                   ) : (
-                    <div className={styles.rowCoverPlaceholder}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <div className={styles.boardTilePlaceholder}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <rect x="3" y="3" width="18" height="18" rx="2" />
                         <circle cx="8.5" cy="8.5" r="1.5" />
                         <polyline points="21 15 16 10 5 21" />
@@ -251,20 +259,14 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
                     </div>
                   )}
                 </div>
-                <div className={styles.rowMeta}>
-                  <span className={styles.rowName}>
-                    {b.name}
-                    {b.is_default && <span className={styles.defaultBadge}>Default</span>}
-                  </span>
-                  {b.description && <span className={styles.rowDesc}>{b.description}</span>}
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                <span className={styles.boardTileName}>
+                  {b.name}
+                  {b.is_default && <span className={styles.defaultBadge}> ·</span>}
+                </span>
               </button>
-            </li>
-          ))}
-        </ul>
+            )
+          })}
+        </div>
       )}
     </div>
   )

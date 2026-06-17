@@ -426,6 +426,19 @@ export default function Discover() {
                       }))}
                       default_variant_id={p.default_variant_id ?? undefined}
                       display_mode="parent"
+                      onShuffle={async () => {
+                        const similar = await api.getDiscoverProducts({ q: p.name, limit: 7 })
+                        return similar
+                          .filter(s => s.id !== p.id)
+                          .slice(0, 6)
+                          .map(s => ({
+                            product_id: s.id,
+                            name: s.name,
+                            price: Number(s.price_range?.min ?? 0),
+                            image_url: s.image_url,
+                            shop_name: s.shop_name ?? '',
+                          }))
+                      }}
                     />
                   </div>
                 ))}
