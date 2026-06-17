@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { BoardNote, MasonSavedProduct } from '../api'
 import { useBoardsState } from '../mason/useBoardsState'
 import { MasonMemory } from '../mason/useMasonMemory'
-import { formatCurrency } from '../lib/format'
 import ProductModal, { ProductModalData } from './ProductModal'
 import styles from './BoardsPanel.module.css'
 
@@ -108,28 +107,24 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
           <p className={styles.empty}>Loading…</p>
         ) : boardTab === 'saved' ? (
           boardDetail?.products.length ? (
-            <ul className={styles.items}>
+            <div className={styles.savedGrid}>
               {boardDetail.products.map((p: MasonSavedProduct) => (
-                <li
+                <div
                   key={p.product_id}
-                  className={styles.item}
+                  className={styles.savedTile}
                   onClick={() => setModalProduct({ product_id: p.product_id, name: p.name, price: p.price, image_url: p.image_url, shop_id: p.shop_id, shop_name: p.shop_name ?? '' })}
                   role="button"
                   tabIndex={0}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct({ product_id: p.product_id, name: p.name, price: p.price, image_url: p.image_url, shop_id: p.shop_id, shop_name: p.shop_name ?? '' }) } }}
-                  style={{ cursor: 'pointer' }}
                 >
-                  <div className={styles.itemThumb}>
-                    {p.image_url && <img src={p.image_url} alt="" />}
-                  </div>
-                  <div className={styles.itemBody}>
-                    <span className={styles.itemName}>{p.name}</span>
-                    <span className={styles.itemSub}>{p.shop_name ?? 'Unknown shop'} · {formatCurrency(p.price)}</span>
-                  </div>
-                  <button className={styles.removeBtn} onClick={e => { e.stopPropagation(); handleRemoveProduct(p.product_id) }}>×</button>
-                </li>
+                  {p.image_url
+                    ? <img src={p.image_url} alt={p.name} className={styles.savedTileImg} />
+                    : <div className={styles.savedTilePlaceholder}>🛍️</div>
+                  }
+                  <button className={styles.savedTileRemove} onClick={e => { e.stopPropagation(); handleRemoveProduct(p.product_id) }} title="Remove">×</button>
+                </div>
               ))}
-            </ul>
+            </div>
           ) : <p className={styles.empty}>No saved items yet.</p>
         ) : (
           <div>

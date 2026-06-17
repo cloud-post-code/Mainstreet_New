@@ -255,87 +255,66 @@
   border-bottom-color: #015237;
 }
 
-.items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.item {
-  display: flex;
-  align-items: center;
+/* Saved tab — 2-column image grid */
+.savedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  background: #f9f3e3;
-  border-radius: 6px;
-  padding: 7px 10px;
-  transition: background 120ms;
+  padding: 4px 0;
 }
 
-.item:hover {
-  background: #f0e8d6;
-}
-
-.itemThumb {
-  width: 36px;
-  height: 36px;
-  border-radius: 5px;
+.savedTile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
   overflow: hidden;
-  flex-shrink: 0;
-  background: #e8ddc8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #f0e8d6;
+  cursor: pointer;
 }
 
-.itemThumb img {
+.savedTile:hover .savedTileRemove {
+  opacity: 1;
+}
+
+.savedTileImg {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.18s ease;
 }
 
-.itemBody {
-  flex: 1;
-  min-width: 0;
+.savedTile:hover .savedTileImg {
+  transform: scale(1.04);
+}
+
+.savedTilePlaceholder {
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
 }
 
-.itemName {
-  font-size: 0.82rem;
-  color: #333;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.itemSub {
-  font-size: 0.74rem;
-  color: #888;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.removeBtn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #bbb;
-  font-size: 1rem;
+.savedTileRemove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  transition: color 120ms;
-}
-
-.removeBtn:hover {
-  color: #c0392b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
 .newBoardImagePicker {
