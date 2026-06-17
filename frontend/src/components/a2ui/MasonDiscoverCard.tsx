@@ -64,47 +64,24 @@ export default function MasonDiscoverCard({
 
       <div className={styles.grid}>
         {pageProducts.map(p => (
-          <div
+          <ProductCard
             key={p.product_id}
-            className={styles.cardWrapper}
-            onClick={() => onIntent('open_details', {
-              product_id: p.product_id,
-              name: p.name,
-              price: p.price,
-              shop_name: p.shop_name,
-              shop_id: p.shop_id,
-              image_url: p.image_url,
-              description_summary: p.description_summary,
-              tags: p.tags,
-              quantity: p.quantity,
-              variants: p.variants,
-              default_variant_id: p.default_variant_id,
-            })}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onIntent('open_details', { product_id: p.product_id, name: p.name, price: p.price, shop_name: p.shop_name })
-              }
-            }}
-          >
-            <ProductCard
-              product_id={p.product_id}
-              name={p.name}
-              price={p.price}
-              image_url={p.image_url}
-              shop_name={p.shop_name}
-              shop_id={p.shop_id}
-              description_summary={p.description_summary}
-              tags={p.tags}
-              quantity={p.quantity}
-              variants={p.variants}
-              default_variant_id={p.default_variant_id}
-              layout="grid"
-              showAddToCart
-            />
-          </div>
+            product_id={p.product_id}
+            name={p.name}
+            price={p.price}
+            image_url={p.image_url}
+            shop_name={p.shop_name}
+            shop_id={p.shop_id}
+            description_summary={p.description_summary}
+            tags={p.tags}
+            quantity={p.quantity}
+            variants={p.variants}
+            default_variant_id={p.default_variant_id}
+            layout="grid"
+            showAddToCart
+            display_mode="parent"
+            onIntent={onIntent}
+          />
         ))}
       </div>
 

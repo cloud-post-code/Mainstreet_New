@@ -460,15 +460,8 @@ export default function Discover() {
             ) : (
               <div className={styles.grid}>
                 {products.map(p => (
-                  <div
-                    key={p.id}
-                    className={styles.cardClickable}
-                    onClick={() => setModalProduct(productToModalData(p))}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct(productToModalData(p)) } }}
-                  >
                   <ProductCard
+                    key={p.id}
                     product_id={p.id}
                     name={p.name}
                     price={Number(p.price_range?.min ?? 0)}
@@ -490,8 +483,8 @@ export default function Discover() {
                     }))}
                     default_variant_id={p.default_variant_id ?? undefined}
                     display_mode="parent"
+                    onIntent={() => setModalProduct(productToModalData(p))}
                   />
-                  </div>
                 ))}
                 {loading && Array.from({ length: 3 }).map((_, i) => (
                   <div key={`sk-${i}`} className={styles.skeleton} />
