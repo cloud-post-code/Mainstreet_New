@@ -460,31 +460,32 @@ export default function Discover() {
             ) : (
               <div className={styles.grid}>
                 {products.map(p => (
-                  <ProductCard
-                    key={p.id}
-                    product_id={p.id}
-                    name={p.name}
-                    price={Number(p.price_range?.min ?? 0)}
-                    image_url={p.image_url ?? undefined}
-                    shop_name={p.shop_name ?? ''}
-                    shop_id={p.shop_id}
-                    description_summary={descSummary(p.description)}
-                    tags={descTags(p.description)}
-                    layout="grid"
-                    showAddToCart
-                    variants={p.variants.map(v => ({
-                      variant_id: v.id,
-                      option_names: v.option_names,
-                      option_values: v.option_values,
-                      variant_label: v.variant_label,
-                      price: Number(v.price),
-                      quantity: Number.POSITIVE_INFINITY,
-                      image_url: v.image_url,
-                    }))}
-                    default_variant_id={p.default_variant_id ?? undefined}
-                    display_mode="parent"
-                    onIntent={() => setModalProduct(productToModalData(p))}
-                  />
+                  <div key={p.id} className={styles.cardClickable}>
+                    <ProductCard
+                      product_id={p.id}
+                      name={p.name}
+                      price={Number(p.price_range?.min ?? 0)}
+                      image_url={p.image_url ?? undefined}
+                      shop_name={p.shop_name ?? ''}
+                      shop_id={p.shop_id}
+                      description_summary={descSummary(p.description)}
+                      tags={descTags(p.description)}
+                      layout="grid"
+                      showAddToCart
+                      variants={p.variants.map(v => ({
+                        variant_id: v.id,
+                        option_names: v.option_names,
+                        option_values: v.option_values,
+                        variant_label: v.variant_label,
+                        price: Number(v.price),
+                        quantity: Number.POSITIVE_INFINITY,
+                        image_url: v.image_url,
+                      }))}
+                      default_variant_id={p.default_variant_id ?? undefined}
+                      display_mode="parent"
+                      onIntent={() => setModalProduct(productToModalData(p))}
+                    />
+                  </div>
                 ))}
                 {loading && Array.from({ length: 3 }).map((_, i) => (
                   <div key={`sk-${i}`} className={styles.skeleton} />

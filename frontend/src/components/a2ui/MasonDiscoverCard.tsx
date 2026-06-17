@@ -64,24 +64,25 @@ export default function MasonDiscoverCard({
 
       <div className={styles.grid}>
         {pageProducts.map(p => (
-          <ProductCard
-            key={p.product_id}
-            product_id={p.product_id}
-            name={p.name}
-            price={p.price}
-            image_url={p.image_url}
-            shop_name={p.shop_name}
-            shop_id={p.shop_id}
-            description_summary={p.description_summary}
-            tags={p.tags}
-            quantity={p.quantity}
-            variants={p.variants}
-            default_variant_id={p.default_variant_id}
-            layout="grid"
-            showAddToCart
-            display_mode="parent"
-            onIntent={onIntent}
-          />
+          <div key={p.product_id} className={styles.cardWrapper}>
+            <ProductCard
+              product_id={p.product_id}
+              name={p.name}
+              price={p.price}
+              image_url={p.image_url}
+              shop_name={p.shop_name}
+              shop_id={p.shop_id}
+              description_summary={p.description_summary}
+              tags={p.tags}
+              quantity={p.quantity}
+              variants={p.variants}
+              default_variant_id={p.default_variant_id}
+              layout="grid"
+              showAddToCart
+              display_mode="parent"
+              onIntent={onIntent}
+            />
+          </div>
         ))}
       </div>
 
