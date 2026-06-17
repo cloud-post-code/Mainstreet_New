@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import styles from './Cards.module.css'
 import { IntentHandler } from '../a2ui/types'
 import { formatCurrency } from '../lib/format'
 import { normalizeTags } from '../lib/normalizeTags'
 import { useVariantSelector } from '../hooks/useVariantSelector'
 import { useAddToCart } from '../hooks/useAddToCart'
+import { useMemory } from '../mason/MemoryContext'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 
 interface VariantOption {
   variant_id: number
@@ -46,13 +49,32 @@ interface Props {
   default_variant_id?: number
   // When true, hide the option chips and lock the displayed variant.
   lockVariant?: boolean
-  // Save callback — called when user clicks the save button
-  onSave?: () => void
   // Shuffle callback — returns 6 similar products to display
   onShuffle?: () => ShuffleSimilarProduct[]
 }
 
 export default function ProductCard(props: Props) {
+  const memory = useMemory()
+  const { token } = useAuth()
+  const navigate = useNavigate()
+  const [boardPickerOpen, setBoardPickerOpen] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
+  const saveWrapRef = useRef<HTMLDivElement>(null)
+
+  const isLiked = memory?.savedProducts.some(p => p.product_id === props.product_id) ?? false
+  const boards = memory?.boards ?? []
+
+  useEffect(() => {
+    if (!boardPickerOpen) return
+    const handler = (e: MouseEvent) => {
+      if (saveWrapRef.current && !saveWrapRef.current.contains(e.target as Node)) {
+        setBoardPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [boardPickerOpen])
+
   const variants = props.variants ?? []
   const hasVariants = variants.length > 1
   const initialVariantId = useMemo(() => {
@@ -105,9 +127,33 @@ export default function ProductCard(props: Props) {
     )
   }
 
-  const onSaveClick = (e: React.MouseEvent) => {
+  const onSaveClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    props.onSave?.()
+    if (!token) { navigate('/login'); return }
+    if (!boardPickerOpen && boards.length === 0) {
+      await memory?.refresh()
+    }
+    setBoardPickerOpen(v => !v)
+  }
+
+  const onSaveToBoard = async (boardId: number) => {
+    if (saveBusy) return
+    setBoardPickerOpen(false)
+    setSaveBusy(true)
+    try {
+      const qty = typeof props.quantity === 'number' ? props.quantity : 0
+      await memory?.addProductToBoard(boardId, {
+        product_id: props.product_id,
+        name: props.name,
+        price: props.price,
+        image_url: props.image_url ?? null,
+        shop_id: props.shop_id ?? 0,
+        shop_name: props.shop_name ?? null,
+        quantity: qty,
+      })
+    } finally {
+      setSaveBusy(false)
+    }
   }
 
   const onShuffleClick = (e: React.MouseEvent) => {
@@ -210,15 +256,39 @@ export default function ProductCard(props: Props) {
               >
                 {added ? 'Added ✓' : inStock ? 'Add to cart' : 'Out of stock'}
               </button>
-              <button
-                type="button"
-                className={styles.saveBtn}
-                onClick={onSaveClick}
-                aria-label="Save"
-                title="Save"
-              >
-                ♡
-              </button>
+              <div className={styles.saveWrap} ref={saveWrapRef}>
+                <button
+                  type="button"
+                  className={`${styles.iconBtn} ${isLiked ? styles.liked : ''}`}
+                  onClick={onSaveClick}
+                  aria-label="Save to board"
+                  aria-pressed={isLiked}
+                  disabled={saveBusy}
+                >
+                  {isLiked ? '♥' : '♡'}
+                </button>
+                {boardPickerOpen && (
+                  <div className={styles.boardPicker}>
+                    <div className={styles.boardPickerTitle}>Save to board</div>
+                    {memory?.loading ? (
+                      <p className={styles.boardPickerEmpty}>Loading…</p>
+                    ) : boards.length === 0 ? (
+                      <p className={styles.boardPickerEmpty}>No boards yet</p>
+                    ) : (
+                      boards.map(b => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className={styles.boardPickerItem}
+                          onClick={(e) => { e.stopPropagation(); onSaveToBoard(b.id) }}
+                        >
+                          {b.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               {props.onShuffle && (
                 <button
                   type="button"

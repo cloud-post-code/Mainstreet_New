@@ -176,6 +176,7 @@
   font-size: 0.72rem;
 }
 .productCardCompact .saveBtn,
+.productCardCompact .iconBtn,
 .productCardCompact .shuffleBtn {
   width: 28px;
   height: 28px;
@@ -317,6 +318,99 @@
   padding-right: 2rem;
   font-size: 0.9rem;
   border-width: 1.5px;
+}
+
+/* ── Save / board picker (shared with ProductModal) ── */
+.saveWrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.iconBtn {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(15, 24, 5, 0.18);
+  background: #fff;
+  color: var(--ms-dark, #0f1805);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.13s, border-color 0.13s, color 0.13s;
+  line-height: 1;
+}
+
+.iconBtn:hover {
+  border-color: var(--ms-terra, #be6e46);
+  color: var(--ms-terra, #be6e46);
+  background: rgba(190, 110, 70, 0.07);
+}
+
+.iconBtn.liked {
+  background: var(--ms-terra, #be6e46);
+  color: #fff;
+  border-color: var(--ms-terra, #be6e46);
+}
+
+.boardPicker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  border: 1px solid rgba(15, 24, 5, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  min-width: 160px;
+  z-index: 10;
+  overflow: hidden;
+  animation: boardPickerPop 0.15s ease;
+}
+
+@keyframes boardPickerPop {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.boardPickerTitle {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(15, 24, 5, 0.45);
+  padding: 8px 12px 5px;
+}
+
+.boardPickerItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ms-dark, #0f1805);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.boardPickerItem:hover {
+  background: rgba(1, 82, 55, 0.07);
+  color: var(--ms-primary, #015237);
+}
+
+.boardPickerEmpty {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-style: italic;
+  color: rgba(15, 24, 5, 0.4);
+  padding: 6px 12px 10px;
+  margin: 0;
 }
 
 /* ── Card action row (add + save + shuffle) ── */

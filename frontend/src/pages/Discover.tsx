@@ -5,6 +5,9 @@ import ShopCard from '../components/ShopCard'
 import ProductModal, { ProductModalData } from '../components/ProductModal'
 import styles from './Discover.module.css'
 import { useModalDismiss } from '../hooks/useModalDismiss'
+import { useAuth } from '../hooks/useAuth'
+import { useMasonMemory } from '../mason/useMasonMemory'
+import { MemoryProvider } from '../mason/MemoryContext'
 
 type ShopFull = {
   id: number
@@ -97,6 +100,8 @@ function getSimilar(products: Product[], excludeId: number): ShuffleSimilarProdu
 }
 
 export default function Discover() {
+  const { token } = useAuth()
+  const memory = useMasonMemory(token)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [shopIds, setShopIds] = useState<number[]>([])
@@ -281,6 +286,7 @@ export default function Discover() {
   }
 
   return (
+    <MemoryProvider memory={memory}>
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>Window Display</h1>
@@ -440,7 +446,6 @@ export default function Discover() {
                           }))}
                           default_variant_id={p.default_variant_id ?? undefined}
                           display_mode="parent"
-                          onSave={() => setModalProduct(productToModalData(p))}
                           onShuffle={() => getSimilar(products, p.id)}
                         />
                       </div>
@@ -485,7 +490,6 @@ export default function Discover() {
                     }))}
                     default_variant_id={p.default_variant_id ?? undefined}
                     display_mode="parent"
-                    onSave={() => setModalProduct(productToModalData(p))}
                     onShuffle={() => getSimilar(products, p.id)}
                   />
                   </div>
@@ -546,9 +550,12 @@ export default function Discover() {
       {modalProduct && (
         <ProductModal
           product={modalProduct}
+          memory={memory}
           onClose={() => setModalProduct(null)}
         />
       )}
     </div>
+    </MemoryProvider>
   )
 }
+

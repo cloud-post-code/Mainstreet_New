@@ -10,6 +10,7 @@ import MasonChip from '../components/MasonChip'
 import ProductModal, { ProductModalData } from '../components/ProductModal'
 import { useMason, AgentState } from '../mason/MasonContext'
 import { useMasonMemory } from '../mason/useMasonMemory'
+import { MemoryProvider } from '../mason/MemoryContext'
 import { useCart } from '../cart/CartContext'
 import { track } from '../analytics/posthog'
 import MasonFeedback from '../components/MasonFeedback'
@@ -547,6 +548,7 @@ export default function Chat() {
   }
 
   return (
+    <MemoryProvider memory={masonMemory}>
     <div className={styles.layout}>
       <main className={styles.main}>
         {messages.length === 0 ? (
@@ -751,5 +753,6 @@ export default function Chat() {
         />
       )}
     </div>
+    </MemoryProvider>
   )
 }
