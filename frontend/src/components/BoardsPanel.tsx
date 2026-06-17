@@ -1,6 +1,9 @@
-import { BoardNote } from '../api'
+import { useState } from 'react'
+import { BoardNote, MasonSavedProduct } from '../api'
 import { useBoardsState } from '../mason/useBoardsState'
 import { MasonMemory } from '../mason/useMasonMemory'
+import { formatCurrency } from '../lib/format'
+import ProductModal, { ProductModalData } from './ProductModal'
 import styles from './BoardsPanel.module.css'
 
 interface BoardsPanelProps {
@@ -35,11 +38,13 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
   } = useBoardsState(memory, token)
 
   const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
+  const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
 
   // Board detail view
   if (selectedBoard) {
     const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url
     return (
+      <>
       <div className={styles.boards}>
         <div className={styles.back}>
           <button className={styles.backBtn} onClick={() => { setSelectedBoardId(null); setBoardDetail(null) }}>
@@ -104,10 +109,24 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
         ) : boardTab === 'saved' ? (
           boardDetail?.products.length ? (
             <ul className={styles.items}>
-              {boardDetail.products.map((p: { product_id: number; name: string }) => (
-                <li key={p.product_id} className={styles.item}>
-                  <span className={styles.itemName}>{p.name}</span>
-                  <button className={styles.removeBtn} onClick={() => handleRemoveProduct(p.product_id)}>×</button>
+              {boardDetail.products.map((p: MasonSavedProduct) => (
+                <li
+                  key={p.product_id}
+                  className={styles.item}
+                  onClick={() => setModalProduct({ product_id: p.product_id, name: p.name, price: p.price, image_url: p.image_url, shop_id: p.shop_id, shop_name: p.shop_name ?? '' })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalProduct({ product_id: p.product_id, name: p.name, price: p.price, image_url: p.image_url, shop_id: p.shop_id, shop_name: p.shop_name ?? '' }) } }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className={styles.itemThumb}>
+                    {p.image_url && <img src={p.image_url} alt="" />}
+                  </div>
+                  <div className={styles.itemBody}>
+                    <span className={styles.itemName}>{p.name}</span>
+                    <span className={styles.itemSub}>{p.shop_name ?? 'Unknown shop'} · {formatCurrency(p.price)}</span>
+                  </div>
+                  <button className={styles.removeBtn} onClick={e => { e.stopPropagation(); handleRemoveProduct(p.product_id) }}>×</button>
                 </li>
               ))}
             </ul>
@@ -137,6 +156,14 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
           </div>
         )}
       </div>
+      {modalProduct && (
+        <ProductModal
+          product={modalProduct}
+          memory={memory}
+          onClose={() => setModalProduct(null)}
+        />
+      )}
+      </>
     )
   }
 
