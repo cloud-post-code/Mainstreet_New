@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, Product } from '../api'
-import ProductCard, { ShuffleSimilarProduct } from '../components/ProductCard'
+import ProductCard from '../components/ProductCard'
 import ShopCard from '../components/ShopCard'
 import ProductModal, { ProductModalData } from '../components/ProductModal'
 import styles from './Discover.module.css'
@@ -88,16 +88,6 @@ function productToModalData(p: Product): ProductModalData {
   }
 }
 
-function getSimilar(products: Product[], excludeId: number): ShuffleSimilarProduct[] {
-  const pool = products.filter(p => p.id !== excludeId)
-  return sampleN(pool, 6).map(p => ({
-    product_id: p.id,
-    name: p.name,
-    price: Number(p.price_range?.min ?? 0),
-    image_url: p.image_url,
-    shop_name: p.shop_name ?? '',
-  }))
-}
 
 export default function Discover() {
   const { token } = useAuth()
@@ -446,7 +436,6 @@ export default function Discover() {
                           }))}
                           default_variant_id={p.default_variant_id ?? undefined}
                           display_mode="parent"
-                          onShuffle={() => getSimilar(products, p.id)}
                         />
                       </div>
                     ))}
@@ -469,8 +458,7 @@ export default function Discover() {
                       shop_name={p.shop_name ?? ''}
                       shop_id={p.shop_id}
                       description_summary={descSummary(p.description)}
-                      tags={descTags(p.description)}
-                      layout="grid"
+                      layout="options"
                       showAddToCart
                       variants={p.variants.map(v => ({
                         variant_id: v.id,
@@ -483,7 +471,6 @@ export default function Discover() {
                       }))}
                       default_variant_id={p.default_variant_id ?? undefined}
                       display_mode="parent"
-                      onIntent={() => setModalProduct(productToModalData(p))}
                     />
                   </div>
                 ))}
