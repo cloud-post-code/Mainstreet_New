@@ -36,9 +36,9 @@ interface MasonDrawerProps {
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'history', label: 'History' },
-  { key: 'preferences', label: 'Preferences' },
   { key: 'boards', label: 'Boards' },
+  { key: 'preferences', label: 'Preferences' },
+  { key: 'history', label: 'History' },
 ]
 
 export default function MasonDrawer(props: MasonDrawerProps) {
@@ -55,7 +55,7 @@ export default function MasonDrawer(props: MasonDrawerProps) {
       return () => { document.body.style.overflow = prev }
     }
   }, [isOpen])
-  const [tab, setTab] = useState<TabKey>('history')
+  const [tab, setTab] = useState<TabKey>('boards')
 
   // Latest agent message's events drive the "Now" reasoning view.
   const latestAgentEvents = useMemo(() => {
