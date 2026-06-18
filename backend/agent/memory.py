@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from agent.prompt_safety import wrap_untrusted
-from db.models import AgentTurn, UserMemory, SavedProduct, Product, UserPreferences, Board, BoardProduct, BoardNote
+from db.models import AgentTurn, UserMemory, SavedProduct, Product, ProductVariant, UserPreferences, Board, BoardProduct, BoardNote
 
 MAX_SHORT_TERM_TURNS = 20   # last N turns loaded into context
 MAX_LONG_TERM_KEYS = 50     # cap per user
@@ -538,9 +538,11 @@ async def list_boards(user_id: int, db: AsyncSession) -> list[dict]:
             select(func.count(BoardProduct.id)).where(BoardProduct.board_id == b.id)
         )).scalar() or 0
         first_product_image = (await db.execute(
-            select(Product.image_url)
+            select(ProductVariant.image_url)
+            .join(Product, Product.id == ProductVariant.product_id)
             .join(BoardProduct, BoardProduct.product_id == Product.id)
             .where(BoardProduct.board_id == b.id)
+            .where(ProductVariant.id == Product.default_variant_id)
             .order_by(BoardProduct.saved_at.asc())
             .limit(1)
         )).scalar()
