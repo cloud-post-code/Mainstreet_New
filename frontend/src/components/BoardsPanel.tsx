@@ -41,7 +41,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
 
   // Board detail view
   if (selectedBoard) {
-    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url ?? boardDetail?.products[0]?.image_url ?? selectedBoard.first_product_image_url
+    const coverUrl = boardDetail?.cover_image_url ?? selectedBoard.cover_image_url ?? selectedBoard.first_product_image_url
     return (
       <>
       <div className={styles.boards}>

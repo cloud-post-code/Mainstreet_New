@@ -92,7 +92,7 @@ export function useBoardsState(memory: MasonMemory, token: string): BoardsState 
       const board = await memory.createBoard(name, newBoardDesc.trim() || undefined)
       if (newBoardImage && board?.id) {
         await api.uploadBoardCover(board.id, newBoardImage, token).catch(() => {})
-        memory.refresh()
+        await memory.refresh()
       }
       resetNewBoardForm()
     } catch (e) {
@@ -149,8 +149,8 @@ export function useBoardsState(memory: MasonMemory, token: string): BoardsState 
     setUploadingCover(true)
     try {
       const result = await api.uploadBoardCover(selectedBoardId, file, token)
-      memory.refresh()
       setBoardDetail(prev => prev ? { ...prev, cover_image_url: result.cover_image_url } : prev)
+      await memory.refresh()
     } catch (e) {
       console.error('[useBoardsState] cover upload failed', e)
     } finally {

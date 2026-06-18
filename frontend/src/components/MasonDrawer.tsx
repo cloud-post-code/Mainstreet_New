@@ -9,9 +9,8 @@ import { useMason } from '../mason/MasonContext'
 import { MasonMemory } from '../mason/useMasonMemory'
 import styles from './MasonDrawer.module.css'
 import { formatDate } from '../lib/format'
-import SavedProductItem from './SavedProductItem'
 
-type TabKey = 'preferences' | 'saved' | 'boards' | 'history'
+type TabKey = 'preferences' | 'boards' | 'history'
 
 interface PlanStep { step: number; description: string; done: boolean }
 
@@ -174,36 +173,6 @@ export default function MasonDrawer(props: MasonDrawerProps) {
                 <GuestNotice message="Sign in to save your shopping preferences so Mason can use them every time." />
               ) : (
                 <PrefsSetup prefs={memory.prefs} onPatch={memory.patchPrefs} />
-              )}
-            </div>
-          )}
-
-          {tab === 'saved' && (
-            <div className={styles.section}>
-              {!signedIn ? (
-                <GuestNotice message="Sign in so Mason can save products you want to revisit." />
-              ) : memory.savedProducts.length === 0 ? (
-                <p className={styles.empty}>
-                  Saved products will land here. Tell Mason to "save this" or "keep this for later".
-                </p>
-              ) : (
-                <ul className={styles.savedList}>
-                  {memory.savedProducts.map(p => (
-                    <SavedProductItem
-                      key={p.product_id}
-                      product={p}
-                      classes={{
-                        item: styles.savedItem,
-                        thumb: styles.savedThumb,
-                        body: styles.savedBody,
-                        name: styles.savedName,
-                        sub: styles.savedSub,
-                        remove: styles.savedRemove,
-                      }}
-                      onRemove={memory.unsaveProduct}
-                    />
-                  ))}
-                </ul>
               )}
             </div>
           )}
