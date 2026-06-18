@@ -91,8 +91,9 @@
 }
 
 .search {
-  flex: 1 1 280px;
+  flex: 0 1 480px;
   min-width: 200px;
+  max-width: 480px;
   padding: 10px 14px;
   font-family: 'Lora', serif;
   font-size: 15px;
@@ -100,6 +101,13 @@
   border-radius: 8px;
   background: #fff;
   color: var(--ms-dark, #0f1805);
+}
+
+@media (max-width: 640px) {
+  .search {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
 }
 
 .search:focus {

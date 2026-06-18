@@ -48,6 +48,8 @@ export default function Admin() {
   const [statsLoading, setStatsLoading] = useState(false)
   const [embeddingRunning, setEmbeddingRunning] = useState(false)
   const [embeddingProgress, setEmbeddingProgress] = useState<{ done: number; total: number; errors: number; elapsed_s: number; finished?: boolean } | null>(null)
+  const [enrichRunning, setEnrichRunning] = useState(false)
+  const [enrichProgress, setEnrichProgress] = useState<{ done: number; total: number; errors: number; finished?: boolean } | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -105,6 +107,32 @@ export default function Admin() {
       console.error('Embedding generation failed', e)
       setEmbeddingRunning(false)
     }
+  }
+
+  const handleEnrichProducts = async () => {
+    if (!token || enrichRunning) return
+    setEnrichRunning(true)
+    setEnrichProgress({ done: 0, total: 0, errors: 0 })
+    const apiBase = (import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app')
+    try {
+      const resp = await fetch(`${apiBase}/api/admin/enrich-products`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!resp.ok) { setEnrichRunning(false); return }
+      const poll = async () => {
+        try {
+          const r = await fetch(`${apiBase}/api/admin/enrich-products/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!r.ok) return
+          const p = await r.json()
+          setEnrichProgress({ done: p.done, total: p.total, errors: p.errors, finished: p.finished })
+          if (p.finished) { setEnrichRunning(false) } else { setTimeout(poll, 1500) }
+        } catch { setTimeout(poll, 2000) }
+      }
+      setTimeout(poll, 800)
+    } catch { setEnrichRunning(false) }
   }
 
   useEffect(() => {
@@ -517,6 +545,9 @@ export default function Admin() {
           embeddingRunning={embeddingRunning}
           embeddingProgress={embeddingProgress}
           onGenerateEmbeddings={handleGenerateEmbeddings}
+          enrichRunning={enrichRunning}
+          enrichProgress={enrichProgress}
+          onEnrichProducts={handleEnrichProducts}
         />
       )}
 
@@ -1157,12 +1188,15 @@ function EmbeddingProgressBar({ pct, running }: { pct: number; running: boolean 
   )
 }
 
-function StatsPanel({ stats, loading, embeddingRunning, embeddingProgress, onGenerateEmbeddings }: {
+function StatsPanel({ stats, loading, embeddingRunning, embeddingProgress, onGenerateEmbeddings, enrichRunning, enrichProgress, onEnrichProducts }: {
   stats: AdminStats | null
   loading: boolean
   embeddingRunning: boolean
   embeddingProgress: { done: number; total: number; errors: number; elapsed_s: number; finished?: boolean } | null
   onGenerateEmbeddings: () => void
+  enrichRunning: boolean
+  enrichProgress: { done: number; total: number; errors: number; finished?: boolean } | null
+  onEnrichProducts: () => void
 }) {
   if (loading) return <div className={styles.statsLoading}>Loading statistics…</div>
   if (!stats) return <div className={styles.statsLoading}>No statistics available.</div>
@@ -1246,6 +1280,30 @@ function StatsPanel({ stats, loading, embeddingRunning, embeddingProgress, onGen
                     ? 'All embedded ✓'
                     : `Generate embeddings (${(stats.total_products - stats.embedded_count).toLocaleString()} missing)`}
               </button>
+            )}
+          </div>
+          <div className={styles.healthCard}>
+            <div className={styles.healthHeader}>
+              <span className={styles.healthLabel}>Product enrichment</span>
+            </div>
+            {enrichRunning && enrichProgress && enrichProgress.total > 0 && (
+              <div className={styles.healthSub}>
+                {enrichProgress.done} / {enrichProgress.total} enriched
+                {enrichProgress.errors > 0 ? ` (${enrichProgress.errors} errors)` : ''}
+              </div>
+            )}
+            <button
+              className={styles.embedBtn}
+              onClick={onEnrichProducts}
+              disabled={enrichRunning}
+              style={{ marginTop: 8 }}
+            >
+              {enrichRunning ? 'Enriching…' : 'Enrich Products (GPT-4o-mini)'}
+            </button>
+            {enrichProgress?.finished && (
+              <div className={styles.healthSub} style={{ color: '#015237' }}>
+                Done — {enrichProgress.done} enriched, {enrichProgress.errors} errors
+              </div>
             )}
           </div>
           <div className={styles.healthCard}>

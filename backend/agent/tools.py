@@ -878,12 +878,15 @@ async def _search_products(params: dict, db: AsyncSession) -> dict:
 
     q = (params.get("query") or "").strip()
 
-    # No query: keep the simple alphabetical browse path.
+    # No query: browse path. Use random() when a seed was set via setseed()
+    # upstream, otherwise fall back to alphabetical order.
     if not q:
+        from sqlalchemy import func as sqlfunc
+        order_col = sqlfunc.random() if params.get("seed") is not None else Product.name
         stmt = (
             select(Product, Shop.name.label("shop_name"))
             .join(Shop, Shop.id == Product.shop_id)
-            .order_by(Product.name)
+            .order_by(order_col)
         )
         stmt = _apply_filters(stmt, params)
         result = await db.execute(stmt.limit(limit))

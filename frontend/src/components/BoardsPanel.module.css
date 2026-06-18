@@ -315,11 +315,11 @@
   border-bottom-color: #015237;
 }
 
-/* Saved tab — 2-column image grid */
+/* Saved tab — 3-column image grid */
 .savedGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   padding: 4px 0;
 }
 

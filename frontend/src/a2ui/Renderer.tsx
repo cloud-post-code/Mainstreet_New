@@ -2,6 +2,7 @@ import { ComponentType, ReactNode, useMemo } from 'react'
 import { A2uiComponent, A2uiTree, IntentHandler } from './types'
 import a2uiStyles from '../components/a2ui/A2ui.module.css'
 import ProductCard from '../components/ProductCard'
+import { api, Product } from '../api'
 import ShopCard from '../components/ShopCard'
 import QuestionCard from '../components/QuestionCard'
 import PlanDropdown from '../components/PlanDropdown'
@@ -94,6 +95,18 @@ function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
           ...p,
           showAddToCart: (p.showAddToCart as boolean | undefined) ?? true,
           layout: productCardLayout,
+          onShuffle: async () => {
+            const pid = (p as { product_id?: number }).product_id
+            if (!pid) return []
+            const results: Product[] = await api.getSimilarProducts(pid, 15)
+            return results.map(s => ({
+              product_id: s.id,
+              name: s.name,
+              price: Number(s.price_range?.min ?? 0),
+              image_url: s.image_url,
+              shop_name: s.shop_name ?? '',
+            }))
+          },
         }
       : p
   return (

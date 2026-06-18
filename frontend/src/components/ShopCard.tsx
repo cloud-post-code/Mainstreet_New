@@ -5,17 +5,19 @@ interface Props {
   shop_id: number
   name: string
   logo_url?: string
+  first_product_image_url?: string
   description?: string
   website_url?: string
   product_count?: number
 }
 
 export default function ShopCard(props: Props) {
+  const logoSrc = props.logo_url ?? props.first_product_image_url
   return (
     <div className={styles.shopCard}>
       <div className={styles.shopLogo}>
-        {props.logo_url
-          ? <img src={props.logo_url} alt={props.name} />
+        {logoSrc
+          ? <img src={logoSrc} alt={props.name} />
           : <span>{props.name[0]}</span>
         }
       </div>

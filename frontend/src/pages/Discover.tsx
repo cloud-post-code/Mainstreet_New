@@ -13,6 +13,7 @@ type ShopFull = {
   id: number
   name: string
   logo_url: string | null
+  first_product_image_url: string | null
   description: string | null
   website_url: string | null
   product_count: number
@@ -105,6 +106,7 @@ export default function Discover() {
   const [sessionTags, setSessionTags] = useState<string[]>([])
   const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [browseSeed] = useState(() => Math.floor(Math.random() * 200001))
   const [browseMode, setBrowseMode] = useState<BrowseMode>('product')
   const [allShops, setAllShops] = useState<ShopFull[]>([])
   const [shopsLoading, setShopsLoading] = useState(false)
@@ -193,7 +195,8 @@ export default function Discover() {
     max_price: selectedPrice?.max,
     limit: PAGE_SIZE,
     offset,
-  }), [search, shopIds, selectedTags, selectedPrice])
+    seed: search ? undefined : browseSeed,
+  }), [search, shopIds, selectedTags, selectedPrice, browseSeed])
 
   // Fetch first page whenever filters change.
   useEffect(() => {
@@ -483,6 +486,7 @@ export default function Discover() {
                       shop_id={s.id}
                       name={s.name}
                       logo_url={s.logo_url ?? undefined}
+                      first_product_image_url={s.first_product_image_url ?? undefined}
                       description={s.description ?? undefined}
                       website_url={s.website_url ?? undefined}
                       product_count={s.product_count}

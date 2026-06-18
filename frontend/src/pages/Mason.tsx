@@ -214,11 +214,19 @@ function MasonChatColumn({
   onAfterTurn,
   onClose,
 }: { sessionId: number | null; onAfterTurn: () => void; onClose: () => void }) {
+  const { token } = useAuth()
   const { messages, streaming, sendMessage } = useAgentStream(sessionId)
   const [input, setInput] = useState('')
   const transcriptRef = useRef<HTMLDivElement | null>(null)
   const prevStreaming = useRef(streaming)
   const sentAt = useRef<number | null>(null)
+  const [micRecording, setMicRecording] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const [attachedImage, setAttachedImage] = useState<{ url: string; preview: string } | null>(null)
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (prevStreaming.current && !streaming) {
@@ -242,16 +250,97 @@ function MasonChatColumn({
 
   const handleSend = useCallback(() => {
     const t = input.trim()
-    if (!t || !sessionId || streaming) return
+    const hasImage = !!attachedImage
+    if ((!t && !hasImage) || !sessionId || streaming) return
+    const messageText = attachedImage
+      ? (t ? `${t}\n[image: ${attachedImage.url}]` : `[image: ${attachedImage.url}]`)
+      : t
     track('mason_message_sent', {
       session_id: sessionId,
       surface: 'mason_page',
       message_length: t.length,
+      has_image: hasImage,
     })
     sentAt.current = performance.now()
-    sendMessage(t)
+    sendMessage(messageText)
     setInput('')
-  }, [input, sessionId, streaming, sendMessage])
+    if (attachedImage) {
+      URL.revokeObjectURL(attachedImage.preview)
+      setAttachedImage(null)
+    }
+  }, [input, sessionId, streaming, sendMessage, attachedImage])
+
+  const handleMic = useCallback(async () => {
+    setMicError(null)
+    if (micRecording) {
+      mediaRecorderRef.current?.stop()
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        setMicRecording(false)
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        try {
+          const res = await fetch('/api/agent/transcribe', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'audio/webm',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: blob,
+          })
+          if (!res.ok) throw new Error('Transcription failed')
+          const { text } = await res.json()
+          if (text) setInput(prev => (prev ? `${prev} ${text}` : text))
+        } catch {
+          setMicError('Transcription failed. Please try again.')
+        }
+      }
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setMicRecording(true)
+    } catch {
+      setMicError('Microphone access denied.')
+    }
+  }, [micRecording, token])
+
+  const handleAttach = useCallback(() => {
+    setAttachError(null)
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!e.target) return
+    ;(e.target as HTMLInputElement).value = ''
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      setAttachError('Image too large (max 5 MB)')
+      return
+    }
+    const preview = URL.createObjectURL(file)
+    try {
+      const res = await fetch('/api/agent/upload-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: file,
+      })
+      if (!res.ok) throw new Error('Upload failed')
+      const { url } = await res.json()
+      setAttachedImage({ url, preview })
+    } catch {
+      URL.revokeObjectURL(preview)
+      setAttachError('Image upload failed. Please try again.')
+    }
+  }, [token])
 
   return (
     <>
@@ -307,7 +396,25 @@ function MasonChatColumn({
         })}
       </div>
 
+      {attachedImage && (
+        <div className={styles.imagePreviewWrap}>
+          <img src={attachedImage.preview} alt="attachment preview" className={styles.imagePreview} />
+          <button
+            type="button"
+            className={styles.imagePreviewRemove}
+            onClick={() => { URL.revokeObjectURL(attachedImage.preview); setAttachedImage(null) }}
+            aria-label="Remove image"
+          >×</button>
+        </div>
+      )}
       <div className={styles.composer}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
         <textarea
           rows={1}
           value={input}
@@ -322,11 +429,34 @@ function MasonChatColumn({
           }}
         />
         <button
+          type="button"
+          className={styles.attachBtn}
+          onClick={handleAttach}
+          disabled={!sessionId || !!attachedImage}
+          aria-label="Attach image"
+          title="Attach image"
+        >📎</button>
+        <button
+          type="button"
+          className={`${styles.micBtn} ${micRecording ? styles.micBtnRecording : ''}`}
+          onClick={handleMic}
+          disabled={!sessionId}
+          aria-label={micRecording ? 'Stop recording' : 'Record voice message'}
+          title={micRecording ? 'Tap to stop' : 'Voice input'}
+        >
+          {micRecording ? '⏹' : '🎤'}
+        </button>
+        <button
           className={styles.sendBtn}
           onClick={handleSend}
-          disabled={!sessionId || streaming || !input.trim()}
+          disabled={!sessionId || streaming || (!input.trim() && !attachedImage)}
         >Send</button>
       </div>
+      {(micError || attachError) && (
+        <div style={{ padding: '4px 12px 8px', fontSize: 12, color: '#ef4444' }}>
+          {micError || attachError}
+        </div>
+      )}
     </>
   )
 }

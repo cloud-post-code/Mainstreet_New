@@ -1,0 +1,60 @@
+{
+  "features": [
+    {
+      "id": "discover-shops-functional",
+      "title": "Functional shop cards on Discover",
+      "priority": 1,
+      "status": "passing",
+      "feature_dir": "docs/features/discover-shops-functional"
+    },
+    {
+      "id": "discover-search-resize",
+      "title": "Resize Discover search bar to normal width",
+      "priority": 2,
+      "status": "passing",
+      "feature_dir": "docs/features/discover-search-resize"
+    },
+    {
+      "id": "board-grid-image-fix",
+      "title": "Fix board grid images — normal proportional size",
+      "priority": 3,
+      "status": "passing",
+      "feature_dir": "docs/features/board-grid-image-fix"
+    },
+    {
+      "id": "discover-randomize",
+      "title": "Randomize Discover product order on each load",
+      "priority": 4,
+      "status": "passing",
+      "feature_dir": "docs/features/discover-randomize"
+    },
+    {
+      "id": "shuffle-similar-products",
+      "title": "Shuffle button on chat product cards shows 15 similar items",
+      "priority": 5,
+      "status": "passing",
+      "feature_dir": "docs/features/shuffle-similar-products"
+    },
+    {
+      "id": "voice-mic-chat",
+      "title": "Voice mic input in Mason chat",
+      "priority": 6,
+      "status": "passing",
+      "feature_dir": "docs/features/voice-mic-chat"
+    },
+    {
+      "id": "image-upload-chat",
+      "title": "Image upload in Mason chat",
+      "priority": 7,
+      "status": "passing",
+      "feature_dir": "docs/features/image-upload-chat"
+    },
+    {
+      "id": "product-enrichment-tagging",
+      "title": "Admin product enrichment and tagging pipeline",
+      "priority": 8,
+      "status": "passing",
+      "feature_dir": "docs/features/product-enrichment-tagging"
+    }
+  ]
+}

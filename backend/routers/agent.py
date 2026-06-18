@@ -449,3 +449,80 @@ async def cancel_run_endpoint(
     await _verify_run_owned(db, run_id, current_user)
     cancelled = await cancel_run(run_id)
     return {"cancelled": cancelled}
+
+
+@router.post("/transcribe")
+async def transcribe_audio(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Transcribe uploaded audio using OpenAI Whisper."""
+    import openai
+    from config import settings
+
+    content_type = request.headers.get("content-type", "audio/webm")
+    audio_bytes = await request.body()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="No audio data received")
+    if len(audio_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio file too large (max 10 MB)")
+
+    ext = "webm"
+    if "ogg" in content_type:
+        ext = "ogg"
+    elif "mp4" in content_type or "m4a" in content_type:
+        ext = "mp4"
+    elif "wav" in content_type:
+        ext = "wav"
+
+    client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+    try:
+        import io
+        audio_file = io.BytesIO(audio_bytes)
+        audio_file.name = f"audio.{ext}"
+        response = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="text",
+        )
+        text = response if isinstance(response, str) else getattr(response, "text", str(response))
+        return {"text": text.strip()}
+    except openai.OpenAIError as exc:
+        raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
+
+
+@router.post("/upload-image")
+async def upload_chat_image(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Accept a chat image upload and return a URL the frontend can embed in the chat payload."""
+    import io
+    import uuid
+    from pathlib import Path
+    from agent.uploads import upload_root
+
+    content_type = request.headers.get("content-type", "")
+    allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    ct_base = content_type.split(";")[0].strip().lower()
+    if ct_base not in allowed:
+        raise HTTPException(status_code=415, detail="Unsupported image type")
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="No image data received")
+    if len(body) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image too large (max 5 MB)")
+
+    ext_map = {"image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}
+    ext = ext_map.get(ct_base, "jpg")
+    filename = f"chat_{current_user.id}_{uuid.uuid4().hex[:12]}.{ext}"
+
+    chat_dir = upload_root() / "chat"
+    chat_dir.mkdir(parents=True, exist_ok=True)
+    (chat_dir / filename).write_bytes(body)
+
+    from agent.uploads import public_api_base
+    base = public_api_base(request)
+    url = f"{base}/uploads/chat/{filename}"
+    return {"url": url}

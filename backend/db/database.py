@@ -220,3 +220,10 @@ async def create_tables():
             "UPDATE boards SET name = 'My Board', is_default = true "
             "WHERE lower(name) = 'saved' AND is_default = false"
         ))
+        # Product enrichment pipeline columns
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS enriched_at timestamptz"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS enrichment_data jsonb"
+        ))

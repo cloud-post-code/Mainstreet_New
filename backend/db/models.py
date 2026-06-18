@@ -55,6 +55,8 @@ class Product(Base):
     search_vector = Column(TSVECTOR)
     embedding = Column(Vector(1536), nullable=True)
     shop_name_cached = Column(String(200))
+    enriched_at = Column(DateTime(timezone=True), nullable=True)
+    enrichment_data = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     shop = relationship("Shop", back_populates="products")

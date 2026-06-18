@@ -432,12 +432,16 @@
   margin: 0;
 }
 
-/* Saved tab — 2-column image grid */
+/* Saved tab — 3-column image grid */
 .savedGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   padding: 12px;
+}
+
+@media (max-width: 480px) {
+  .savedGrid { grid-template-columns: repeat(2, 1fr); }
 }
 
 .savedTile {

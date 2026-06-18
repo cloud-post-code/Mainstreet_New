@@ -263,6 +263,7 @@ export interface DiscoverOpts {
   in_stock_only?: boolean
   limit?: number
   offset?: number
+  seed?: number
 }
 
 function buildDiscoverQuery(opts: DiscoverOpts, includePaging: boolean): string {
@@ -274,6 +275,7 @@ function buildDiscoverQuery(opts: DiscoverOpts, includePaging: boolean): string 
   if (opts.min_price != null) params.set('min_price', String(opts.min_price))
   if (opts.max_price != null) params.set('max_price', String(opts.max_price))
   if (opts.in_stock_only) params.set('in_stock_only', 'true')
+  if (opts.seed != null) params.set('seed', String(opts.seed))
   if (includePaging) {
     if (opts.limit != null) params.set('limit', String(opts.limit))
     if (opts.offset != null) params.set('offset', String(opts.offset))
@@ -412,6 +414,9 @@ export const api = {
     return { blob: await res.blob(), filename: 'shops.csv' }
   },
 
+  getSimilarProducts: (productId: number, limit = 15) =>
+    request<Product[]>(`/api/products/similar?product_id=${productId}&limit=${limit}`),
+
   getDiscoverProducts: (opts: DiscoverOpts = {}) => {
     const qs = buildDiscoverQuery(opts, true)
     return request<Product[]>(`/api/products/discover${qs ? `?${qs}` : ''}`)
@@ -430,6 +435,7 @@ export const api = {
       id: number
       name: string
       logo_url: string | null
+      first_product_image_url: string | null
       description: string | null
       website_url: string | null
       product_count: number

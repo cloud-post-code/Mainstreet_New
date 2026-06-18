@@ -31,6 +31,19 @@ async def list_shops_public_full(
 ):
     """Unauthenticated list of shops with details + product counts for the
     public Discover "Shop by shop" view."""
+    # Subquery: first image_url from any variant of the shop's cheapest product.
+    from db.models import ProductVariant
+
+    first_img_sub = (
+        select(ProductVariant.image_url)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(Product.shop_id == Shop.id)
+        .where(ProductVariant.image_url.isnot(None))
+        .order_by(Product.id, ProductVariant.id)
+        .limit(1)
+        .correlate(Shop)
+        .scalar_subquery()
+    )
     stmt = (
         select(
             Shop.id,
@@ -39,6 +52,7 @@ async def list_shops_public_full(
             Shop.description,
             Shop.website_url,
             func.count(Product.id).label("product_count"),
+            first_img_sub.label("first_product_image_url"),
         )
         .outerjoin(Product, Product.shop_id == Shop.id)
         .group_by(Shop.id)
@@ -55,6 +69,7 @@ async def list_shops_public_full(
             "description": row.description,
             "website_url": row.website_url,
             "product_count": row.product_count,
+            "first_product_image_url": row.first_product_image_url,
         }
         for row in result.all()
     ]
@@ -93,7 +108,11 @@ async def list_shops(
 
 
 @router.get("/{shop_id}", response_model=ShopOut)
-async def get_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_current_user)):
+async def get_shop(
+    shop_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
     result = await db.execute(
         select(Shop, func.count(Product.id).label("product_count"))
         .outerjoin(Product, Product.shop_id == Shop.id)
@@ -103,6 +122,7 @@ async def get_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User = D
     row = result.first()
     if not row:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Shop not found")
     shop, count = row
     out = ShopOut.model_validate(shop)

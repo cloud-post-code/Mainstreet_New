@@ -659,6 +659,44 @@ async def _run_embedding_job():
         _embedding_job["finished"] = True
 
 
+_enrichment_job: dict = {"running": False, "done": 0, "total": 0, "errors": 0, "finished": False, "error_msg": ""}
+
+
+@router.post("/enrich-products", status_code=202)
+async def enrich_products(
+    _: User = Depends(get_admin_user),
+):
+    """Start background enrichment job (GPT-4o-mini). Only processes unenriched products."""
+    import asyncio
+    global _enrichment_job
+    if _enrichment_job.get("running"):
+        return _enrichment_job
+    _enrichment_job = {"running": True, "done": 0, "total": 0, "errors": 0, "finished": False, "error_msg": ""}
+    asyncio.create_task(_run_enrichment_job())
+    return _enrichment_job
+
+
+@router.get("/enrich-products/status")
+async def enrichment_status(_: User = Depends(get_admin_user)):
+    return _enrichment_job
+
+
+async def _run_enrichment_job():
+    global _enrichment_job
+    from db.database import AsyncSessionLocal
+    from agent.enrichment import run_enrichment_batch
+    try:
+        async with AsyncSessionLocal() as session:
+            await run_enrichment_batch(session, status_store=_enrichment_job)
+    except Exception as exc:
+        _enrichment_job["error_msg"] = str(exc)
+        import logging
+        logging.getLogger(__name__).error("Enrichment job failed: %s", exc, exc_info=True)
+    finally:
+        _enrichment_job["running"] = False
+        _enrichment_job["finished"] = True
+
+
 @router.post("/reindex-search", status_code=200)
 async def reindex_search(
     db: AsyncSession = Depends(get_db),
