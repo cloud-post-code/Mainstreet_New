@@ -116,6 +116,7 @@ export default function Discover() {
   const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const loadingRef = useRef(false)
 
   useModalDismiss(!!modalProduct, () => setModalProduct(null))
 
@@ -237,12 +238,22 @@ export default function Discover() {
     return () => { cancelled = true }
   }, [filterKey])
 
+  const totalRef  = useRef(total)
+  const productsLenRef = useRef(products.length)
+  useEffect(() => { totalRef.current = total }, [total])
+  useEffect(() => { productsLenRef.current = products.length }, [products.length])
+  useEffect(() => { loadingRef.current = loading }, [loading])
+
+  // Stable loadMore — reads current values via refs so the callback never
+  // needs to be recreated, preventing the IntersectionObserver from
+  // re-subscribing on every render and causing a fetch loop.
   const loadMore = useCallback(async () => {
-    if (loading) return
-    if (total != null && products.length >= total) return
+    if (loadingRef.current) return
+    if (totalRef.current != null && productsLenRef.current >= totalRef.current) return
+    loadingRef.current = true
     setLoading(true)
     try {
-      const more = await api.getDiscoverProducts(buildFilters(products.length))
+      const more = await api.getDiscoverProducts(buildFilters(productsLenRef.current))
       setProducts(prev => {
         const seenNames = new Set(prev.map(p => p.name.trim().toLowerCase()))
         return [...prev, ...dedupeByName(more, seenNames)]
@@ -250,11 +261,13 @@ export default function Discover() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more')
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
-  }, [loading, total, products.length, buildFilters])
+  }, [buildFilters])
 
-  // Infinite scroll via IntersectionObserver.
+  // IntersectionObserver only re-subscribes when loadMore changes (which is
+  // now stable — only changes when filters change, not on every render).
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
