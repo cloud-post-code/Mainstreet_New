@@ -1,146 +1,176 @@
-.calendar {
+.wrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  user-select: none;
 }
 
-.addForm {
-  display: flex;
-  gap: 5px;
-  align-items: stretch;
-}
-
-.addInput {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 9px;
-  border: 1px solid #d9cebd;
-  border-radius: 6px;
-  background: #fff;
-  font: inherit;
-  font-size: 0.82rem;
-  color: #1a1a1a;
-  outline: none;
-}
-
-.addInput:focus {
-  border-color: #015237;
-}
-
-.dateInput {
-  flex: 0 0 auto;
-  padding: 6px 7px;
-  border: 1px solid #d9cebd;
-  border-radius: 6px;
-  background: #fff;
-  font: inherit;
-  font-size: 0.78rem;
-  color: #1a1a1a;
-  outline: none;
-  max-width: 130px;
-}
-
-.dateInput:focus {
-  border-color: #015237;
-}
-
-.addBtn {
-  appearance: none;
-  border: 1.5px solid #015237;
-  border-radius: 6px;
-  padding: 6px 11px;
-  background: #015237;
-  color: #f1e9d8;
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 120ms;
-}
-
-.addBtn:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.addBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.item {
+/* ── Month navigation ── */
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  background: #f9f3e3;
-  border: 1px solid #e5dccb;
-  border-radius: 8px;
-  transition: background 120ms;
+  padding: 0 2px;
 }
 
-.item.urgent {
+.navBtn {
+  appearance: none;
+  border: 1px solid rgba(1,82,55,0.2);
+  border-radius: 6px;
+  background: transparent;
+  color: #015237;
+  font-size: 1.15rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 120ms;
+  padding: 0;
+}
+.navBtn:hover { background: rgba(1,82,55,0.08); }
+
+.monthLabel {
+  font-family: var(--font-heading, serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #015237;
+}
+
+/* ── Day-of-week row ── */
+.dayHeaders {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.dayHeader {
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 0;
+}
+
+/* ── Calendar grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cellEmpty {
+  aspect-ratio: 1 / 1;
+}
+
+.cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 6px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+  padding: 0;
+  position: relative;
+}
+.cell:hover { background: rgba(1,82,55,0.07); }
+
+.cellPast { opacity: 0.38; }
+
+.cellToday {
+  border-color: #015237;
+  background: rgba(1,82,55,0.06);
+}
+
+.cellSelected {
+  background: #015237 !important;
+  border-color: #015237;
+}
+.cellSelected .dayNum { color: #fff; }
+.cellSelected .dot { background: rgba(255,255,255,0.7) !important; }
+
+.cellHasEvents { }
+
+.dayNum {
+  font-family: var(--font-body, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1;
+}
+
+.dots {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dotBuiltin { background: #015237; }
+.dotCustom  { background: #be6e46; }
+
+/* ── Selected day events ── */
+.eventList {
+  background: #fff;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.noEvents {
+  font-size: 0.78rem;
+  color: #aaa;
+  margin: 0;
+  text-align: center;
+}
+
+.eventItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #f9f3e3;
+  border: 1px solid #e5dccb;
+}
+
+.eventUrgent {
   background: #f0f9f4;
   border-color: #b2d8c5;
 }
 
-.itemLeft {
+.eventInfo {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
 }
 
-.itemName {
-  font-size: 0.84rem;
+.eventName {
+  font-size: 0.82rem;
   font-weight: 600;
   color: #1a1a1a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.itemDate {
-  font-size: 0.72rem;
-  color: #888;
-}
-
-.itemRight {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-}
-
-.countdown {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #999;
-  white-space: nowrap;
-}
-
-.countdownUrgent {
+.eventCountdown {
+  font-size: 0.68rem;
   color: #015237;
-}
-
-.customBadge {
-  font-size: 0.62rem;
   font-weight: 600;
-  background: #e8f0e4;
-  color: #4a7c5e;
-  border-radius: 4px;
-  padding: 1px 5px;
-  white-space: nowrap;
 }
 
 .removeBtn {
@@ -149,22 +179,163 @@
   background: transparent;
   color: #bba;
   font-size: 1rem;
-  line-height: 1;
   cursor: pointer;
   padding: 2px 4px;
-  border-radius: 5px;
+  border-radius: 4px;
   flex-shrink: 0;
+  line-height: 1;
   transition: background 120ms, color 120ms;
 }
+.removeBtn:hover { background: #f0e4c8; color: #7a5c2e; }
 
-.removeBtn:hover {
-  background: #f0e4c8;
-  color: #7a5c2e;
+.addEventBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+  opacity: 0.75;
+  transition: opacity 120ms;
+}
+.addEventBtn:hover { opacity: 1; }
+
+/* ── Upcoming strip ── */
+.upcomingStrip {
+  background: #f9f3e3;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.empty {
-  font-size: 0.85rem;
-  color: #888;
-  padding: 4px 0;
+.upcomingTitle {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #999;
+  margin-bottom: 2px;
+}
+
+.upcomingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.upcomingName {
+  font-size: 0.78rem;
+  color: #1a1a1a;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upcomingDays {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #aaa;
+  flex-shrink: 0;
+}
+.upcomingUrgent { color: #015237; }
+
+/* ── Add form ── */
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+}
+
+.addInput {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid #d9cebd;
+  border-radius: 6px;
+  background: #faf5ea;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #1a1a1a;
+  outline: none;
+  box-sizing: border-box;
+}
+.addInput:focus { border-color: #015237; background: #fff; }
+
+.dateInput {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid #d9cebd;
+  border-radius: 6px;
+  background: #faf5ea;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #1a1a1a;
+  outline: none;
+  box-sizing: border-box;
+}
+.dateInput:focus { border-color: #015237; background: #fff; }
+
+.addRow {
+  display: flex;
+  gap: 5px;
+}
+
+.addBtn {
+  flex: 1;
+  appearance: none;
+  border: 1.5px solid #015237;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #015237;
+  color: #f1e9d8;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+.addBtn:hover:not(:disabled) { opacity: 0.85; }
+.addBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.cancelBtn {
+  appearance: none;
+  border: 1.5px solid #d9cebd;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  color: #666;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.cancelBtn:hover { background: #f0e8d6; }
+
+.addEventBtnFloating {
+  appearance: none;
+  border: 1px dashed rgba(1,82,55,0.35);
+  border-radius: 6px;
+  padding: 6px;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
   text-align: center;
+  opacity: 0.7;
+  transition: opacity 120ms, background 120ms;
 }
+.addEventBtnFloating:hover { opacity: 1; background: rgba(1,82,55,0.05); }

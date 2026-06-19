@@ -15,201 +15,270 @@ interface CustomDate {
 }
 
 const STORAGE_KEY = 'ms_custom_dates'
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
 function nthWeekday(year: number, month: number, weekday: number, nth: number): Date {
-  // month is 1-based; weekday 0=Sun
   const d = new Date(year, month - 1, 1)
   let count = 0
   while (true) {
-    if (d.getDay() === weekday) {
-      count++
-      if (count === nth) return new Date(d)
-    }
+    if (d.getDay() === weekday) { count++; if (count === nth) return new Date(d) }
     d.setDate(d.getDate() + 1)
   }
 }
 
 function lastWeekday(year: number, month: number, weekday: number): Date {
-  // last weekday of the month
-  const d = new Date(year, month, 0) // last day of month
+  const d = new Date(year, month, 0)
   while (d.getDay() !== weekday) d.setDate(d.getDate() - 1)
   return new Date(d)
 }
 
-function getNextOccurrence(buildDate: (year: number) => Date, today: Date): Date {
-  const thisYear = buildDate(today.getFullYear())
-  // Use >= so today counts as upcoming
-  if (thisYear >= today) return thisYear
-  return buildDate(today.getFullYear() + 1)
+function getNextOccurrence(fn: (year: number) => Date, today: Date): Date {
+  const thisYear = fn(today.getFullYear())
+  return thisYear >= today ? thisYear : fn(today.getFullYear() + 1)
 }
 
-function buildBuiltinDates(today: Date): CalendarDate[] {
-  const fixed = (month: number, day: number) => (year: number) => new Date(year, month - 1, day)
+function buildBuiltins(): CalendarDate[] {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const fixed = (m: number, d: number) => (y: number) => new Date(y, m - 1, d)
+  const thanksgiving = (y: number) => nthWeekday(y, 11, 4, 4)
+  const blackFriday  = (y: number) => { const t = thanksgiving(y); const b = new Date(t); b.setDate(t.getDate()+1); return b }
+  const cyberMonday  = (y: number) => { const b = blackFriday(y);  const c = new Date(b); c.setDate(b.getDate()+3); return c }
 
-  const thanksgivingDate = (year: number) => nthWeekday(year, 11, 4, 4) // 4th Thu of Nov
-  const blackFridayDate = (year: number) => {
-    const t = thanksgivingDate(year)
-    const bf = new Date(t)
-    bf.setDate(t.getDate() + 1)
-    return bf
-  }
-  const cyberMondayDate = (year: number) => {
-    const bf = blackFridayDate(year)
-    const cm = new Date(bf)
-    cm.setDate(bf.getDate() + 3) // Monday after Black Friday
-    return cm
-  }
-
-  const entries: Array<{ name: string; fn: (year: number) => Date }> = [
-    { name: "Valentine's Day", fn: fixed(2, 14) },
-    { name: "Mother's Day", fn: (y) => nthWeekday(y, 5, 0, 2) }, // 2nd Sun of May
-    { name: 'Memorial Day', fn: (y) => lastWeekday(y, 5, 1) }, // last Mon of May
-    { name: "Father's Day", fn: (y) => nthWeekday(y, 6, 0, 3) }, // 3rd Sun of Jun
-    { name: '4th of July', fn: fixed(7, 4) },
-    { name: 'Labor Day', fn: (y) => nthWeekday(y, 9, 1, 1) }, // 1st Mon of Sep
-    { name: 'Halloween', fn: fixed(10, 31) },
-    { name: 'Thanksgiving', fn: thanksgivingDate },
-    { name: 'Black Friday', fn: blackFridayDate },
-    { name: 'Cyber Monday', fn: cyberMondayDate },
-    { name: 'Christmas', fn: fixed(12, 25) },
-    { name: "New Year's", fn: fixed(1, 1) },
-    // Hardcoded variable holidays for 2026
-    { name: 'Hanukkah', fn: (y) => y === 2026 ? new Date(2026, 11, 4) : fixed(12, 4)(y) },
-    { name: 'Easter', fn: (y) => y === 2026 ? new Date(2026, 3, 5) : fixed(4, 5)(y) },
+  const entries: Array<{name: string; fn: (y: number) => Date}> = [
+    { name: "New Year's Day",   fn: fixed(1, 1) },
+    { name: "Valentine's Day",  fn: fixed(2, 14) },
+    { name: 'Easter',           fn: (y) => y === 2026 ? new Date(2026,3,5)  : fixed(4,5)(y) },
+    { name: "Mother's Day",     fn: (y) => nthWeekday(y, 5, 0, 2) },
+    { name: 'Memorial Day',     fn: (y) => lastWeekday(y, 5, 1) },
+    { name: "Father's Day",     fn: (y) => nthWeekday(y, 6, 0, 3) },
+    { name: '4th of July',      fn: fixed(7, 4) },
+    { name: 'Labor Day',        fn: (y) => nthWeekday(y, 9, 1, 1) },
+    { name: 'Halloween',        fn: fixed(10, 31) },
+    { name: 'Thanksgiving',     fn: thanksgiving },
+    { name: 'Black Friday',     fn: blackFriday },
+    { name: 'Cyber Monday',     fn: cyberMonday },
+    { name: 'Hanukkah',        fn: (y) => y === 2026 ? new Date(2026,11,4) : fixed(12,4)(y) },
+    { name: 'Christmas',        fn: fixed(12, 25) },
   ]
 
-  return entries.map(({ name, fn }) => ({
-    name,
-    date: getNextOccurrence(fn, today),
-    isCustom: false,
-  }))
+  // Include current year AND next year so the calendar has data when browsing forward
+  const years = [today.getFullYear(), today.getFullYear() + 1]
+  const results: CalendarDate[] = []
+  for (const { name, fn } of entries) {
+    for (const y of years) {
+      results.push({ name, date: fn(y), isCustom: false })
+    }
+  }
+  return results
+}
+
+const BUILTINS = buildBuiltins()
+
+function toKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+}
+
+function loadCustom(): CustomDate[] {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
 }
 
 function daysUntil(date: Date, today: Date): number {
-  const ms = date.getTime() - today.getTime()
-  return Math.ceil(ms / (1000 * 60 * 60 * 24))
-}
-
-function formatDateLabel(date: Date): string {
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function loadCustomDates(): CustomDate[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as CustomDate[]) : []
-  } catch {
-    return []
-  }
-}
-
-function saveCustomDates(dates: CustomDate[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(dates))
+  return Math.ceil((date.getTime() - today.getTime()) / 86400000)
 }
 
 export default function ShoppingCalendar() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = new Date(); today.setHours(0,0,0,0)
 
-  const builtins = buildBuiltinDates(today)
-
-  const [customDates, setCustomDates] = useState<CustomDate[]>(loadCustomDates)
+  const [viewYear,  setViewYear]  = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())    // 0-based
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [customDates, setCustomDates] = useState<CustomDate[]>(loadCustom)
   const [newName, setNewName] = useState('')
   const [newDate, setNewDate] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
-  useEffect(() => {
-    saveCustomDates(customDates)
-  }, [customDates])
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(customDates)) }, [customDates])
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
+    else setViewMonth(m => m - 1)
+    setSelectedDay(null)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
+    else setViewMonth(m => m + 1)
+    setSelectedDay(null)
+  }
 
   function addCustomDate() {
     if (!newName.trim() || !newDate) return
-    const entry: CustomDate = {
-      id: `${Date.now()}-${Math.random()}`,
-      name: newName.trim(),
-      date: newDate,
-    }
-    setCustomDates(prev => [...prev, entry])
-    setNewName('')
-    setNewDate('')
+    setCustomDates(prev => [...prev, { id: `${Date.now()}`, name: newName.trim(), date: newDate }])
+    setNewName(''); setNewDate(''); setShowAdd(false)
   }
 
   function removeCustomDate(id: string) {
     setCustomDates(prev => prev.filter(d => d.id !== id))
   }
 
-  // Merge and sort
-  const customCalendarDates: CalendarDate[] = customDates.map(cd => ({
-    name: cd.name,
-    date: new Date(cd.date + 'T00:00:00'),
-    isCustom: true,
-    id: cd.id,
+  // Build all events keyed by day string
+  const customCalDates: CalendarDate[] = customDates.map(cd => ({
+    name: cd.name, date: new Date(cd.date + 'T00:00:00'), isCustom: true, id: cd.id,
   }))
+  const allEvents: CalendarDate[] = [...BUILTINS, ...customCalDates]
 
-  const allDates = [...builtins, ...customCalendarDates]
-    .filter(d => d.date >= today)
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
+  const eventsByDay = new Map<string, CalendarDate[]>()
+  for (const ev of allEvents) {
+    const k = toKey(ev.date)
+    if (!eventsByDay.has(k)) eventsByDay.set(k, [])
+    eventsByDay.get(k)!.push(ev)
+  }
+
+  // Build calendar grid
+  const firstOfMonth = new Date(viewYear, viewMonth, 1)
+  const startPad = firstOfMonth.getDay() // 0=Sun
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: Array<number | null> = [
+    ...Array(startPad).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  // Pad to complete last row
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const selectedEvents = selectedDay ? (eventsByDay.get(selectedDay) ?? []) : []
 
   return (
-    <div className={styles.calendar}>
-      <div className={styles.addForm}>
-        <input
-          className={styles.addInput}
-          placeholder="Event name"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && addCustomDate()}
-        />
-        <input
-          className={styles.dateInput}
-          type="date"
-          value={newDate}
-          onChange={e => setNewDate(e.target.value)}
-          min={today.toISOString().slice(0, 10)}
-        />
-        <button
-          className={styles.addBtn}
-          onClick={addCustomDate}
-          disabled={!newName.trim() || !newDate}
-        >
-          Add
-        </button>
+    <div className={styles.wrap}>
+      {/* Month navigation */}
+      <div className={styles.header}>
+        <button className={styles.navBtn} onClick={prevMonth} aria-label="Previous month">‹</button>
+        <span className={styles.monthLabel}>{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button className={styles.navBtn} onClick={nextMonth} aria-label="Next month">›</button>
       </div>
 
-      <ul className={styles.list}>
-        {allDates.map((entry, i) => {
-          const days = daysUntil(entry.date, today)
-          const urgent = days <= 30
+      {/* Day-of-week headers */}
+      <div className={styles.dayHeaders}>
+        {DAY_LABELS.map(d => <div key={d} className={styles.dayHeader}>{d}</div>)}
+      </div>
+
+      {/* Calendar grid */}
+      <div className={styles.grid}>
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`pad-${i}`} className={styles.cellEmpty} />
+          const cellDate = new Date(viewYear, viewMonth, day)
+          const key = toKey(cellDate)
+          const events = eventsByDay.get(key) ?? []
+          const isToday = key === toKey(today)
+          const isSelected = selectedDay === key
+          const isPast = cellDate < today
           return (
-            <li key={entry.isCustom ? entry.id : `${entry.name}-${i}`} className={`${styles.item} ${urgent ? styles.urgent : ''}`}>
-              <div className={styles.itemLeft}>
-                <span className={styles.itemName}>{entry.name}</span>
-                <span className={styles.itemDate}>{formatDateLabel(entry.date)}</span>
-              </div>
-              <div className={styles.itemRight}>
-                <span className={`${styles.countdown} ${urgent ? styles.countdownUrgent : ''}`}>
-                  {days === 0 ? 'Today!' : days === 1 ? '1 day' : `${days} days`}
-                </span>
-                {entry.isCustom && (
-                  <span className={styles.customBadge}>custom</span>
-                )}
-                {entry.isCustom && (
-                  <button
-                    className={styles.removeBtn}
-                    onClick={() => removeCustomDate(entry.id!)}
-                    title="Remove"
-                    aria-label={`Remove ${entry.name}`}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </li>
+            <button
+              key={key}
+              className={[
+                styles.cell,
+                isToday     ? styles.cellToday    : '',
+                isSelected  ? styles.cellSelected : '',
+                isPast      ? styles.cellPast     : '',
+                events.length ? styles.cellHasEvents : '',
+              ].join(' ')}
+              onClick={() => setSelectedDay(isSelected ? null : key)}
+              aria-label={`${MONTH_NAMES[viewMonth]} ${day}${events.length ? `, ${events.length} event${events.length > 1 ? 's' : ''}` : ''}`}
+            >
+              <span className={styles.dayNum}>{day}</span>
+              {events.length > 0 && (
+                <div className={styles.dots}>
+                  {events.slice(0, 3).map((ev, di) => (
+                    <span key={di} className={`${styles.dot} ${ev.isCustom ? styles.dotCustom : styles.dotBuiltin}`} />
+                  ))}
+                </div>
+              )}
+            </button>
           )
         })}
-        {allDates.length === 0 && (
-          <li className={styles.empty}>No upcoming dates.</li>
-        )}
-      </ul>
+      </div>
+
+      {/* Selected day event list */}
+      {selectedDay && (
+        <div className={styles.eventList}>
+          {selectedEvents.length === 0 ? (
+            <p className={styles.noEvents}>No events</p>
+          ) : (
+            selectedEvents.map((ev, i) => {
+              const days = daysUntil(ev.date, today)
+              return (
+                <div key={ev.isCustom ? ev.id : `${ev.name}-${i}`} className={`${styles.eventItem} ${days <= 30 && days >= 0 ? styles.eventUrgent : ''}`}>
+                  <div className={styles.eventInfo}>
+                    <span className={styles.eventName}>{ev.name}</span>
+                    {days >= 0 && (
+                      <span className={styles.eventCountdown}>
+                        {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${days} days away`}
+                      </span>
+                    )}
+                  </div>
+                  {ev.isCustom && (
+                    <button className={styles.removeBtn} onClick={() => removeCustomDate(ev.id!)} title="Remove">×</button>
+                  )}
+                </div>
+              )
+            })
+          )}
+          <button className={styles.addEventBtn} onClick={() => { setShowAdd(true); setNewDate(`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${selectedDay.split('-')[2].padStart(2,'0')}`) }}>
+            + Add event
+          </button>
+        </div>
+      )}
+
+      {/* Upcoming strip — next 3 events */}
+      {!selectedDay && (() => {
+        const upcoming = allEvents
+          .filter(e => e.date >= today)
+          .sort((a, b) => a.date.getTime() - b.date.getTime())
+          .slice(0, 4)
+        if (!upcoming.length) return null
+        return (
+          <div className={styles.upcomingStrip}>
+            <div className={styles.upcomingTitle}>Upcoming</div>
+            {upcoming.map((ev, i) => {
+              const days = daysUntil(ev.date, today)
+              return (
+                <div key={i} className={styles.upcomingItem}>
+                  <span className={styles.upcomingName}>{ev.name}</span>
+                  <span className={`${styles.upcomingDays} ${days <= 30 ? styles.upcomingUrgent : ''}`}>
+                    {days === 0 ? 'Today!' : days === 1 ? '1 day' : `${days}d`}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {/* Add event form */}
+      {showAdd ? (
+        <div className={styles.addForm}>
+          <input
+            className={styles.addInput}
+            placeholder="Event name"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addCustomDate()}
+            autoFocus
+          />
+          <input
+            className={styles.dateInput}
+            type="date"
+            value={newDate}
+            onChange={e => setNewDate(e.target.value)}
+            min={today.toISOString().slice(0, 10)}
+          />
+          <div className={styles.addRow}>
+            <button className={styles.addBtn} onClick={addCustomDate} disabled={!newName.trim() || !newDate}>Add</button>
+            <button className={styles.cancelBtn} onClick={() => { setShowAdd(false); setNewName(''); setNewDate('') }}>Cancel</button>
+          </div>
+        </div>
+      ) : !selectedDay && (
+        <button className={styles.addEventBtnFloating} onClick={() => setShowAdd(true)}>+ Add custom date</button>
+      )}
     </div>
   )
 }
