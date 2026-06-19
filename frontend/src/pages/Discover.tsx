@@ -155,19 +155,25 @@ export default function Discover() {
   }, [])
 
   // Eagerly fetch full shop list on mount so the "Shop by shop" tab is instant.
+  // Use an abort controller so React 18 Strict Mode double-invoke doesn't leave
+  // shopsLoading stuck true (the second effect run would bail on the guard and
+  // never clear the flag).
   useEffect(() => {
-    if (allShops.length > 0 || shopsLoading) return
-    let cancelled = false
+    const controller = new AbortController()
     setShopsLoading(true)
     setShopsError(null)
     api.getPublicShopsFull()
-      .then(rows => { if (!cancelled) setAllShops(rows) })
-      .catch(err => {
-        if (cancelled) return
-        setShopsError(err instanceof Error ? err.message : 'Failed to load shops')
+      .then(rows => {
+        if (!controller.signal.aborted) setAllShops(rows)
       })
-      .finally(() => { if (!cancelled) setShopsLoading(false) })
-    return () => { cancelled = true }
+      .catch(err => {
+        if (!controller.signal.aborted)
+          setShopsError(err instanceof Error ? err.message : 'Failed to load shops')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setShopsLoading(false)
+      })
+    return () => controller.abort()
   }, [])
 
   const filteredShops = useMemo(() => {
