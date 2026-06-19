@@ -1,7 +1,7 @@
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   user-select: none;
 }
 
@@ -204,24 +204,42 @@
 }
 .addEventBtn:hover { opacity: 1; }
 
+/* ── Bottom row: upcoming + add button side by side ── */
+.bottomRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.bottomRow .upcomingStrip {
+  flex: 1;
+  min-width: 0;
+}
+
+.bottomRow .addEventBtnFloating {
+  flex-shrink: 0;
+  align-self: stretch;
+  white-space: nowrap;
+}
+
 /* ── Upcoming strip ── */
 .upcomingStrip {
   background: #f9f3e3;
   border: 1px solid #e5dccb;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .upcomingTitle {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #999;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .upcomingItem {
@@ -232,7 +250,7 @@
 }
 
 .upcomingName {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: #1a1a1a;
   font-weight: 500;
   white-space: nowrap;
@@ -241,7 +259,7 @@
 }
 
 .upcomingDays {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: #aaa;
   flex-shrink: 0;

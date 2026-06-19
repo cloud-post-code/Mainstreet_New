@@ -228,33 +228,37 @@ export default function ShoppingCalendar() {
         </div>
       )}
 
-      {/* Upcoming strip — next 3 events */}
-      {!selectedDay && (() => {
+      {/* Bottom section: upcoming + add — always visible below the grid */}
+      {!selectedDay && !showAdd && (() => {
         const upcoming = allEvents
           .filter(e => e.date >= today)
           .sort((a, b) => a.date.getTime() - b.date.getTime())
           .slice(0, 4)
-        if (!upcoming.length) return null
         return (
-          <div className={styles.upcomingStrip}>
-            <div className={styles.upcomingTitle}>Upcoming</div>
-            {upcoming.map((ev, i) => {
-              const days = daysUntil(ev.date, today)
-              return (
-                <div key={i} className={styles.upcomingItem}>
-                  <span className={styles.upcomingName}>{ev.name}</span>
-                  <span className={`${styles.upcomingDays} ${days <= 30 ? styles.upcomingUrgent : ''}`}>
-                    {days === 0 ? 'Today!' : days === 1 ? '1 day' : `${days}d`}
-                  </span>
-                </div>
-              )
-            })}
+          <div className={styles.bottomRow}>
+            {upcoming.length > 0 && (
+              <div className={styles.upcomingStrip}>
+                <div className={styles.upcomingTitle}>Upcoming</div>
+                {upcoming.map((ev, i) => {
+                  const days = daysUntil(ev.date, today)
+                  return (
+                    <div key={i} className={styles.upcomingItem}>
+                      <span className={styles.upcomingName}>{ev.name}</span>
+                      <span className={`${styles.upcomingDays} ${days <= 30 ? styles.upcomingUrgent : ''}`}>
+                        {days === 0 ? 'Today!' : days === 1 ? '1 day' : `${days}d`}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <button className={styles.addEventBtnFloating} onClick={() => setShowAdd(true)}>+ Add date</button>
           </div>
         )
       })()}
 
       {/* Add event form */}
-      {showAdd ? (
+      {showAdd && (
         <div className={styles.addForm}>
           <input
             className={styles.addInput}
@@ -276,8 +280,6 @@ export default function ShoppingCalendar() {
             <button className={styles.cancelBtn} onClick={() => { setShowAdd(false); setNewName(''); setNewDate('') }}>Cancel</button>
           </div>
         </div>
-      ) : !selectedDay && (
-        <button className={styles.addEventBtnFloating} onClick={() => setShowAdd(true)}>+ Add custom date</button>
       )}
     </div>
   )
