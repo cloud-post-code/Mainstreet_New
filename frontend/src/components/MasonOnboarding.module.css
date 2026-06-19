@@ -39,15 +39,15 @@
 
 .headerName {
   font-family: 'Playfair Display', serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f1805;
 }
 
 .headerSub {
   font-family: 'Lora', serif;
-  font-size: 11px;
-  color: #8a7f6c;
+  font-size: 12px;
+  color: #5a5040;
   margin-top: 1px;
 }
 
@@ -56,8 +56,8 @@
   background: transparent;
   border: none;
   font-family: 'Lora', serif;
-  font-size: 11px;
-  color: #b0a490;
+  font-size: 12px;
+  color: #7a6f5e;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -66,7 +66,7 @@
 }
 
 .skipAll:hover {
-  color: #8a7f6c;
+  color: #3a3228;
 }
 
 /* Progress dots */
@@ -132,13 +132,14 @@
 
 .bubbleText {
   background: #fff;
-  border: 1px solid #e5dccb;
+  border: 1px solid #d4c9b0;
   border-radius: 14px 14px 14px 4px;
-  padding: 10px 13px;
+  padding: 11px 14px;
   font-family: 'Lora', serif;
-  font-size: 13px;
-  color: #0f1805;
-  line-height: 1.55;
+  font-size: 14px;
+  color: #1a1108;
+  line-height: 1.6;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 /* User reply bubble */
@@ -147,12 +148,13 @@
   background: var(--ms-primary, #015237);
   color: #f1e9d8;
   border-radius: 14px 14px 4px 14px;
-  padding: 9px 13px;
+  padding: 10px 14px;
   font-family: 'Lora', serif;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   max-width: 80%;
   animation: slideIn 0.2s ease;
+  font-weight: 500;
 }
 
 /* Typing indicator */
@@ -174,10 +176,10 @@
 }
 
 .typingDot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #b0a490;
+  background: #7a6f5e;
   animation: bounce 1.2s infinite;
 }
 
@@ -192,9 +194,9 @@
 /* Interaction area */
 .interactionArea {
   flex-shrink: 0;
-  padding: 8px 14px 14px;
-  border-top: 1px solid #f0e8d4;
-  background: #fffdf7;
+  padding: 10px 14px 16px;
+  border-top: 2px solid #e5dccb;
+  background: #f7f0e2;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -209,16 +211,17 @@
 
 .chip {
   appearance: none;
-  padding: 8px 14px;
+  padding: 8px 16px;
   border-radius: 20px;
-  border: 1.5px solid #d4c9b0;
+  border: 1.5px solid #b0a080;
   background: #fff;
   font-family: 'Lora', serif;
-  font-size: 12px;
-  color: #2c2517;
+  font-size: 13px;
+  color: #1a1108;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s, transform 0.1s;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .chip:hover {
@@ -246,12 +249,12 @@
 .imageOption {
   appearance: none;
   background: none;
-  border: 2px solid transparent;
+  border: 2px solid #c8bca0;
   border-radius: 8px;
   padding: 0;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.15s, transform 0.1s;
+  transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
   aspect-ratio: 1;
   position: relative;
 }
@@ -263,7 +266,7 @@
 
 .imageOption.selected {
   border-color: var(--ms-primary, #015237);
-  box-shadow: 0 0 0 2px #015237;
+  box-shadow: 0 0 0 3px rgba(1,82,55,0.35);
 }
 
 .imageCheck {
@@ -293,10 +296,11 @@
 
 .imageLabel {
   font-family: 'Lora', serif;
-  font-size: 10px;
-  color: #6a604f;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1a1108;
   text-align: center;
-  margin-top: 3px;
+  margin-top: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -317,9 +321,9 @@
 .textInput {
   flex: 1;
   font-family: 'Lora', serif;
-  font-size: 13px;
-  padding: 9px 12px;
-  border: 1.5px solid #d4c9b0;
+  font-size: 14px;
+  padding: 10px 14px;
+  border: 1.5px solid #a09070;
   border-radius: 20px;
   background: #fff;
   color: #0f1805;
@@ -327,7 +331,7 @@
   resize: none;
   line-height: 1.5;
   transition: border-color 0.15s;
-  min-height: 38px;
+  min-height: 42px;
   max-height: 90px;
   overflow-y: auto;
 }
@@ -337,7 +341,7 @@
 }
 
 .textInput::placeholder {
-  color: #b0a490;
+  color: #7a6f5e;
   font-style: italic;
 }
 
@@ -381,14 +385,14 @@
 
 .confirmBtn {
   appearance: none;
-  padding: 8px 18px;
+  padding: 9px 20px;
   background: var(--ms-primary, #015237);
   color: #f1e9d8;
   border: none;
   border-radius: 20px;
   font-family: 'Lora', serif;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.12s;
 }
@@ -414,8 +418,9 @@
 
 .sizingLabel {
   font-family: 'Lora', serif;
-  font-size: 12px;
-  color: #6a604f;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1108;
   width: 90px;
   flex-shrink: 0;
 }
@@ -424,8 +429,8 @@
   flex: 1;
   font-family: 'Lora', serif;
   font-size: 13px;
-  padding: 7px 11px;
-  border: 1.5px solid #d4c9b0;
+  padding: 8px 12px;
+  border: 1.5px solid #a09070;
   border-radius: 10px;
   background: #fff;
   color: #0f1805;
@@ -438,9 +443,9 @@
 }
 
 .sizingInput::placeholder {
-  color: #b0a490;
+  color: #8a7f6c;
   font-style: italic;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Done state */
@@ -483,8 +488,8 @@
 
 .doneSub {
   font-family: 'Lora', serif;
-  font-size: 13px;
-  color: #6a604f;
+  font-size: 14px;
+  color: #3a3228;
   margin: 0;
   line-height: 1.6;
   max-width: 300px;

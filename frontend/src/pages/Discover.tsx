@@ -253,10 +253,17 @@ export default function Discover() {
     loadingRef.current = true
     setLoading(true)
     try {
-      const more = await api.getDiscoverProducts(buildFilters(productsLenRef.current))
+      // Snapshot the current offset before the async fetch so we use a
+      // consistent value even if the ref updates between now and resolution.
+      const offset = productsLenRef.current
+      const more = await api.getDiscoverProducts(buildFilters(offset))
       setProducts(prev => {
         const seenNames = new Set(prev.map(p => p.name.trim().toLowerCase()))
-        return [...prev, ...dedupeByName(more, seenNames)]
+        const next = [...prev, ...dedupeByName(more, seenNames)]
+        // Update the ref synchronously inside the updater so the next
+        // loadMore call sees the correct offset before the next render.
+        productsLenRef.current = next.length
+        return next
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more')
@@ -266,17 +273,18 @@ export default function Discover() {
     }
   }, [buildFilters])
 
-  // IntersectionObserver only re-subscribes when loadMore changes (which is
-  // now stable — only changes when filters change, not on every render).
+  // Re-observe the sentinel after each load completes so that if the sentinel
+  // is still visible (page didn't grow enough to push it offscreen), we
+  // immediately queue another fetch rather than waiting for user to scroll.
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
     const obs = new IntersectionObserver(entries => {
       if (entries.some(e => e.isIntersecting)) loadMore()
-    }, { rootMargin: '600px 0px' })
+    }, { rootMargin: '800px 0px', threshold: 0 })
     obs.observe(el)
     return () => obs.disconnect()
-  }, [loadMore])
+  }, [loadMore, loading])
 
   const exhausted = total != null && products.length >= total
   const activeFilterCount =

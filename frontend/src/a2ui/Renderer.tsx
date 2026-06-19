@@ -14,6 +14,9 @@ import ProductDetailsModal from '../components/a2ui/ProductDetailsModal'
 import NextActions from '../components/a2ui/NextActions'
 import MasonDiscoverCard from '../components/a2ui/MasonDiscoverCard'
 import StyleQuestionCard from '../components/a2ui/StyleQuestionCard'
+import VibeQuestionCard from '../components/a2ui/VibeQuestionCard'
+import ProductTypeQuestionCard from '../components/a2ui/ProductTypeQuestionCard'
+import CartPicker from '../components/a2ui/CartPicker'
 import BoardPicker from '../components/a2ui/BoardPicker'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,6 +35,9 @@ const COMPONENTS: Record<string, AnyComp> = {
   plan: PlanDropdown,
   mason_discover_card: MasonDiscoverCard,
   style_question_card: StyleQuestionCard,
+  vibe_question_card: VibeQuestionCard,
+  product_type_question_card: ProductTypeQuestionCard,
+  cart_picker: CartPicker,
   board_picker: BoardPicker,
 }
 

@@ -147,6 +147,11 @@ export default function ShoppingCalendar() {
 
   const selectedEvents = selectedDay ? (eventsByDay.get(selectedDay) ?? []) : []
 
+  const upcoming = allEvents
+    .filter(e => e.date >= today)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .slice(0, 6)
+
   return (
     <div className={styles.wrap}>
       {/* Month navigation */}
@@ -156,131 +161,134 @@ export default function ShoppingCalendar() {
         <button className={styles.navBtn} onClick={nextMonth} aria-label="Next month">›</button>
       </div>
 
-      {/* Day-of-week headers */}
-      <div className={styles.dayHeaders}>
-        {DAY_LABELS.map(d => <div key={d} className={styles.dayHeader}>{d}</div>)}
-      </div>
+      {/* Main layout: calendar left, dates panel right */}
+      <div className={styles.mainRow}>
+        {/* Left: calendar grid */}
+        <div className={styles.calendarCol}>
+          {/* Day-of-week headers */}
+          <div className={styles.dayHeaders}>
+            {DAY_LABELS.map(d => <div key={d} className={styles.dayHeader}>{d}</div>)}
+          </div>
 
-      {/* Calendar grid */}
-      <div className={styles.grid}>
-        {cells.map((day, i) => {
-          if (day === null) return <div key={`pad-${i}`} className={styles.cellEmpty} />
-          const cellDate = new Date(viewYear, viewMonth, day)
-          const key = toKey(cellDate)
-          const events = eventsByDay.get(key) ?? []
-          const isToday = key === toKey(today)
-          const isSelected = selectedDay === key
-          const isPast = cellDate < today
-          return (
-            <button
-              key={key}
-              className={[
-                styles.cell,
-                isToday     ? styles.cellToday    : '',
-                isSelected  ? styles.cellSelected : '',
-                isPast      ? styles.cellPast     : '',
-                events.length ? styles.cellHasEvents : '',
-              ].join(' ')}
-              onClick={() => setSelectedDay(isSelected ? null : key)}
-              aria-label={`${MONTH_NAMES[viewMonth]} ${day}${events.length ? `, ${events.length} event${events.length > 1 ? 's' : ''}` : ''}`}
-            >
-              <span className={styles.dayNum}>{day}</span>
-              {events.length > 0 && (
-                <div className={styles.dots}>
-                  {events.slice(0, 3).map((ev, di) => (
-                    <span key={di} className={`${styles.dot} ${ev.isCustom ? styles.dotCustom : styles.dotBuiltin}`} />
-                  ))}
-                </div>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Selected day event list */}
-      {selectedDay && (
-        <div className={styles.eventList}>
-          {selectedEvents.length === 0 ? (
-            <p className={styles.noEvents}>No events</p>
-          ) : (
-            selectedEvents.map((ev, i) => {
-              const days = daysUntil(ev.date, today)
+          {/* Calendar grid */}
+          <div className={styles.grid}>
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`pad-${i}`} className={styles.cellEmpty} />
+              const cellDate = new Date(viewYear, viewMonth, day)
+              const key = toKey(cellDate)
+              const events = eventsByDay.get(key) ?? []
+              const isToday = key === toKey(today)
+              const isSelected = selectedDay === key
+              const isPast = cellDate < today
               return (
-                <div key={ev.isCustom ? ev.id : `${ev.name}-${i}`} className={`${styles.eventItem} ${days <= 30 && days >= 0 ? styles.eventUrgent : ''}`}>
-                  <div className={styles.eventInfo}>
-                    <span className={styles.eventName}>{ev.name}</span>
-                    {days >= 0 && (
-                      <span className={styles.eventCountdown}>
-                        {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${days} days away`}
-                      </span>
-                    )}
-                  </div>
-                  {ev.isCustom && (
-                    <button className={styles.removeBtn} onClick={() => removeCustomDate(ev.id!)} title="Remove">×</button>
+                <button
+                  key={key}
+                  className={[
+                    styles.cell,
+                    isToday     ? styles.cellToday    : '',
+                    isSelected  ? styles.cellSelected : '',
+                    isPast      ? styles.cellPast     : '',
+                    events.length ? styles.cellHasEvents : '',
+                  ].join(' ')}
+                  onClick={() => setSelectedDay(isSelected ? null : key)}
+                  aria-label={`${MONTH_NAMES[viewMonth]} ${day}${events.length ? `, ${events.length} event${events.length > 1 ? 's' : ''}` : ''}`}
+                >
+                  <span className={styles.dayNum}>{day}</span>
+                  {events.length > 0 && (
+                    <div className={styles.dots}>
+                      {events.slice(0, 3).map((ev, di) => (
+                        <span key={di} className={`${styles.dot} ${ev.isCustom ? styles.dotCustom : styles.dotBuiltin}`} />
+                      ))}
+                    </div>
                   )}
-                </div>
+                </button>
               )
-            })
-          )}
-          <button className={styles.addEventBtn} onClick={() => { setShowAdd(true); setNewDate(`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${selectedDay.split('-')[2].padStart(2,'0')}`) }}>
-            + Add event
-          </button>
+            })}
+          </div>
         </div>
-      )}
 
-      {/* Bottom section: upcoming + add — always visible below the grid */}
-      {!selectedDay && !showAdd && (() => {
-        const upcoming = allEvents
-          .filter(e => e.date >= today)
-          .sort((a, b) => a.date.getTime() - b.date.getTime())
-          .slice(0, 4)
-        return (
-          <div className={styles.bottomRow}>
-            {upcoming.length > 0 && (
-              <div className={styles.upcomingStrip}>
-                <div className={styles.upcomingTitle}>Upcoming</div>
-                {upcoming.map((ev, i) => {
+        {/* Right: dates panel */}
+        <div className={styles.datesCol}>
+          {showAdd ? (
+            <div className={styles.addForm}>
+              <div className={styles.addFormTitle}>Add date</div>
+              <input
+                className={styles.addInput}
+                placeholder="Event name"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addCustomDate()}
+                autoFocus
+              />
+              <input
+                className={styles.dateInput}
+                type="date"
+                value={newDate}
+                onChange={e => setNewDate(e.target.value)}
+                min={today.toISOString().slice(0, 10)}
+              />
+              <div className={styles.addRow}>
+                <button className={styles.addBtn} onClick={addCustomDate} disabled={!newName.trim() || !newDate}>Add</button>
+                <button className={styles.cancelBtn} onClick={() => { setShowAdd(false); setNewName(''); setNewDate('') }}>Cancel</button>
+              </div>
+            </div>
+          ) : selectedDay ? (
+            <div className={styles.eventList}>
+              <div className={styles.eventListTitle}>
+                {(() => {
+                  const [y, m, d] = selectedDay.split('-').map(Number)
+                  return `${MONTH_NAMES[m]} ${d}`
+                })()}
+              </div>
+              {selectedEvents.length === 0 ? (
+                <p className={styles.noEvents}>No events</p>
+              ) : (
+                selectedEvents.map((ev, i) => {
                   const days = daysUntil(ev.date, today)
                   return (
-                    <div key={i} className={styles.upcomingItem}>
+                    <div key={ev.isCustom ? ev.id : `${ev.name}-${i}`} className={`${styles.eventItem} ${days <= 30 && days >= 0 ? styles.eventUrgent : ''}`}>
+                      <div className={styles.eventInfo}>
+                        <span className={styles.eventName}>{ev.name}</span>
+                        {days >= 0 && (
+                          <span className={styles.eventCountdown}>
+                            {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${days}d away`}
+                          </span>
+                        )}
+                      </div>
+                      {ev.isCustom && (
+                        <button className={styles.removeBtn} onClick={() => removeCustomDate(ev.id!)} title="Remove">×</button>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+              <button className={styles.addEventBtn} onClick={() => { setShowAdd(true); setNewDate(`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${selectedDay.split('-')[2].padStart(2,'0')}`) }}>
+                + Add event
+              </button>
+            </div>
+          ) : (
+            <div className={styles.upcomingPanel}>
+              <div className={styles.upcomingPanelHeader}>
+                <span className={styles.upcomingTitle}>Upcoming</span>
+                <button className={styles.addEventBtnFloating} onClick={() => setShowAdd(true)}>+ Add</button>
+              </div>
+              {upcoming.map((ev, i) => {
+                const days = daysUntil(ev.date, today)
+                return (
+                  <div key={i} className={styles.upcomingItem}>
+                    <div className={styles.upcomingInfo}>
                       <span className={styles.upcomingName}>{ev.name}</span>
                       <span className={`${styles.upcomingDays} ${days <= 30 ? styles.upcomingUrgent : ''}`}>
                         {days === 0 ? 'Today!' : days === 1 ? '1 day' : `${days}d`}
                       </span>
                     </div>
-                  )
-                })}
-              </div>
-            )}
-            <button className={styles.addEventBtnFloating} onClick={() => setShowAdd(true)}>+ Add date</button>
-          </div>
-        )
-      })()}
-
-      {/* Add event form */}
-      {showAdd && (
-        <div className={styles.addForm}>
-          <input
-            className={styles.addInput}
-            placeholder="Event name"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addCustomDate()}
-            autoFocus
-          />
-          <input
-            className={styles.dateInput}
-            type="date"
-            value={newDate}
-            onChange={e => setNewDate(e.target.value)}
-            min={today.toISOString().slice(0, 10)}
-          />
-          <div className={styles.addRow}>
-            <button className={styles.addBtn} onClick={addCustomDate} disabled={!newName.trim() || !newDate}>Add</button>
-            <button className={styles.cancelBtn} onClick={() => { setShowAdd(false); setNewName(''); setNewDate('') }}>Cancel</button>
-          </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

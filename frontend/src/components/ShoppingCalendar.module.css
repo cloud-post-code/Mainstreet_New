@@ -5,6 +5,58 @@
   user-select: none;
 }
 
+/* ── Side-by-side layout: calendar left, dates right ── */
+.mainRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.calendarCol {
+  flex: 1;
+  min-width: 0;
+}
+
+.datesCol {
+  width: 150px;
+  flex-shrink: 0;
+}
+
+/* ── Upcoming panel (right column) ── */
+.upcomingPanel {
+  background: #f9f3e3;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.upcomingPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.upcomingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* ── Event list (right column when day selected) ── */
+.eventListTitle {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #015237;
+  margin-bottom: 3px;
+}
+
 /* ── Month navigation ── */
 .header {
   display: flex;
@@ -204,53 +256,22 @@
 }
 .addEventBtn:hover { opacity: 1; }
 
-/* ── Bottom row: upcoming + add button side by side ── */
-.bottomRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.bottomRow .upcomingStrip {
-  flex: 1;
-  min-width: 0;
-}
-
-.bottomRow .addEventBtnFloating {
-  flex-shrink: 0;
-  align-self: stretch;
-  white-space: nowrap;
-}
-
-/* ── Upcoming strip ── */
-.upcomingStrip {
-  background: #f9f3e3;
-  border: 1px solid #e5dccb;
-  border-radius: 8px;
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
 .upcomingTitle {
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #999;
-  margin-bottom: 1px;
 }
 
 .upcomingItem {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .upcomingName {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: #1a1a1a;
   font-weight: 500;
   white-space: nowrap;
@@ -259,12 +280,20 @@
 }
 
 .upcomingDays {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: #aaa;
-  flex-shrink: 0;
 }
 .upcomingUrgent { color: #015237; }
+
+.addFormTitle {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #015237;
+  margin-bottom: 2px;
+}
 
 /* ── Add form ── */
 .addForm {
