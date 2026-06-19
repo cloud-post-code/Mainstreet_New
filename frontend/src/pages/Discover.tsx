@@ -154,9 +154,9 @@ export default function Discover() {
     return () => { cancelled = true }
   }, [])
 
-  // Lazily fetch full shop list the first time the user switches to "Shop by shop".
+  // Eagerly fetch full shop list on mount so the "Shop by shop" tab is instant.
   useEffect(() => {
-    if (browseMode !== 'shop' || allShops.length > 0 || shopsLoading) return
+    if (allShops.length > 0 || shopsLoading) return
     let cancelled = false
     setShopsLoading(true)
     setShopsError(null)
@@ -168,7 +168,7 @@ export default function Discover() {
       })
       .finally(() => { if (!cancelled) setShopsLoading(false) })
     return () => { cancelled = true }
-  }, [browseMode, allShops.length, shopsLoading])
+  }, [])
 
   const filteredShops = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -494,29 +494,33 @@ export default function Discover() {
               <div className={styles.empty}>No shops match your search.</div>
             ) : (
               <div className={styles.grid}>
-                {filteredShops.map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className={styles.shopTile}
-                    onClick={() => {
-                      setShopIds([s.id])
-                      setBrowseMode('product')
-                      setCameFromShopBrowse(true)
-                    }}
-                    aria-label={`Browse products from ${s.name}`}
-                  >
-                    <ShopCard
-                      shop_id={s.id}
-                      name={s.name}
-                      logo_url={s.logo_url ?? undefined}
-                      first_product_image_url={s.first_product_image_url ?? undefined}
-                      description={s.description ?? undefined}
-                      website_url={s.website_url ?? undefined}
-                      product_count={s.product_count}
-                    />
-                  </button>
-                ))}
+                {filteredShops.map(s => {
+                  const imgSrc = s.first_product_image_url ?? s.logo_url
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={styles.shopGridTile}
+                      onClick={() => {
+                        setShopIds([s.id])
+                        setBrowseMode('product')
+                        setCameFromShopBrowse(true)
+                      }}
+                      aria-label={`Browse products from ${s.name}`}
+                    >
+                      <div className={styles.shopGridImg}>
+                        {imgSrc
+                          ? <img src={imgSrc} alt={s.name} />
+                          : <span className={styles.shopGridInitial}>{s.name[0]}</span>
+                        }
+                      </div>
+                      <div className={styles.shopGridBody}>
+                        <div className={styles.shopGridName}>{s.name}</div>
+                        <div className={styles.shopGridCount}>{s.product_count} products</div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </>
