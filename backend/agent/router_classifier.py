@@ -30,13 +30,15 @@ _SYSTEM = """You route shopping messages for Mason, a personal shopping assistan
 **Choose `fast` (this is the preferred answer for simple, specific asks):**
 - The user names a specific product, category, or filter and just wants to see options.
 - Examples: "show me a candle", "blue mug under $30", "soap", "wool socks", "ceramic vase", "something orange", "linen shirts in medium", "candles", "any new mugs?", "show me what you have for tea".
+- The user names a shop alongside a product type — treat as a product search: "Find Eco Home Goods cleaning products", "candles from Blackstone's", "show me Lekkerhome rugs".
+- The user asks to find or browse a shop and then names a product type in the same or next message.
 
 **Choose `full` only when:**
 - The user mentions a recipient ("for my mom", "gift for", "for a 5-year-old").
 - The user asks to compare, choose between, or evaluate options ("compare these", "which is better", "help me decide").
 - The user is planning something multi-step or multi-item ("gift basket", "outfit for a wedding", "stock my pantry").
 - The session has an active questionnaire or plan (the state line will say so).
-- The user is asking about cart checkout, removing items, or browsing shops.
+- The user is asking about cart checkout, removing items, or browsing the shop directory.
 
 When in doubt between fast and full for a short, specific product ask — choose `fast`."""
 
