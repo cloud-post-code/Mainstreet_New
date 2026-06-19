@@ -505,6 +505,19 @@ async def create_shop(
     return out
 
 
+@router.delete("/shops/empty", status_code=200)
+async def delete_empty_shops(db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
+    """Delete all shops that have no products."""
+    subq = select(Product.shop_id).distinct()
+    result = await db.execute(select(Shop).where(Shop.id.notin_(subq)))
+    empty_shops = result.scalars().all()
+    count = len(empty_shops)
+    for shop in empty_shops:
+        await db.delete(shop)
+    await db.commit()
+    return {"deleted": count}
+
+
 @router.delete("/shops/{shop_id}", status_code=204)
 async def delete_shop(shop_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(get_admin_user)):
     shop = await get_or_404(db, Shop, shop_id, detail="Shop not found")

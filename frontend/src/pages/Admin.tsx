@@ -199,6 +199,14 @@ export default function Admin() {
     setProductsTotal(t => Math.max(0, t - 1))
   }
 
+  async function handleDeleteEmptyShops() {
+    if (!token) return
+    if (!confirm('Delete all shops with no products? This cannot be undone.')) return
+    const result = await api.deleteEmptyShops(token)
+    alert(`Deleted ${result.deleted} empty shop${result.deleted === 1 ? '' : 's'}.`)
+    api.adminShops(token).then(setShops)
+  }
+
   async function handleClearAllProducts() {
     if (!token) return
     if (!confirm('Are you sure you want to clear ALL products? This will permanently delete every product from the database and cannot be undone.')) return
@@ -426,6 +434,13 @@ export default function Admin() {
             disabled={downloadingShops}
           >
             {downloadingShops ? 'Downloading…' : 'Download Shops CSV'}
+          </button>
+          <button
+            type="button"
+            className={styles.deleteBtn}
+            onClick={handleDeleteEmptyShops}
+          >
+            Delete Empty Shops
           </button>
         </div>
         {shopImportError && (

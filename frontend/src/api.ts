@@ -493,6 +493,8 @@ export const api = {
     request<void>(`/api/admin/products/${id}`, { method: 'DELETE' }, token),
   clearAllProducts: (token: string) =>
     request<{ deleted: number }>(`/api/admin/products`, { method: 'DELETE' }, token),
+  deleteEmptyShops: (token: string) =>
+    request<{ deleted: number }>(`/api/admin/shops/empty`, { method: 'DELETE' }, token),
 
   getBoards: (token: string) =>
     request<Board[]>('/api/mason/boards', {}, token),
