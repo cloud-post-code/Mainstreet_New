@@ -108,6 +108,8 @@ export default function Discover() {
   const [showFilters, setShowFilters] = useState(false)
   const [browseSeed] = useState(() => Math.floor(Math.random() * 200001))
   const [browseMode, setBrowseMode] = useState<BrowseMode>('product')
+  // tracks whether the current shopIds filter was set by clicking a shop tile
+  const [cameFromShopBrowse, setCameFromShopBrowse] = useState(false)
   const [allShops, setAllShops] = useState<ShopFull[]>([])
   const [shopsLoading, setShopsLoading] = useState(false)
   const [shopsError, setShopsError] = useState<string | null>(null)
@@ -307,16 +309,6 @@ export default function Discover() {
       </header>
 
       <div className={styles.filterBar}>
-        <input
-          className={styles.search}
-          type="search"
-          placeholder={browseMode === 'shop'
-            ? 'Search shops by name or description…'
-            : 'Search by product, shop, or description…'}
-          value={searchInput}
-          onChange={e => setSearchInput(e.target.value)}
-          aria-label={browseMode === 'shop' ? 'Search shops' : 'Search products'}
-        />
         <div className={styles.filterBarRow}>
           {browseMode === 'product' && (
             <button
@@ -327,6 +319,16 @@ export default function Discover() {
               Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
             </button>
           )}
+          <input
+            className={styles.search}
+            type="search"
+            placeholder={browseMode === 'shop'
+              ? 'Search shops by name or description…'
+              : 'Search by product, shop, or description…'}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            aria-label={browseMode === 'shop' ? 'Search shops' : 'Search products'}
+          />
           <span className={styles.count}>
             {browseMode === 'product'
               ? (total != null ? `${total} result${total === 1 ? '' : 's'}` : '')
@@ -401,6 +403,21 @@ export default function Discover() {
       <main className={styles.content}>
         {browseMode === 'product' ? (
           <>
+            {cameFromShopBrowse && shopIds.length === 1 && (() => {
+              const shopName = allShops.find(s => s.id === shopIds[0])?.name
+              return (
+                <div className={styles.shopBackBar}>
+                  <button
+                    type="button"
+                    className={styles.shopBackBtn}
+                    onClick={() => { setBrowseMode('shop'); setShopIds([]); setCameFromShopBrowse(false) }}
+                  >
+                    ← All shops
+                  </button>
+                  {shopName && <span className={styles.shopBackName}>{shopName}</span>}
+                </div>
+              )
+            })()}
             {error && <div className={styles.error}>{error}</div>}
 
 
@@ -409,7 +426,11 @@ export default function Discover() {
             ) : (
               <div className={styles.grid}>
                 {products.map(p => (
-                  <div key={p.id} className={styles.cardClickable}>
+                  <div
+                    key={p.id}
+                    className={styles.cardClickable}
+                    onClick={() => setModalProduct(productToModalData(p))}
+                  >
                     <ProductCard
                       product_id={p.id}
                       name={p.name}
@@ -481,6 +502,7 @@ export default function Discover() {
                     onClick={() => {
                       setShopIds([s.id])
                       setBrowseMode('product')
+                      setCameFromShopBrowse(true)
                     }}
                     aria-label={`Browse products from ${s.name}`}
                   >

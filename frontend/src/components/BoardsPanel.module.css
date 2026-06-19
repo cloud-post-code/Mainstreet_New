@@ -28,18 +28,18 @@
   gap: 5px;
 }
 
-/* Board selector — 2×2 grid */
+/* Board selector — 3-column compact grid */
 .boardGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .boardTile {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
   appearance: none;
   border: none;
   background: transparent;
@@ -50,8 +50,8 @@
 
 .boardTileImg {
   width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 10px;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
   overflow: hidden;
   background: #f0e8d6;
   display: flex;
@@ -79,13 +79,13 @@
 }
 
 .boardTileName {
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: #1a1a1a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 2px;
+  padding: 0 1px;
 }
 
 /* Cover image — detail view */
@@ -237,6 +237,33 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.backActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 120ms;
+}
+
+.editBtn:hover { opacity: 1; }
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
 }
 
 .backBtn {

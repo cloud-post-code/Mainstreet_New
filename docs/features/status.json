@@ -90,6 +90,13 @@
       "priority": 13,
       "status": "passing",
       "feature_dir": "docs/features/shuffle-builds-chat-block"
+    },
+    {
+      "id": "discover-three-column-grid",
+      "title": "Discover page: 3-column product grid layout",
+      "priority": 14,
+      "status": "pending",
+      "feature_dir": "docs/features/discover-three-column-grid"
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { api, Session, ShippingAddress, ShippingAddressPatch } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useAgentStream, StreamEvent } from '../hooks/useAgentStream'
@@ -34,7 +34,9 @@ export default function Mason() {
 
 function MasonInner({ token, navigate }: { token: string; navigate: (path: string) => void }) {
   const memory = useMasonMemory(token)
-  const [tab, setTab] = useState<TabKey>('saved')
+  const location = useLocation()
+  const initialTab = (new URLSearchParams(location.search).get('tab') ?? 'saved') as TabKey
+  const [tab, setTab] = useState<TabKey>(initialTab)
   const [sessions, setSessions] = useState<Session[]>([])
   const [sessionsHasMore, setSessionsHasMore] = useState(false)
   const [sessionsLoadingMore, setSessionsLoadingMore] = useState(false)

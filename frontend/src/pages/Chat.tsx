@@ -119,6 +119,13 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const selectTokenRef = useRef(0)
   const skipNextScrollRef = useRef(false)
+  const [micRecording, setMicRecording] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const [attachedImage, setAttachedImage] = useState<{ url: string; preview: string } | null>(null)
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const { messages: liveMessages, streaming, plan, sendMessage, attachToRun, reset } = useAgentStream(activeSessionId)
   const [runningSessionIds, setRunningSessionIds] = useState<Set<number>>(new Set())
@@ -343,7 +350,7 @@ export default function Chat() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!input.trim() || streaming) return
+    if ((!input.trim() && !attachedImage) || streaming) return
     const text = input.trim()
 
     // /goal <text> — set the session goal without sending to Mason
@@ -369,6 +376,13 @@ export default function Chat() {
     }
 
     setInput('')
+    const messageText = attachedImage
+      ? (text ? `${text}\n[image: ${attachedImage.url}]` : `[image: ${attachedImage.url}]`)
+      : text
+    if (attachedImage) {
+      URL.revokeObjectURL(attachedImage.preview)
+      setAttachedImage(null)
+    }
 
     track('mason_message_sent', {
       session_id: activeSessionId,
@@ -385,10 +399,10 @@ export default function Chat() {
         : await api.createGuestSession()
       if (token) setSessions(prev => [s, ...prev])
       setActiveSessionId(s.id)
-      await sendMessage(text, undefined, mode, s.id)
+      await sendMessage(messageText, undefined, mode, s.id)
       return
     }
-    await sendMessage(text, undefined, mode)
+    await sendMessage(messageText, undefined, mode)
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -397,6 +411,57 @@ export default function Chat() {
       handleSubmit(e as unknown as FormEvent)
     }
   }
+
+  const handleMic = useCallback(async () => {
+    setMicError(null)
+    if (micRecording) { mediaRecorderRef.current?.stop(); return }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        setMicRecording(false)
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        try {
+          const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
+          const res = await fetch(`${BASE}/api/agent/transcribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'audio/webm', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: blob,
+          })
+          if (!res.ok) throw new Error('Transcription failed')
+          const { text } = await res.json()
+          if (text) setInput(prev => (prev ? `${prev} ${text}` : text))
+        } catch { setMicError('Transcription failed. Please try again.') }
+      }
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setMicRecording(true)
+    } catch { setMicError('Microphone access denied.') }
+  }, [micRecording, token])
+
+  const handleAttach = useCallback(() => { setAttachError(null); fileInputRef.current?.click() }, [])
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    ;(e.target as HTMLInputElement).value = ''
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { setAttachError('Image too large (max 5 MB)'); return }
+    const preview = URL.createObjectURL(file)
+    try {
+      const BASE = import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app'
+      const res = await fetch(`${BASE}/api/agent/upload-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: file,
+      })
+      if (!res.ok) throw new Error('Upload failed')
+      const { url } = await res.json()
+      setAttachedImage({ url, preview })
+    } catch { URL.revokeObjectURL(preview); setAttachError('Image upload failed. Please try again.') }
+  }, [token])
 
   const handleAnswer = useCallback((answer: string, questionCardId: string) => {
     sendMessage(answer, questionCardId)
@@ -672,7 +737,28 @@ export default function Chat() {
           </div>
         )}
 
+        {attachedImage && (
+          <div className={styles.imagePreviewBar}>
+            <img src={attachedImage.preview} alt="attachment" className={styles.imagePreviewThumb} />
+            <button
+              type="button"
+              className={styles.imagePreviewRemove}
+              onClick={() => { URL.revokeObjectURL(attachedImage.preview); setAttachedImage(null) }}
+              aria-label="Remove image"
+            >×</button>
+          </div>
+        )}
+        {(micError || attachError) && (
+          <div className={styles.composerError}>{micError || attachError}</div>
+        )}
         <form className={styles.inputBar} onSubmit={handleSubmit}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
           <div className={styles.inputWrap}>
             <textarea
               className={styles.textarea}
@@ -684,6 +770,32 @@ export default function Chat() {
               disabled={streaming}
             />
             <div className={styles.composerActions}>
+              <button
+                type="button"
+                className={styles.iconActionBtn}
+                onClick={handleAttach}
+                disabled={!!attachedImage}
+                aria-label="Attach image"
+                title="Attach image"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`${styles.iconActionBtn} ${micRecording ? styles.iconActionBtnActive : ''}`}
+                onClick={handleMic}
+                aria-label={micRecording ? 'Stop recording' : 'Voice input'}
+                title={micRecording ? 'Tap to stop' : 'Voice input'}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              </button>
               <div className={styles.modeDropdown} ref={modeMenuRef}>
                 <button
                   type="button"
@@ -724,7 +836,7 @@ export default function Chat() {
                   </div>
                 )}
               </div>
-              <button className={styles.sendButton} type="submit" disabled={!input.trim() || streaming} aria-label="Send">
+              <button className={styles.sendButton} type="submit" disabled={(!input.trim() && !attachedImage) || streaming} aria-label="Send">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>

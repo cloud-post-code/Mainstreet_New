@@ -548,19 +548,20 @@ async def _run_agent_turn_inner(
         base_prompt = SYSTEM_PROMPT_FAST
         tools_for_turn = FAST_TOOL_DEFINITIONS
         model_name = "claude-haiku-4-5-20251001"
-        # No iteration cap on fast — let it complete search → render even when
-        # it spends a step or two settling on the layout. The prompt's
-        # "one search, one render" rule still keeps the path short in practice.
+        enable_thinking = False  # fast path skips extended thinking for speed
         max_iterations = MAX_ITERATIONS
     elif session_type == "mason":
         base_prompt = MASON_MEMORY_SYSTEM_PROMPT
         tools_for_turn = MASON_MEMORY_TOOL_DEFINITIONS
         model_name = "claude-sonnet-4-6"
+        enable_thinking = True
         max_iterations = MAX_ITERATIONS
     else:
         base_prompt = SYSTEM_PROMPT
         tools_for_turn = TOOL_DEFINITIONS
         model_name = "claude-sonnet-4-6"
+        # "full" = thinking on; auto-classified "full" also gets thinking
+        enable_thinking = True
         max_iterations = MAX_ITERATIONS
 
     # Split the system prompt around {{LONG_TERM_MEMORY}} so the static body
@@ -620,6 +621,7 @@ async def _run_agent_turn_inner(
         response = None
         for kind, payload in stream_claude(
             client,
+            enable_thinking=enable_thinking,
             model=model_name,
             max_tokens=16384,
             system=system_blocks,

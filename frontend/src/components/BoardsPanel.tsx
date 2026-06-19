@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BoardNote, MasonSavedProduct } from '../api'
+import { api, BoardNote, MasonSavedProduct } from '../api'
 import { useBoardsState } from '../mason/useBoardsState'
 import { MasonMemory } from '../mason/useMasonMemory'
 import ProductModal, { ProductModalData } from './ProductModal'
@@ -38,6 +38,31 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
 
   const selectedBoard = memory.boards.find(b => b.id === selectedBoardId)
   const [modalProduct, setModalProduct] = useState<ProductModalData | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  const startEdit = () => {
+    if (!selectedBoard) return
+    setEditName(selectedBoard.name)
+    setEditDesc(selectedBoard.description ?? '')
+    setEditingName(true)
+  }
+
+  const saveEdit = async () => {
+    if (!selectedBoard || !editName.trim()) return
+    setSavingEdit(true)
+    try {
+      await api.updateBoard(selectedBoard.id, { name: editName.trim(), description: editDesc.trim() || null }, token)
+      await memory.refresh()
+      setEditingName(false)
+    } catch (e) {
+      console.error('saveEdit failed', e)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   // Board detail view
   if (selectedBoard) {
@@ -46,14 +71,19 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
       <>
       <div className={styles.boards}>
         <div className={styles.back}>
-          <button className={styles.backBtn} onClick={() => { setSelectedBoardId(null); setBoardDetail(null) }}>
+          <button className={styles.backBtn} onClick={() => { setSelectedBoardId(null); setBoardDetail(null); setEditingName(false) }}>
             ← Boards
           </button>
-          {!selectedBoard.is_default && (
-            <button className={styles.deleteBtn} onClick={() => handleDeleteBoard(selectedBoard.id)}>
-              Delete
-            </button>
-          )}
+          <div className={styles.backActions}>
+            {!selectedBoard.is_default && (
+              <button className={styles.editBtn} onClick={startEdit} title="Edit board">✏️</button>
+            )}
+            {!selectedBoard.is_default && (
+              <button className={styles.deleteBtn} onClick={() => handleDeleteBoard(selectedBoard.id)}>
+                Delete
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Cover image */}
@@ -85,10 +115,36 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
           />
         </div>
 
-        <div className={styles.boardTitle}>
-          <strong>{selectedBoard.name}</strong>
-          {selectedBoard.description && <span className={styles.boardPurpose}>{selectedBoard.description}</span>}
-        </div>
+        {editingName ? (
+          <div className={styles.editForm}>
+            <input
+              className={styles.addInput}
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              placeholder="Board name"
+              autoFocus
+            />
+            <input
+              className={styles.addInput}
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              placeholder="Description (optional)"
+            />
+            <div className={styles.addRow}>
+              <button className={styles.addBtn} onClick={saveEdit} disabled={savingEdit || !editName.trim()}>
+                {savingEdit ? 'Saving…' : 'Save'}
+              </button>
+              <button className={styles.addBtn} style={{ background: 'transparent', color: '#555', border: '1.5px solid #d9cebd' }} onClick={() => setEditingName(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.boardTitle}>
+            <strong>{selectedBoard.name}</strong>
+            {selectedBoard.description && <span className={styles.boardPurpose}>{selectedBoard.description}</span>}
+          </div>
+        )}
         <div className={styles.boardTabs}>
           <button
             className={`${styles.boardTab} ${boardTab === 'saved' ? styles.boardTabActive : ''}`}

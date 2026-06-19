@@ -112,6 +112,16 @@
 }
 .priceGrid { font-size: 1.35rem; }
 
+/* In grid layout, let the description grow to fill available height so
+   cards without variant selectors don't leave awkward whitespace. */
+.productCardGrid .productDesc {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
 /* Hero — single big featured card */
 .productCardHero {
   max-width: none;
