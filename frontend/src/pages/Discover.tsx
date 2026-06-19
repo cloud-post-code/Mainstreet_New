@@ -244,24 +244,17 @@ export default function Discover() {
   useEffect(() => { productsLenRef.current = products.length }, [products.length])
   useEffect(() => { loadingRef.current = loading }, [loading])
 
-  // Stable loadMore — reads current values via refs so the callback never
-  // needs to be recreated, preventing the IntersectionObserver from
-  // re-subscribing on every render and causing a fetch loop.
   const loadMore = useCallback(async () => {
     if (loadingRef.current) return
     if (totalRef.current != null && productsLenRef.current >= totalRef.current) return
     loadingRef.current = true
     setLoading(true)
     try {
-      // Snapshot the current offset before the async fetch so we use a
-      // consistent value even if the ref updates between now and resolution.
       const offset = productsLenRef.current
       const more = await api.getDiscoverProducts(buildFilters(offset))
       setProducts(prev => {
         const seenNames = new Set(prev.map(p => p.name.trim().toLowerCase()))
         const next = [...prev, ...dedupeByName(more, seenNames)]
-        // Update the ref synchronously inside the updater so the next
-        // loadMore call sees the correct offset before the next render.
         productsLenRef.current = next.length
         return next
       })
@@ -273,9 +266,7 @@ export default function Discover() {
     }
   }, [buildFilters])
 
-  // Re-observe the sentinel after each load completes so that if the sentinel
-  // is still visible (page didn't grow enough to push it offscreen), we
-  // immediately queue another fetch rather than waiting for user to scroll.
+  // Stable IO — only re-subscribes when filters change (loadMore is stable).
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -284,7 +275,21 @@ export default function Discover() {
     }, { rootMargin: '800px 0px', threshold: 0 })
     obs.observe(el)
     return () => obs.disconnect()
-  }, [loadMore, loading])
+  }, [loadMore])
+
+  // After each page lands, check if the sentinel is still on screen and
+  // chain the next fetch. This handles the case where the initial page is
+  // short enough that the sentinel never leaves the viewport.
+  useEffect(() => {
+    if (loading) return
+    const el = sentinelRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.top < window.innerHeight + 800) {
+      loadMore()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products.length])
 
   const exhausted = total != null && products.length >= total
   const activeFilterCount =
