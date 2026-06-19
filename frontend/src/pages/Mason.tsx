@@ -11,13 +11,15 @@ import { formatDate } from '../lib/format'
 import { track } from '../analytics/posthog'
 import MasonFeedback from '../components/MasonFeedback'
 import MasonInboxTab from '../components/MasonInboxTab'
+import ShoppingCalendar from '../components/ShoppingCalendar'
 
-type TabKey = 'shipping' | 'preferences' | 'saved' | 'history' | 'inbox'
+type TabKey = 'shipping' | 'preferences' | 'saved' | 'history' | 'inbox' | 'dates'
 
 const SESSIONS_PAGE_SIZE = 50
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'saved', label: 'Boards' },
+  { key: 'dates', label: 'Dates' },
   { key: 'history', label: 'History' },
   { key: 'preferences', label: 'Preferences' },
   { key: 'inbox', label: 'Inbox' },
@@ -168,6 +170,8 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
               </>
             )
           )}
+
+          {tab === 'dates' && <ShoppingCalendar />}
 
           {tab === 'inbox' && (
             <MasonInboxTab

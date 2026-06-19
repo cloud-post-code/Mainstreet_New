@@ -711,6 +711,8 @@ export default function Admin() {
 
 // ── Scrapers Panel ────────────────────────────────────────────────────────
 
+interface QueueItem { url: string; shopNameOverride: string }
+
 function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] }) {
   const [url, setUrl] = useState('')
   const [shopNameOverride, setShopNameOverride] = useState('')
@@ -725,12 +727,20 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
   const [preview, setPreview] = useState<ScraperPreview | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [deletingIngested, setDeletingIngested] = useState<number | null>(null)
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [runningQueue, setRunningQueue] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement | null>(null)
+  const logContainerRef = useRef<HTMLDivElement | null>(null)
 
-  // Auto-scroll log
+  // Auto-scroll log only if already near the bottom
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = logContainerRef.current
+    if (!container) return
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+    if (distanceFromBottom < 80) {
+      logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [activeJob?.event_log])
 
   useEffect(() => {
@@ -777,6 +787,54 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
     } finally {
       setStarting(false)
     }
+  }
+
+  function handleAddToQueue() {
+    if (!url.trim()) return
+    setQueue(prev => [...prev, { url: url.trim(), shopNameOverride: shopNameOverride.trim() }])
+    setUrl('')
+    setShopNameOverride('')
+  }
+
+  function handleRemoveFromQueue(index: number) {
+    setQueue(prev => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleRunQueue() {
+    if (queue.length === 0) return
+    setRunningQueue(true)
+    setStartError(null)
+    const items = [...queue]
+    setQueue([])
+    for (const item of items) {
+      try {
+        const job = await api.startScraperJob(item.url, item.shopNameOverride || null, token)
+        setActiveJob(job)
+        setJobs(prev => [job, ...prev])
+        // Wait for this job to finish before starting the next
+        await new Promise<void>(resolve => {
+          startPolling(job.id)
+          const check = setInterval(async () => {
+            try {
+              const updated = await api.getScraperJob(job.id, token)
+              setActiveJob(updated)
+              setJobs(prev => prev.map(j => j.id === job.id ? updated : j))
+              if (updated.status !== 'pending' && updated.status !== 'running') {
+                clearInterval(check)
+                resolve()
+              }
+            } catch {
+              clearInterval(check)
+              resolve()
+            }
+          }, 2000)
+        })
+      } catch (err: unknown) {
+        setStartError(err instanceof Error ? err.message : 'Failed to start scraper')
+      }
+    }
+    setRunningQueue(false)
+    api.listScraperJobs(token).then(setJobs).catch(() => {})
   }
 
   async function handleRerun(jobId: number) {
@@ -873,10 +931,62 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
             value={shopNameOverride}
             onChange={e => setShopNameOverride(e.target.value)}
           />
-          <button type="submit" className={styles.uploadBtn} disabled={starting || !url.trim()}>
-            {starting ? 'Starting…' : 'Build Scraper'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button type="submit" className={styles.uploadBtn} disabled={starting || !url.trim()}>
+              {starting ? 'Starting…' : 'Build Scraper'}
+            </button>
+            <button
+              type="button"
+              className={styles.rerunBtn}
+              onClick={handleAddToQueue}
+              disabled={!url.trim()}
+            >
+              + Add to Queue
+            </button>
+          </div>
         </form>
+
+        {/* Queue list */}
+        {queue.length > 0 && (
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                Queue <span style={{ background: '#015237', color: '#fff', borderRadius: '9999px', padding: '0.1rem 0.5rem', fontSize: '0.75rem' }}>{queue.length}</span>
+              </span>
+              <button
+                className={styles.uploadBtn}
+                onClick={handleRunQueue}
+                disabled={runningQueue || starting}
+                style={{ padding: '0.3rem 0.9rem', fontSize: '0.85rem' }}
+              >
+                {runningQueue ? 'Running Queue…' : '▶ Run Queue'}
+              </button>
+              <button
+                onClick={() => setQueue([])}
+                style={{ background: 'none', border: 'none', color: '#c0392b', cursor: 'pointer', fontSize: '0.8rem' }}
+              >
+                Clear all
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              {queue.map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f8f5f0', borderRadius: '6px', padding: '0.4rem 0.7rem', fontSize: '0.82rem' }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.url}{item.shopNameOverride ? ` (${item.shopNameOverride})` : ''}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveFromQueue(i)}
+                    style={{ background: 'none', border: 'none', color: '#c0392b', cursor: 'pointer', fontSize: '0.9rem', lineHeight: 1, flexShrink: 0 }}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {startError && <div className={styles.errorText}>{startError}</div>}
       </section>
 
@@ -906,7 +1016,7 @@ function ScrapersPanel({ token, shops: _shops }: { token: string; shops: Shop[] 
           </div>
 
           {/* Live log */}
-          <div className={styles.scraperLog}>
+          <div className={styles.scraperLog} ref={logContainerRef}>
             {(activeJob.event_log ?? []).map((l, i) => (
               <div key={i} className={`${styles.scraperLogLine} ${logKindClass(l.kind)}`}>
                 <span className={styles.scraperLogTime}>{l.ts}</span>

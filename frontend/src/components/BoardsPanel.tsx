@@ -5,6 +5,15 @@ import { MasonMemory } from '../mason/useMasonMemory'
 import ProductModal, { ProductModalData } from './ProductModal'
 import styles from './BoardsPanel.module.css'
 
+function getBoardInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0].toUpperCase())
+    .join('')
+}
+
 interface BoardsPanelProps {
   memory: MasonMemory
   token: string
@@ -92,11 +101,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
             <img className={styles.coverImg} src={coverUrl} alt="" />
           ) : (
             <div className={styles.coverPlaceholder}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
+              {getBoardInitials(selectedBoard.name)}
             </div>
           )}
           <button
@@ -307,11 +312,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
                     <img src={thumbUrl} alt="" className={styles.boardTileImgEl} />
                   ) : (
                     <div className={styles.boardTilePlaceholder}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <polyline points="21 15 16 10 5 21" />
-                      </svg>
+                      {getBoardInitials(b.name)}
                     </div>
                   )}
                 </div>
