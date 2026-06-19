@@ -328,6 +328,7 @@ async def _run_turn_background(run_id: int) -> None:
                         "product_count": product_count,
                         "ui_tree_count": ui_tree_count,
                         "run_id": run_id,
+                        "user_message": run.user_message or "",
                     },
                 )
             except Exception:

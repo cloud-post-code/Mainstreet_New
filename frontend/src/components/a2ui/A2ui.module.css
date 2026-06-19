@@ -610,3 +610,28 @@
 .questionnaireContinue:hover:not(:disabled) { background: #013d28; }
 .questionnaireContinue:disabled { cursor: not-allowed; opacity: 0.5; }
 
+.questionnaireContinueRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 0.4rem;
+}
+
+.questionnaireSkip {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  color: var(--ms-muted, #6a604f);
+  border: 1px solid #d8cdb4;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.questionnaireSkip:hover:not(:disabled) { background: #f1e9d8; color: #3a3228; }
+.questionnaireSkip:disabled { cursor: not-allowed; opacity: 0.5; }
+

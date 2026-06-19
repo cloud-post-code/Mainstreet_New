@@ -64,6 +64,9 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
   const [toast, setToast] = useState<string | null>(null)
   const [saveBusy, setSaveBusy] = useState(false)
   const [boardPickerOpen, setBoardPickerOpen] = useState(false)
+  const [createBoardOpen, setCreateBoardOpen] = useState(false)
+  const [newBoardName, setNewBoardName] = useState('')
+  const [createBoardBusy, setCreateBoardBusy] = useState(false)
   // Sizing capture: shown once after add-to-cart when a size option was selected
   const [sizeSavePrompt, setSizeSavePrompt] = useState<{ field: keyof import('../api').MasonSizes; value: string; label: string } | null>(null)
   const [fitNote, setFitNote] = useState('')
@@ -141,6 +144,24 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
       await memory?.refresh()
     }
     setBoardPickerOpen(v => !v)
+    setCreateBoardOpen(false)
+    setNewBoardName('')
+  }
+
+  const onCreateBoard = async () => {
+    const name = newBoardName.trim()
+    if (!name || createBoardBusy || !memory) return
+    setCreateBoardBusy(true)
+    try {
+      const board = await memory.createBoard(name)
+      await onSaveToBoard(board.id, board.name)
+    } catch {
+      setToast('Could not create board')
+    } finally {
+      setCreateBoardBusy(false)
+      setCreateBoardOpen(false)
+      setNewBoardName('')
+    }
   }
 
   const onSaveToBoard = async (boardId: number, boardName: string) => {
@@ -340,6 +361,35 @@ export default function ProductModal({ product, memory, onClose, onChatAbout }: 
                           {b.name}
                         </button>
                       ))
+                    )}
+                    {createBoardOpen ? (
+                      <div className={styles.boardPickerCreate}>
+                        <input
+                          className={styles.boardPickerInput}
+                          type="text"
+                          placeholder="Board name…"
+                          value={newBoardName}
+                          onChange={e => setNewBoardName(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') onCreateBoard() }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className={styles.boardPickerCreateBtn}
+                          onClick={onCreateBoard}
+                          disabled={!newBoardName.trim() || createBoardBusy}
+                        >
+                          {createBoardBusy ? '…' : 'Create'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.boardPickerNewBtn}
+                        onClick={() => setCreateBoardOpen(true)}
+                      >
+                        + Create new board
+                      </button>
                     )}
                   </div>
                 )}

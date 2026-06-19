@@ -291,7 +291,7 @@
 .chatHeaderText { flex: 1; min-width: 0; }
 
 .chatAvatar {
-  width: 44px; height: 44px;
+  width: 54px; height: 54px;
   border-radius: 50%;
   overflow: hidden;
   background: #f1e9d8;

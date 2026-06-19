@@ -11,6 +11,7 @@ interface Step {
   options?: string[]
   hint?: string
   allow_other?: boolean
+  allow_skip?: boolean
 }
 
 interface Props {
@@ -58,12 +59,22 @@ export default function Questionnaire({
     setSingleChoice(null)
   }, [stepIndex, active?.step_id])
 
+  function skipStep() {
+    if (!active || submitted || answered) return
+    recordAndAdvanceRaw('(skipped)')
+  }
+
   function recordAndAdvance(answer: string) {
     if (!active || submitted || answered) return
     const trimmed = answer.trim()
     if (!trimmed) return
+    recordAndAdvanceRaw(trimmed)
+  }
 
-    const nextCollected = { ...collected, [active.step_id]: trimmed }
+  function recordAndAdvanceRaw(answer: string) {
+    if (!active || submitted || answered) return
+
+    const nextCollected = { ...collected, [active.step_id]: answer }
     setCollected(nextCollected)
 
     const nextIndex = stepIndex + 1
@@ -147,6 +158,15 @@ export default function Questionnaire({
                       {opt}
                     </button>
                   ))}
+                  {s.allow_skip && (
+                    <button
+                      className={styles.questionnaireSkip}
+                      onClick={skipStep}
+                      disabled={disabled}
+                    >
+                      Skip
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -179,16 +199,27 @@ export default function Questionnaire({
                       disabled={disabled}
                     />
                   )}
-                  <button
-                    className={styles.questionnaireContinue}
-                    onClick={submitMulti}
-                    disabled={
-                      disabled ||
-                      (selectedMulti.length === 0 && otherText.trim() === '')
-                    }
-                  >
-                    Continue
-                  </button>
+                  <div className={styles.questionnaireContinueRow}>
+                    <button
+                      className={styles.questionnaireContinue}
+                      onClick={submitMulti}
+                      disabled={
+                        disabled ||
+                        (selectedMulti.length === 0 && otherText.trim() === '')
+                      }
+                    >
+                      Continue
+                    </button>
+                    {s.allow_skip && (
+                      <button
+                        className={styles.questionnaireSkip}
+                        onClick={skipStep}
+                        disabled={disabled}
+                      >
+                        Skip
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -212,6 +243,15 @@ export default function Questionnaire({
                   >
                     Send
                   </button>
+                  {s.allow_skip && (
+                    <button
+                      className={styles.questionnaireSkip}
+                      onClick={skipStep}
+                      disabled={disabled}
+                    >
+                      Skip
+                    </button>
+                  )}
                 </div>
               )}
             </li>

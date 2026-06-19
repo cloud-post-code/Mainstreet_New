@@ -389,6 +389,7 @@ export default function Chat() {
       surface: 'chat',
       mode,
       message_length: text.length,
+      user_message: text,
       is_authenticated: !!token,
     })
     sentAtRef.current = performance.now()
@@ -576,6 +577,8 @@ export default function Chat() {
           ? `Compare these products for me: ${ids.join(', ')}.`
           : `Compare the products you just showed me.`
       )
+    } else if (intent === 'remix_current') {
+      sendMessage('Show me 15 remixes and variations of what you just showed me')
     } else if (typeof p.label === 'string' && p.label) {
       sendMessage(p.label)
     } else {

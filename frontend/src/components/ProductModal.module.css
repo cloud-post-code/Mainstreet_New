@@ -419,3 +419,55 @@
   padding: 8px 14px 12px;
   margin: 0;
 }
+
+.boardPickerNewBtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 14px 11px;
+  font-family: 'Lora', serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #015237;
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(15, 24, 5, 0.08);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.boardPickerNewBtn:hover {
+  background: rgba(1, 82, 55, 0.07);
+}
+
+.boardPickerCreate {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(15, 24, 5, 0.08);
+}
+
+.boardPickerInput {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #d8cdb4;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+
+.boardPickerCreateBtn {
+  padding: 6px 10px;
+  background: #015237;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.boardPickerCreateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

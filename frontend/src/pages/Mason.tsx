@@ -265,6 +265,7 @@ function MasonChatColumn({
       session_id: sessionId,
       surface: 'mason_page',
       message_length: t.length,
+      user_message: t,
       has_image: hasImage,
     })
     sentAt.current = performance.now()
