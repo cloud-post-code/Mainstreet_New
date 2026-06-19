@@ -367,6 +367,18 @@
   gap: 0.5rem;
 }
 
+.composerLeft {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.composerRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .modeDropdown {
   position: relative;
   display: inline-block;
