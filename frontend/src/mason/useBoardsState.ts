@@ -6,7 +6,7 @@ export interface BoardsState {
   // board detail
   selectedBoardId: number | null
   boardDetail: BoardDetail | null
-  boardTab: 'saved' | 'notes'
+  boardTab: 'saved' | 'notes' | 'vibes'
   detailLoading: boolean
   uploadingCover: boolean
   coverInputRef: React.RefObject<HTMLInputElement>
@@ -24,7 +24,7 @@ export interface BoardsState {
   // actions
   setSelectedBoardId: (id: number | null) => void
   setBoardDetail: React.Dispatch<React.SetStateAction<BoardDetail | null>>
-  setBoardTab: (tab: 'saved' | 'notes') => void
+  setBoardTab: (tab: 'saved' | 'notes' | 'vibes') => void
   setShowAddBoard: React.Dispatch<React.SetStateAction<boolean>>
   setNewBoardName: (v: string) => void
   setNewBoardDesc: (v: string) => void
@@ -42,7 +42,7 @@ export interface BoardsState {
 export function useBoardsState(memory: MasonMemory, token: string): BoardsState {
   const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null)
   const [boardDetail, setBoardDetail] = useState<BoardDetail | null>(null)
-  const [boardTab, setBoardTab] = useState<'saved' | 'notes'>('saved')
+  const [boardTab, setBoardTab] = useState<'saved' | 'notes' | 'vibes'>('saved')
   const [showAddBoard, setShowAddBoard] = useState(false)
   const [newBoardName, setNewBoardName] = useState('')
   const [newBoardDesc, setNewBoardDesc] = useState('')

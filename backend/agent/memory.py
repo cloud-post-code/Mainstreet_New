@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from agent.prompt_safety import wrap_untrusted
-from db.models import AgentTurn, UserMemory, SavedProduct, Product, ProductVariant, UserPreferences, Board, BoardProduct, BoardNote
+from db.models import AgentTurn, UserMemory, SavedProduct, Product, ProductVariant, UserPreferences, Board, BoardProduct, BoardNote, BoardVibe, VibeSet, VibeSetItem
 
 MAX_SHORT_TERM_TURNS = 20   # last N turns loaded into context
 MAX_LONG_TERM_KEYS = 50     # cap per user
@@ -973,3 +973,140 @@ async def set_shipping(user_id: int, patch: dict, db: AsyncSession) -> dict:
         db.add(UserMemory(user_id=user_id, key=SHIPPING_KEY, value=merged))
     await db.flush()
     return merged
+
+
+# ── Board Vibes ──────────────────────────────────────────────────────────────
+
+async def add_vibe_to_board(
+    user_id: int,
+    board_id: int,
+    label: str,
+    image_url: str,
+    source: str = "mason",
+    db: AsyncSession = None,
+) -> dict:
+    """Save an inspo vibe to a board."""
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if board is None:
+        raise ValueError(f"Board {board_id} not found")
+    vibe = BoardVibe(
+        board_id=board_id,
+        label=label[:200],
+        image_url=image_url,
+        source=source,
+    )
+    db.add(vibe)
+    await db.commit()
+    await db.refresh(vibe)
+    return {
+        "id": vibe.id,
+        "label": vibe.label,
+        "image_url": vibe.image_url,
+        "source": vibe.source,
+        "created_at": vibe.created_at.isoformat() if vibe.created_at else None,
+    }
+
+
+async def get_board_vibes(user_id: int, board_id: int, db: AsyncSession) -> list:
+    from sqlalchemy import asc
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if board is None:
+        return []
+    rows = (await db.execute(
+        select(BoardVibe).where(BoardVibe.board_id == board_id).order_by(asc(BoardVibe.created_at))
+    )).scalars().all()
+    return [
+        {
+            "id": v.id,
+            "label": v.label,
+            "image_url": v.image_url,
+            "source": v.source,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+        }
+        for v in rows
+    ]
+
+
+async def delete_board_vibe(user_id: int, board_id: int, vibe_id: int, db: AsyncSession) -> None:
+    board = (await db.execute(
+        select(Board).where(Board.id == board_id, Board.user_id == user_id)
+    )).scalars().first()
+    if board is None:
+        raise ValueError("Board not found")
+    vibe = (await db.execute(
+        select(BoardVibe).where(BoardVibe.id == vibe_id, BoardVibe.board_id == board_id)
+    )).scalars().first()
+    if vibe:
+        await db.delete(vibe)
+        await db.commit()
+
+
+# ── Admin Vibe Sets ──────────────────────────────────────────────────────────
+
+async def list_vibe_sets(db: AsyncSession, active_only: bool = False) -> list:
+    from sqlalchemy.orm import selectinload
+    q = select(VibeSet).options(selectinload(VibeSet.vibes))
+    if active_only:
+        q = q.where(VibeSet.is_active == True)  # noqa: E712
+    rows = (await db.execute(q)).scalars().all()
+    return [
+        {
+            "id": vs.id,
+            "name": vs.name,
+            "description": vs.description,
+            "is_active": vs.is_active,
+            "vibes": [
+                {"id": item.id, "label": item.label, "image_url": item.image_url, "sort_order": item.sort_order}
+                for item in vs.vibes
+            ],
+        }
+        for vs in rows
+    ]
+
+
+async def create_vibe_set(name: str, description: str | None, db: AsyncSession) -> dict:
+    vs = VibeSet(name=name, description=description)
+    db.add(vs)
+    await db.commit()
+    await db.refresh(vs)
+    return {"id": vs.id, "name": vs.name, "description": vs.description, "is_active": vs.is_active, "vibes": []}
+
+
+async def add_vibe_to_set(vibe_set_id: int, label: str, image_url: str, sort_order: int, db: AsyncSession) -> dict:
+    item = VibeSetItem(vibe_set_id=vibe_set_id, label=label, image_url=image_url, sort_order=sort_order)
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return {"id": item.id, "label": item.label, "image_url": item.image_url, "sort_order": item.sort_order}
+
+
+async def delete_vibe_set_item(vibe_set_id: int, item_id: int, db: AsyncSession) -> None:
+    item = (await db.execute(
+        select(VibeSetItem).where(VibeSetItem.id == item_id, VibeSetItem.vibe_set_id == vibe_set_id)
+    )).scalars().first()
+    if item:
+        await db.delete(item)
+        await db.commit()
+
+
+async def get_active_vibe_set(db: AsyncSession) -> dict | None:
+    """Get the most recently created active vibe set for Mason to use."""
+    from sqlalchemy.orm import selectinload
+    vs = (await db.execute(
+        select(VibeSet)
+        .options(selectinload(VibeSet.vibes))
+        .where(VibeSet.is_active == True)  # noqa: E712
+        .order_by(VibeSet.created_at.desc())
+        .limit(1)
+    )).scalars().first()
+    if vs is None:
+        return None
+    return {
+        "id": vs.id,
+        "name": vs.name,
+        "vibes": [{"id": item.id, "label": item.label, "image_url": item.image_url} for item in vs.vibes],
+    }

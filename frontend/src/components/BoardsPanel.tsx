@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { api, BoardNote, MasonSavedProduct } from '../api'
+import { useEffect, useState } from 'react'
+import { api, BoardNote, BoardVibe, MasonSavedProduct } from '../api'
 import { useBoardsState } from '../mason/useBoardsState'
 import { MasonMemory } from '../mason/useMasonMemory'
 import ProductModal, { ProductModalData } from './ProductModal'
@@ -52,6 +52,30 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
   const [editDesc, setEditDesc] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
+  // Vibes state
+  const [boardVibes, setBoardVibes] = useState<BoardVibe[]>([])
+  const [vibesLoading, setVibesLoading] = useState(false)
+
+  // Pinterest state
+  const [pinterestStatus, setPinterestStatus] = useState<{ connected: boolean; username?: string; profile_image?: string } | null>(null)
+  const [importingPinterest, setImportingPinterest] = useState(false)
+
+  // Load Pinterest status on mount
+  useEffect(() => {
+    if (!token) return
+    api.getPinterestStatus(token).then(setPinterestStatus).catch(() => {})
+  }, [token])
+
+  // Load vibes when a board is selected and we switch to the vibes tab
+  useEffect(() => {
+    if (!selectedBoardId || boardTab !== 'vibes') return
+    setVibesLoading(true)
+    api.getBoardVibes(selectedBoardId, token)
+      .then(setBoardVibes)
+      .catch(() => setBoardVibes([]))
+      .finally(() => setVibesLoading(false))
+  }, [selectedBoardId, boardTab, token])
+
   const startEdit = () => {
     if (!selectedBoard) return
     setEditName(selectedBoard.name)
@@ -71,6 +95,31 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
     } finally {
       setSavingEdit(false)
     }
+  }
+
+  const handleDeleteVibe = async (vibeId: number) => {
+    if (!selectedBoardId) return
+    await api.deleteBoardVibe(selectedBoardId, vibeId, token).catch(() => {})
+    setBoardVibes(prev => prev.filter(v => v.id !== vibeId))
+  }
+
+  const handleImportPinterest = async () => {
+    if (!token || importingPinterest) return
+    setImportingPinterest(true)
+    try {
+      const result = await api.importPinterest({}, token)
+      alert(`Imported ${result.imported} board${result.imported === 1 ? '' : 's'} from Pinterest.`)
+      await memory.refresh()
+    } catch (e) {
+      alert('Pinterest import failed. Please try again.')
+    } finally {
+      setImportingPinterest(false)
+    }
+  }
+
+  const handleConnectPinterest = () => {
+    const apiBase = (import.meta.env.VITE_API_URL ?? 'https://backend-production-c5f5.up.railway.app')
+    window.location.href = `${apiBase}/api/pinterest/connect?token=${token}`
   }
 
   // Board detail view
@@ -163,6 +212,12 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
           >
             Notes ({selectedBoard.note_count})
           </button>
+          <button
+            className={`${styles.boardTab} ${boardTab === 'vibes' ? styles.boardTabActive : ''}`}
+            onClick={() => setBoardTab('vibes')}
+          >
+            Vibes
+          </button>
         </div>
         {detailLoading ? (
           <p className={styles.empty}>Loading…</p>
@@ -187,7 +242,7 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
               ))}
             </div>
           ) : <p className={styles.empty}>No saved items yet.</p>
-        ) : (
+        ) : boardTab === 'notes' ? (
           <div className={styles.notesSection}>
             <div className={styles.addRow}>
               <input
@@ -217,6 +272,25 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
               </ul>
             ) : <p className={styles.empty}>No notes yet.</p>}
           </div>
+        ) : (
+          // Vibes tab
+          <div className={styles.vibesSection}>
+            {vibesLoading ? (
+              <p className={styles.empty}>Loading vibes…</p>
+            ) : boardVibes.length ? (
+              <div className={styles.vibesGrid}>
+                {boardVibes.map(v => (
+                  <div key={v.id} className={styles.vibeTile}>
+                    <img src={v.image_url} alt={v.label} className={styles.vibeTileImg} />
+                    <span className={styles.vibeTileLabel}>{v.label}</span>
+                    <button className={styles.vibeTileRemove} onClick={() => handleDeleteVibe(v.id)} title="Remove">×</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.empty}>No vibes saved yet. When Mason asks about your style, select options to save them here.</p>
+            )}
+          </div>
         )}
       </div>
       {modalProduct && (
@@ -235,6 +309,29 @@ export default function BoardsPanel({ memory, token }: BoardsPanelProps) {
     <div className={styles.boards}>
       <div className={styles.header}>
         <button className={styles.addBtn} onClick={() => setShowAddBoard(v => !v)}>+ New Board</button>
+        <div className={styles.pinterestActions}>
+          {pinterestStatus?.connected ? (
+            <>
+              <span className={styles.pinterestBadge}>
+                {pinterestStatus.profile_image && (
+                  <img src={pinterestStatus.profile_image} alt="" className={styles.pinterestAvatar} />
+                )}
+                {pinterestStatus.username}
+              </span>
+              <button
+                className={styles.pinterestBtn}
+                onClick={handleImportPinterest}
+                disabled={importingPinterest}
+              >
+                {importingPinterest ? 'Importing…' : 'Import Pinterest'}
+              </button>
+            </>
+          ) : (
+            <button className={styles.pinterestBtn} onClick={handleConnectPinterest}>
+              Connect Pinterest
+            </button>
+          )}
+        </div>
       </div>
       {showAddBoard && (
         <div className={styles.form}>

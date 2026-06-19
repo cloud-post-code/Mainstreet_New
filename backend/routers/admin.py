@@ -3,7 +3,8 @@ import io
 import json
 import uuid
 from decimal import Decimal, InvalidOperation
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from typing import Optional
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -870,3 +871,92 @@ async def create_vector_index(
     }
 
 
+# ── Admin Vibe Sets ──────────────────────────────────────────────────────────
+
+class VibeSetCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+@router.get("/vibe-sets")
+async def list_vibe_sets(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    from agent import memory as mem
+    return await mem.list_vibe_sets(db)
+
+
+@router.post("/vibe-sets", status_code=201)
+async def create_vibe_set(
+    body: VibeSetCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    from agent import memory as mem
+    return await mem.create_vibe_set(body.name, body.description, db)
+
+
+@router.patch("/vibe-sets/{vibe_set_id}")
+async def toggle_vibe_set(
+    vibe_set_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    from db.models import VibeSet
+    from sqlalchemy import update
+    allowed = {k: v for k, v in body.items() if k in ("is_active", "name", "description")}
+    await db.execute(update(VibeSet).where(VibeSet.id == vibe_set_id).values(**allowed))
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/vibe-sets/{vibe_set_id}", status_code=204)
+async def delete_vibe_set(
+    vibe_set_id: int,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    from db.models import VibeSet
+    vs = (await db.execute(select(VibeSet).where(VibeSet.id == vibe_set_id))).scalars().first()
+    if vs:
+        await db.delete(vs)
+        await db.commit()
+
+
+@router.post("/vibe-sets/{vibe_set_id}/items", status_code=201)
+async def add_vibe_set_item(
+    vibe_set_id: int,
+    label: str = Form(...),
+    sort_order: int = Form(0),
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    from agent.upload_safety import read_capped, validate_image_bytes
+    from agent.uploads import public_api_base, upload_root
+    import uuid as _uuid
+    blob = await read_capped(file, 8 * 1024 * 1024)
+    validate_image_bytes(blob)
+    ext = (file.filename or "image.jpg").rsplit(".", 1)[-1].lower()
+    fname = f"{_uuid.uuid4().hex}.{ext}"
+    vibe_dir = upload_root() / "vibes"
+    vibe_dir.mkdir(parents=True, exist_ok=True)
+    (vibe_dir / fname).write_bytes(blob)
+    base = public_api_base(request)
+    image_url = f"{base.rstrip('/')}/uploads/vibes/{fname}"
+    from agent import memory as mem
+    return await mem.add_vibe_to_set(vibe_set_id, label, image_url, sort_order, db)
+
+
+@router.delete("/vibe-sets/{vibe_set_id}/items/{item_id}", status_code=204)
+async def delete_vibe_set_item(
+    vibe_set_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+):
+    from agent import memory as mem
+    await mem.delete_vibe_set_item(vibe_set_id, item_id, db)

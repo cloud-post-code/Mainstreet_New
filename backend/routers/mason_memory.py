@@ -1,16 +1,18 @@
 """REST endpoints powering Mason's Prefs / Saved / Boards tabs."""
+import asyncio
 import uuid
 from typing import Optional, Any, List, Dict
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import get_current_user
-from db.database import get_db
+from db.database import get_db, AsyncSessionLocal
 from db.models import User
 from agent import memory as mem
 from agent.upload_safety import read_capped, validate_image_bytes
 from agent.uploads import public_api_base, upload_root
+from agent.board_image import generate_and_save_board_cover
 
 MAX_BOARD_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB
 
@@ -173,6 +175,7 @@ async def list_boards(
 @router.post("/boards", status_code=201)
 async def create_board(
     body: BoardCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -181,6 +184,15 @@ async def create_board(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     await db.commit()
+    # Generate a placeholder cover image in the background if none exists yet
+    if not board.get("cover_image_url"):
+        background_tasks.add_task(
+            generate_and_save_board_cover,
+            board["id"],
+            board["name"],
+            board.get("description"),
+            AsyncSessionLocal,
+        )
     return board
 
 
@@ -305,3 +317,43 @@ async def delete_board_note(
     if not ok:
         raise HTTPException(status_code=404, detail="Note not found")
     await db.commit()
+
+
+# ── Board Vibes ──────────────────────────────────────────────────────────────
+
+class VibeCreate(BaseModel):
+    label: str = Field(..., min_length=1, max_length=200)
+    image_url: str = Field(..., min_length=1)
+    source: str = Field(default="mason")
+
+
+@router.get("/boards/{board_id}/vibes")
+async def get_board_vibes(
+    board_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await mem.get_board_vibes(current_user.id, board_id, db)
+
+
+@router.post("/boards/{board_id}/vibes", status_code=201)
+async def add_board_vibe(
+    board_id: int,
+    body: VibeCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return await mem.add_vibe_to_board(current_user.id, board_id, body.label, body.image_url, body.source, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/boards/{board_id}/vibes/{vibe_id}", status_code=204)
+async def delete_board_vibe(
+    board_id: int,
+    vibe_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await mem.delete_board_vibe(current_user.id, board_id, vibe_id, db)

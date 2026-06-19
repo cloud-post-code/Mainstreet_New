@@ -26,6 +26,7 @@ class User(Base):
     sessions = relationship("AgentSession", back_populates="user", cascade="all, delete-orphan", foreign_keys="AgentSession.user_id")
     memory = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
     boards = relationship("Board", back_populates="user", cascade="all, delete-orphan")
+    integrations = relationship("UserIntegration", back_populates="user", cascade="all, delete-orphan")
 
 
 class Shop(Base):
@@ -285,6 +286,7 @@ class Board(Base):
     user = relationship("User", back_populates="boards")
     board_products = relationship("BoardProduct", back_populates="board", cascade="all, delete-orphan")
     board_notes = relationship("BoardNote", back_populates="board", cascade="all, delete-orphan")
+    board_vibes = relationship("BoardVibe", back_populates="board", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_boards_user_name"),
@@ -318,6 +320,69 @@ class BoardNote(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     board = relationship("Board", back_populates="board_notes")
+
+
+class BoardVibe(Base):
+    """An inspo vibe image saved to a board (from Mason questions, admin uploads, or Pinterest)."""
+    __tablename__ = "board_vibes"
+
+    id = Column(Integer, primary_key=True)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String(200), nullable=False)
+    image_url = Column(Text, nullable=False)
+    source = Column(String(50), nullable=False, server_default="mason")  # 'mason' | 'admin' | 'pinterest'
+    vibe_set_id = Column(Integer, ForeignKey("vibe_sets.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    board = relationship("Board", back_populates="board_vibes")
+
+
+class VibeSet(Base):
+    """Admin-curated set of vibes Mason can use in vibe_question_card questions."""
+    __tablename__ = "vibe_sets"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    is_active = Column(Boolean, nullable=False, server_default=text("true"), default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    vibes = relationship("VibeSetItem", back_populates="vibe_set", cascade="all, delete-orphan", order_by="VibeSetItem.sort_order")
+
+
+class VibeSetItem(Base):
+    """A single vibe image+label within an admin VibeSet."""
+    __tablename__ = "vibe_set_items"
+
+    id = Column(Integer, primary_key=True)
+    vibe_set_id = Column(Integer, ForeignKey("vibe_sets.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String(200), nullable=False)
+    image_url = Column(Text, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    vibe_set = relationship("VibeSet", back_populates="vibes")
+
+
+class UserIntegration(Base):
+    """OAuth integration tokens for third-party services (e.g. Pinterest)."""
+    __tablename__ = "user_integrations"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider = Column(String(50), nullable=False)  # 'pinterest'
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text)
+    token_expires_at = Column(DateTime(timezone=True))
+    meta = Column(JSONB)  # username, avatar, board count etc.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="integrations")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_user_integrations_provider"),
+    )
 
 
 class TurnUsage(Base):

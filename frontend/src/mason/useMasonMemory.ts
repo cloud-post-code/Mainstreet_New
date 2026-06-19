@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, Board, BoardNote, InboxMessage, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
+import { api, Board, BoardNote, BoardVibe, InboxMessage, MasonPrefs, MasonPrefsPatch, MasonSavedProduct, ShippingAddress, ShippingAddressPatch } from '../api'
 
 const EMPTY_SHIPPING: ShippingAddress = {
   name: '', line1: '', line2: '', city: '', state: '', postal_code: '', country: '', phone: '',
@@ -35,6 +35,8 @@ export interface MasonMemory {
   removeProductFromBoard: (boardId: number, productId: number) => Promise<void>
   addNoteToBoard: (boardId: number, text: string) => Promise<BoardNote>
   deleteBoardNote: (boardId: number, noteId: number) => Promise<void>
+  addVibeToBoard: (boardId: number, label: string, imageUrl: string, source?: string) => Promise<BoardVibe>
+  deleteBoardVibe: (boardId: number, vibeId: number) => Promise<void>
   refresh: () => Promise<void>
   refreshInbox: () => Promise<void>
 }
@@ -211,5 +213,15 @@ export function useMasonMemory(token: string | null): MasonMemory {
     setBoards(prev => prev.map(b => b.id === boardId ? { ...b, note_count: Math.max(0, b.note_count - 1) } : b))
   }, [token])
 
-  return { prefs, savedProducts, boards, inbox, shipping, loading, patchPrefs, saveShipping, saveProduct, unsaveProduct, createBoard, deleteBoard, addProductToBoard, removeProductFromBoard, addNoteToBoard, deleteBoardNote, refresh, refreshInbox }
+  const addVibeToBoard = useCallback(async (boardId: number, label: string, imageUrl: string, source = 'mason'): Promise<BoardVibe> => {
+    if (!token) throw new Error('not logged in')
+    return api.addBoardVibe(boardId, { label, image_url: imageUrl, source }, token)
+  }, [token])
+
+  const deleteBoardVibe = useCallback(async (boardId: number, vibeId: number) => {
+    if (!token) return
+    await api.deleteBoardVibe(boardId, vibeId, token)
+  }, [token])
+
+  return { prefs, savedProducts, boards, inbox, shipping, loading, patchPrefs, saveShipping, saveProduct, unsaveProduct, createBoard, deleteBoard, addProductToBoard, removeProductFromBoard, addNoteToBoard, deleteBoardNote, addVibeToBoard, deleteBoardVibe, refresh, refreshInbox }
 }

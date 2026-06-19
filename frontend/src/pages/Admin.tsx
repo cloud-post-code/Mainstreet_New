@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, ChangeEvent, FormEvent } from 'react'
+import React, { useEffect, useState, useRef, ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { api, Shop, Product, ListingDraft, ListingStage, AdminStats, ScraperJobOut, ScraperVerificationReport, ScraperLogEntry, ScraperPreview } from '../api'
+import { api, Shop, Product, ListingDraft, ListingStage, AdminStats, ScraperJobOut, ScraperVerificationReport, ScraperLogEntry, ScraperPreview, VibeSet, VibeSetItem } from '../api'
 import { safeHref } from '../lib/safeHref'
 import styles from './Admin.module.css'
 import { formatCurrency } from '../lib/format'
@@ -43,7 +43,13 @@ export default function Admin() {
   const [addingShop, setAddingShop] = useState(false)
   const [addShopError, setAddShopError] = useState<string | null>(null)
   const [showAddProduct, setShowAddProduct] = useState(false)
-  const [tab, setTab] = useState<'shops' | 'products' | 'stats' | 'scrapers'>('stats')
+  const [tab, setTab] = useState<'shops' | 'products' | 'stats' | 'scrapers' | 'vibes'>('stats')
+  const [vibeSets, setVibeSets] = useState<VibeSet[]>([])
+  const [vibeSetLoading, setVibeSetLoading] = useState(false)
+  const [showAddVibeSet, setShowAddVibeSet] = useState(false)
+  const [newVibeSetName, setNewVibeSetName] = useState('')
+  const [newVibeSetDesc, setNewVibeSetDesc] = useState('')
+  const [addingVibeSet, setAddingVibeSet] = useState(false)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [embeddingRunning, setEmbeddingRunning] = useState(false)
@@ -55,6 +61,12 @@ export default function Admin() {
     if (!token) return
     api.adminShops(token).then(setShops)
   }, [token])
+
+  useEffect(() => {
+    if (!token || tab !== 'vibes') return
+    setVibeSetLoading(true)
+    api.adminListVibeSets(token).then(setVibeSets).catch(() => {}).finally(() => setVibeSetLoading(false))
+  }, [token, tab])
 
   useEffect(() => {
     if (!token) return
@@ -551,6 +563,9 @@ export default function Admin() {
         <button className={`${styles.tab} ${tab === 'scrapers' ? styles.activeTab : ''}`} onClick={() => setTab('scrapers')}>
           Scrapers
         </button>
+        <button className={`${styles.tab} ${tab === 'vibes' ? styles.activeTab : ''}`} onClick={() => setTab('vibes')}>
+          Vibe Sets
+        </button>
       </div>
 
       {tab === 'stats' && (
@@ -704,6 +719,218 @@ export default function Admin() {
 
       {tab === 'scrapers' && token && (
         <ScrapersPanel token={token} shops={shops} />
+      )}
+
+      {tab === 'vibes' && token && (
+        <VibeSetsPanel
+          token={token}
+          vibeSets={vibeSets}
+          setVibeSets={setVibeSets}
+          loading={vibeSetLoading}
+          showAddVibeSet={showAddVibeSet}
+          setShowAddVibeSet={setShowAddVibeSet}
+          newVibeSetName={newVibeSetName}
+          setNewVibeSetName={setNewVibeSetName}
+          newVibeSetDesc={newVibeSetDesc}
+          setNewVibeSetDesc={setNewVibeSetDesc}
+          addingVibeSet={addingVibeSet}
+          setAddingVibeSet={setAddingVibeSet}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Vibe Sets Panel ───────────────────────────────────────────────────────
+
+interface VibeSetsProps {
+  token: string
+  vibeSets: VibeSet[]
+  setVibeSets: React.Dispatch<React.SetStateAction<VibeSet[]>>
+  loading: boolean
+  showAddVibeSet: boolean
+  setShowAddVibeSet: React.Dispatch<React.SetStateAction<boolean>>
+  newVibeSetName: string
+  setNewVibeSetName: (v: string) => void
+  newVibeSetDesc: string
+  setNewVibeSetDesc: (v: string) => void
+  addingVibeSet: boolean
+  setAddingVibeSet: (v: boolean) => void
+}
+
+function VibeSetsPanel({
+  token, vibeSets, setVibeSets, loading,
+  showAddVibeSet, setShowAddVibeSet,
+  newVibeSetName, setNewVibeSetName,
+  newVibeSetDesc, setNewVibeSetDesc,
+  addingVibeSet, setAddingVibeSet,
+}: VibeSetsProps) {
+  const [uploadingForSet, setUploadingForSet] = useState<number | null>(null)
+  const [vibeLabel, setVibeLabel] = useState<Record<number, string>>({})
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+
+  async function handleCreateVibeSet(e: FormEvent) {
+    e.preventDefault()
+    if (!newVibeSetName.trim()) return
+    setAddingVibeSet(true)
+    try {
+      const vs = await api.adminCreateVibeSet({ name: newVibeSetName.trim(), description: newVibeSetDesc.trim() || undefined }, token)
+      setVibeSets(prev => [...prev, vs])
+      setNewVibeSetName('')
+      setNewVibeSetDesc('')
+      setShowAddVibeSet(false)
+    } catch (e) {
+      console.error('create vibe set failed', e)
+    } finally {
+      setAddingVibeSet(false)
+    }
+  }
+
+  async function handleToggleActive(vsId: number, isActive: boolean) {
+    await api.adminToggleVibeSet(vsId, isActive, token).catch(() => {})
+    setVibeSets(prev => prev.map(vs => vs.id === vsId ? { ...vs, is_active: isActive } : vs))
+  }
+
+  async function handleDeleteVibeSet(vsId: number) {
+    if (!confirm('Delete this vibe set and all its images?')) return
+    await api.adminDeleteVibeSet(vsId, token).catch(() => {})
+    setVibeSets(prev => prev.filter(vs => vs.id !== vsId))
+  }
+
+  async function handleAddVibeItem(vsId: number, file: File) {
+    const label = (vibeLabel[vsId] || '').trim()
+    if (!label || !file) { alert('Please enter a label for the vibe.'); return }
+    setUploadingForSet(vsId)
+    try {
+      const fd = new FormData()
+      fd.append('label', label)
+      fd.append('sort_order', '0')
+      fd.append('file', file)
+      const item = await api.adminAddVibeToSet(vsId, fd, token)
+      setVibeSets(prev => prev.map(vs => vs.id === vsId ? { ...vs, vibes: [...vs.vibes, item] } : vs))
+      setVibeLabel(prev => ({ ...prev, [vsId]: '' }))
+      // reset file input
+      if (fileInputRefs.current[vsId]) fileInputRefs.current[vsId]!.value = ''
+    } catch (e) {
+      alert('Upload failed. Please try again.')
+    } finally {
+      setUploadingForSet(null)
+    }
+  }
+
+  async function handleDeleteVibeItem(vsId: number, itemId: number) {
+    await api.adminDeleteVibeSetItem(vsId, itemId, token).catch(() => {})
+    setVibeSets(prev => prev.map(vs => vs.id === vsId ? { ...vs, vibes: vs.vibes.filter((v: VibeSetItem) => v.id !== itemId) } : vs))
+  }
+
+  return (
+    <div className={styles.vibeSetPanel}>
+      <div className={styles.vibeSetHeader}>
+        <h2 className={styles.sectionTitle}>Vibe Sets</h2>
+        <button className={styles.seedBtn} onClick={() => setShowAddVibeSet(v => !v)}>
+          {showAddVibeSet ? 'Cancel' : '+ New Vibe Set'}
+        </button>
+      </div>
+
+      {showAddVibeSet && (
+        <form className={styles.addForm} onSubmit={handleCreateVibeSet}>
+          <label className={styles.addLabel}>
+            Name <span className={styles.required}>*</span>
+            <input
+              className={styles.input}
+              value={newVibeSetName}
+              onChange={e => setNewVibeSetName(e.target.value)}
+              placeholder="e.g. Spring 2025 Aesthetic"
+              required
+            />
+          </label>
+          <label className={styles.addLabel}>
+            Description <span className={styles.optional}>(optional)</span>
+            <input
+              className={styles.input}
+              value={newVibeSetDesc}
+              onChange={e => setNewVibeSetDesc(e.target.value)}
+              placeholder="Short description"
+            />
+          </label>
+          <button type="submit" className={styles.saveBtn} disabled={addingVibeSet || !newVibeSetName.trim()}>
+            {addingVibeSet ? 'Creating…' : 'Create Vibe Set'}
+          </button>
+        </form>
+      )}
+
+      {loading ? (
+        <p className={styles.csvHint}>Loading…</p>
+      ) : vibeSets.length === 0 ? (
+        <p className={styles.csvHint}>No vibe sets yet. Create one above.</p>
+      ) : (
+        vibeSets.map(vs => (
+          <div key={vs.id} className={styles.vibeSetCard}>
+            <div className={styles.vibeSetCardHeader}>
+              <div>
+                <strong>{vs.name}</strong>
+                {vs.description && <span className={styles.vibeSetDesc}> — {vs.description}</span>}
+                <span className={`${styles.tag} ${vs.is_active ? styles.tagActive : styles.tagInactive}`} style={{ marginLeft: 8 }}>
+                  {vs.is_active ? 'Active' : 'Inactive'}
+                </span>
+                <span className={styles.tag} style={{ marginLeft: 4 }}>
+                  {vs.vibes.length} vibe{vs.vibes.length !== 1 ? 's' : ''}
+                  {vs.vibes.length < 3 && <span className={styles.tagWarn}> ⚠ min 3</span>}
+                  {vs.vibes.length > 9 && <span className={styles.tagWarn}> ⚠ max 9</span>}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className={styles.uploadBtn}
+                  onClick={() => handleToggleActive(vs.id, !vs.is_active)}
+                >
+                  {vs.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button className={styles.deleteBtn} onClick={() => handleDeleteVibeSet(vs.id)}>Delete</button>
+              </div>
+            </div>
+
+            {/* Existing vibes grid */}
+            {vs.vibes.length > 0 && (
+              <div className={styles.vibeItemGrid}>
+                {vs.vibes.map((item: VibeSetItem) => (
+                  <div key={item.id} className={styles.vibeItemCard}>
+                    <img src={item.image_url} alt={item.label} className={styles.vibeItemImg} />
+                    <span className={styles.vibeItemLabel}>{item.label}</span>
+                    <button className={styles.vibeItemRemove} onClick={() => handleDeleteVibeItem(vs.id, item.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new vibe */}
+            <div className={styles.vibeAddRow}>
+              <input
+                className={styles.input}
+                placeholder="Vibe label (e.g. Coastal Grandma)"
+                value={vibeLabel[vs.id] || ''}
+                onChange={e => setVibeLabel(prev => ({ ...prev, [vs.id]: e.target.value }))}
+                style={{ flex: 1 }}
+              />
+              <label className={styles.uploadLabel}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  ref={el => { fileInputRefs.current[vs.id] = el }}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) handleAddVibeItem(vs.id, file)
+                  }}
+                  disabled={uploadingForSet === vs.id}
+                />
+                <span className={`${styles.uploadBtn} ${uploadingForSet === vs.id ? styles.disabled : ''}`}>
+                  {uploadingForSet === vs.id ? 'Uploading…' : '+ Add Image'}
+                </span>
+              </label>
+            </div>
+          </div>
+        ))
       )}
     </div>
   )

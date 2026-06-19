@@ -124,6 +124,33 @@ export interface BoardDetail extends Board {
   products: MasonSavedProduct[]
 }
 
+export interface BoardVibe {
+  id: number
+  label: string
+  image_url: string
+  source: 'mason' | 'admin' | 'pinterest'
+  created_at: string | null
+}
+
+export interface BoardDetailWithVibes extends BoardDetail {
+  vibes: BoardVibe[]
+}
+
+export interface VibeSetItem {
+  id: number
+  label: string
+  image_url: string
+  sort_order: number
+}
+
+export interface VibeSet {
+  id: number
+  name: string
+  description: string | null
+  is_active: boolean
+  vibes: VibeSetItem[]
+}
+
 export interface MasonSizes {
   shirt?: string
   waist?: string
@@ -527,6 +554,50 @@ export const api = {
     request<BoardNote>(`/api/mason/boards/${boardId}/notes`, { method: 'POST', body: JSON.stringify({ text }) }, token),
   deleteBoardNote: (boardId: number, noteId: number, token: string) =>
     request<void>(`/api/mason/boards/${boardId}/notes/${noteId}`, { method: 'DELETE' }, token),
+
+  getBoardVibes: (boardId: number, token: string): Promise<BoardVibe[]> =>
+    request<BoardVibe[]>(`/api/mason/boards/${boardId}/vibes`, {}, token),
+
+  addBoardVibe: (boardId: number, body: { label: string; image_url: string; source?: string }, token: string): Promise<BoardVibe> =>
+    request<BoardVibe>(`/api/mason/boards/${boardId}/vibes`, { method: 'POST', body: JSON.stringify(body) }, token),
+
+  deleteBoardVibe: (boardId: number, vibeId: number, token: string): Promise<void> =>
+    request<void>(`/api/mason/boards/${boardId}/vibes/${vibeId}`, { method: 'DELETE' }, token),
+
+  getPinterestStatus: (token: string): Promise<{ connected: boolean; username?: string; profile_image?: string }> =>
+    request<{ connected: boolean; username?: string; profile_image?: string }>('/api/pinterest/status', {}, token),
+
+  importPinterest: (body: { board_ids?: string[] }, token: string): Promise<{ imported: number; boards: Array<{ board_id: number; name: string; vibes_added: number }> }> =>
+    request<{ imported: number; boards: Array<{ board_id: number; name: string; vibes_added: number }> }>('/api/pinterest/import', { method: 'POST', body: JSON.stringify(body) }, token),
+
+  disconnectPinterest: (token: string): Promise<void> =>
+    request<void>('/api/pinterest/disconnect', { method: 'DELETE' }, token),
+
+  adminListVibeSets: (token: string): Promise<VibeSet[]> =>
+    request<VibeSet[]>('/api/admin/vibe-sets', {}, token),
+
+  adminCreateVibeSet: (body: { name: string; description?: string }, token: string): Promise<VibeSet> =>
+    request<VibeSet>('/api/admin/vibe-sets', { method: 'POST', body: JSON.stringify(body) }, token),
+
+  adminDeleteVibeSet: (id: number, token: string): Promise<void> =>
+    request<void>(`/api/admin/vibe-sets/${id}`, { method: 'DELETE' }, token),
+
+  adminToggleVibeSet: (id: number, is_active: boolean, token: string): Promise<void> =>
+    request<void>(`/api/admin/vibe-sets/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active }) }, token),
+
+  adminAddVibeToSet: (vibeSetId: number, formData: FormData, token: string): Promise<VibeSetItem> => {
+    return fetch(`${BASE}/api/admin/vibe-sets/${vibeSetId}/items`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    }).then(async r => {
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? 'Upload failed')
+      return r.json() as Promise<VibeSetItem>
+    })
+  },
+
+  adminDeleteVibeSetItem: (vibeSetId: number, itemId: number, token: string): Promise<void> =>
+    request<void>(`/api/admin/vibe-sets/${vibeSetId}/items/${itemId}`, { method: 'DELETE' }, token),
 
   getMasonPrefs: (token: string) =>
     request<MasonPrefs>('/api/mason/prefs', {}, token),
