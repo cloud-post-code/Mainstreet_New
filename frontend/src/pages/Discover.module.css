@@ -82,18 +82,25 @@
   top: 56px;
   z-index: 40;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   padding: 14px 24px;
   background: var(--ms-cream, #f1e9d8);
   border-bottom: 1px solid rgba(15, 24, 5, 0.1);
 }
 
+.filterBarRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
 .search {
-  flex: 0 1 480px;
-  min-width: 200px;
-  max-width: 480px;
+  width: 100%;
+  max-width: 520px;
   padding: 10px 14px;
   font-family: 'Lora', serif;
   font-size: 15px;
@@ -104,10 +111,7 @@
 }
 
 @media (max-width: 640px) {
-  .search {
-    flex: 1 1 100%;
-    max-width: 100%;
-  }
+  .search { max-width: 100%; }
 }
 
 .search:focus {

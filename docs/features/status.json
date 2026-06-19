@@ -55,6 +55,41 @@
       "priority": 8,
       "status": "passing",
       "feature_dir": "docs/features/product-enrichment-tagging"
+    },
+    {
+      "id": "discover-search-center",
+      "title": "Center the Discover search bar",
+      "priority": 9,
+      "status": "passing",
+      "feature_dir": "docs/features/discover-search-center"
+    },
+    {
+      "id": "home-page-ui-redesign",
+      "title": "Home page (Chat) UI redesign — clean, centered, airy",
+      "priority": 10,
+      "status": "passing",
+      "feature_dir": "docs/features/home-page-ui-redesign"
+    },
+    {
+      "id": "chat-ui-simplify",
+      "title": "Simplify chat UI — cleaner bubbles, minimal chrome",
+      "priority": 11,
+      "status": "passing",
+      "feature_dir": "docs/features/chat-ui-simplify"
+    },
+    {
+      "id": "mason-drawer-auto-refresh",
+      "title": "Mason drawer auto-refresh after each turn",
+      "priority": 12,
+      "status": "passing",
+      "feature_dir": "docs/features/mason-drawer-auto-refresh"
+    },
+    {
+      "id": "shuffle-builds-chat-block",
+      "title": "Shuffle button builds a chat block with 15 similar items",
+      "priority": 13,
+      "status": "passing",
+      "feature_dir": "docs/features/shuffle-builds-chat-block"
     }
   ]
 }

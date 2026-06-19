@@ -10,9 +10,10 @@ interface Props {
   streaming?: boolean
   onAnswer: (answer: string, questionCardId: string) => void
   onIntent?: (intent: string, payload?: unknown) => void
+  onShuffleMessage?: (productName: string) => void
 }
 
-function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
+function AgentMessageImpl({ events, onAnswer, onIntent, onShuffleMessage }: Props) {
   const rendered: React.ReactNode[] = []
   const textBlocks: string[] = []
 
@@ -62,6 +63,7 @@ function AgentMessageImpl({ events, onAnswer, onIntent }: Props) {
             tree={latestTree}
             intentHandler={intentHandler}
             onAnswer={onAnswer}
+            onShuffleMessage={onShuffleMessage}
           />
         </AgentErrorBoundary>
       </div>
@@ -184,10 +186,12 @@ function TreeWithQuestionCardAdapter({
   tree,
   intentHandler,
   onAnswer,
+  onShuffleMessage,
 }: {
   tree: A2uiTree
   intentHandler: (intent: string, payload?: unknown) => void
   onAnswer: (answer: string, questionCardId: string) => void
+  onShuffleMessage?: (productName: string) => void
 }) {
   const patched: A2uiTree = {
     root: tree.root,
@@ -198,5 +202,5 @@ function TreeWithQuestionCardAdapter({
       return c
     }),
   }
-  return <Renderer tree={patched} onIntent={intentHandler} />
+  return <Renderer tree={patched} onIntent={intentHandler} onShuffleMessage={onShuffleMessage} />
 }

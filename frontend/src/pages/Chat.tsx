@@ -148,6 +148,9 @@ export default function Chat() {
           setSessionsHasMore(s.length === SESSIONS_PAGE_SIZE)
         }).catch(() => { /* ignore */ })
       }
+      // Second refresh after a short delay catches tool results (e.g. saved
+      // products, board updates) that commit slightly after the done event.
+      setTimeout(() => { masonMemory.refresh() }, 800)
     }
     prevStreamingRef.current = streaming
   }, [streaming, cart, masonMemory, activeSessionId, mode, token])
@@ -554,11 +557,16 @@ export default function Chat() {
         {messages.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}><MasonChip /></div>
-            <h2>
+            <h2 className={styles.emptyHeading}>
               {user
-                ? `Welcome back, ${user.display_name ?? user.email?.split('@')[0] ?? 'friend'} — anything I can help you find today?`
-                : 'Experience your local shopping assistant today'}
+                ? `Hey ${user.display_name ?? user.email?.split('@')[0] ?? 'there'} — what are we finding today?`
+                : 'Your neighborhood shopping assistant'}
             </h2>
+            <p className={styles.emptyTagline}>
+              {user
+                ? 'Tell me what you\'re looking for and I\'ll find it from real local shops.'
+                : 'Ask Mason anything — gift ideas, home goods, local finds, and more.'}
+            </p>
             {!token && (
               <p className={styles.guestHint}>
                 <button onClick={() => navigate('/login')} className={styles.inlineLink}>Sign in</button> to save your preferences and shopping history.
@@ -638,6 +646,7 @@ export default function Chat() {
                         streaming={streaming && idx === lastAgentIdx}
                         onAnswer={handleAnswer}
                         onIntent={handleIntent}
+                        onShuffleMessage={(productName) => sendMessage(`Show me 15 items similar to ${productName}`)}
                       />
                       {!streaming && idx === lastAgentIdx && (
                         <MasonFeedback

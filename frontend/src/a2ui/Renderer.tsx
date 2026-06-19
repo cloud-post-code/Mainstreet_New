@@ -40,9 +40,10 @@ interface NodeProps {
   id: string
   onIntent: IntentHandler
   parentLayout?: string
+  onShuffleMessage?: (productName: string) => void
 }
 
-function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
+function Node({ tree, id, onIntent, parentLayout, onShuffleMessage }: NodeProps): ReactNode {
   if (!id || typeof id !== 'string') return null
   const node = tree.get(id)
   if (!node) return <div style={{ color: '#c0392b' }}>Missing component: {id}</div>
@@ -53,7 +54,7 @@ function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
   const childLayout =
     node.type === 'product_grid' ? (p.layout as string | undefined) : undefined
   const children = (node.children ?? []).map(cid => (
-    <Node key={cid} tree={tree} id={cid} onIntent={onIntent} parentLayout={childLayout} />
+    <Node key={cid} tree={tree} id={cid} onIntent={onIntent} parentLayout={childLayout} onShuffleMessage={onShuffleMessage} />
   ))
 
   // Inline trivial wrappers — they're a pure CSS shell, not worth a separate file.
@@ -95,18 +96,27 @@ function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
           ...p,
           showAddToCart: (p.showAddToCart as boolean | undefined) ?? true,
           layout: productCardLayout,
-          onShuffle: async () => {
-            const pid = (p as { product_id?: number }).product_id
-            if (!pid) return []
-            const results: Product[] = await api.getSimilarProducts(pid, 15)
-            return results.map(s => ({
-              product_id: s.id,
-              name: s.name,
-              price: Number(s.price_range?.min ?? 0),
-              image_url: s.image_url,
-              shop_name: s.shop_name ?? '',
-            }))
-          },
+          onShuffle: onShuffleMessage
+            ? async () => {
+                // Chat context: send a message to Mason so the reply builds
+                // a full A2UI product grid with text explanation.
+                const name = (p as { name?: string }).name ?? 'this item'
+                onShuffleMessage(name)
+                return [] // return empty — result comes through Mason's reply
+              }
+            : async () => {
+                // Discover / standalone context: show inline similar panel.
+                const pid = (p as { product_id?: number }).product_id
+                if (!pid) return []
+                const results: Product[] = await api.getSimilarProducts(pid, 15)
+                return results.map(s => ({
+                  product_id: s.id,
+                  name: s.name,
+                  price: Number(s.price_range?.min ?? 0),
+                  image_url: s.image_url,
+                  shop_name: s.shop_name ?? '',
+                }))
+              },
         }
       : p
   return (
@@ -116,7 +126,7 @@ function Node({ tree, id, onIntent, parentLayout }: NodeProps): ReactNode {
   )
 }
 
-export default function Renderer({ tree, onIntent }: { tree: A2uiTree; onIntent: IntentHandler }) {
+export default function Renderer({ tree, onIntent, onShuffleMessage }: { tree: A2uiTree; onIntent: IntentHandler; onShuffleMessage?: (productName: string) => void }) {
   const map = useMemo(() => {
     const m = new Map<string, A2uiComponent>()
     const components = Array.isArray(tree?.components) ? tree.components : []
@@ -131,5 +141,5 @@ export default function Renderer({ tree, onIntent }: { tree: A2uiTree; onIntent:
     }
     return null
   }
-  return <Node tree={map} id={tree.root} onIntent={onIntent} />
+  return <Node tree={map} id={tree.root} onIntent={onIntent} onShuffleMessage={onShuffleMessage} />
 }

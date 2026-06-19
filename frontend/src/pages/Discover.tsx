@@ -317,22 +317,24 @@ export default function Discover() {
           onChange={e => setSearchInput(e.target.value)}
           aria-label={browseMode === 'shop' ? 'Search shops' : 'Search products'}
         />
-        {browseMode === 'product' && (
-          <button
-            type="button"
-            className={styles.filterToggle}
-            onClick={() => setShowFilters(s => !s)}
-          >
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-          </button>
-        )}
-        <span className={styles.count}>
-          {browseMode === 'product'
-            ? (total != null ? `${total} result${total === 1 ? '' : 's'}` : '')
-            : (allShops.length > 0
-              ? `${filteredShops.length} shop${filteredShops.length === 1 ? '' : 's'}`
-              : '')}
-        </span>
+        <div className={styles.filterBarRow}>
+          {browseMode === 'product' && (
+            <button
+              type="button"
+              className={styles.filterToggle}
+              onClick={() => setShowFilters(s => !s)}
+            >
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+          )}
+          <span className={styles.count}>
+            {browseMode === 'product'
+              ? (total != null ? `${total} result${total === 1 ? '' : 's'}` : '')
+              : (allShops.length > 0
+                ? `${filteredShops.length} shop${filteredShops.length === 1 ? '' : 's'}`
+                : '')}
+          </span>
+        </div>
       </div>
 
       {browseMode === 'product' && showFilters && (
