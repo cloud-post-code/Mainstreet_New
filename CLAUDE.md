@@ -31,7 +31,8 @@ Main Street is a **neighborhood-style AI shopping assistant**. The stack is:
 | Auth | JWT tokens, `backend/auth.py` |
 | Payments | Stripe |
 | Analytics | PostHog |
-| Deploy | Railway (backend), Vercel (frontend) |
+| Deploy | Railway (backend + frontend + DB + Redis) |
+| Database | Supabase (PostgreSQL, hosted on Railway) |
 
 Standard layout (already in place):
 ```
@@ -130,6 +131,13 @@ Include concrete impact and file:line references in findings.
 - Preserve existing secret values when editing `.env`, Railway config, or CI files.
 - Do not replace secrets with placeholders.
 - Do not print raw secrets in responses or logs.
+
+## Deployment
+- All services (backend, frontend, database, Redis) run on **Railway**.
+- Pushing to `main` on GitHub automatically triggers a Railway deploy — no manual deploy step needed.
+- Backend URL: `https://backend-production-c5f5.up.railway.app`
+- There is no Vercel deployment. Do not reference Vercel for this project.
+- Database is PostgreSQL managed via Railway (originally provisioned through Supabase).
 
 ## Safety
 - Do not force push, deploy, or run destructive commands unless explicitly requested and approved.
