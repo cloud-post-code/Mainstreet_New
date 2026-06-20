@@ -573,6 +573,15 @@ export const api = {
   disconnectPinterest: (token: string): Promise<void> =>
     request<void>('/api/pinterest/disconnect', { method: 'DELETE' }, token),
 
+  gcalStatus: (token: string): Promise<{ connected: boolean; events?: Array<{ id: string; name: string; date: string }> }> =>
+    request<{ connected: boolean; events?: Array<{ id: string; name: string; date: string }> }>('/api/gcal/status', {}, token),
+
+  gcalSync: (token: string): Promise<{ synced: number; events: Array<{ id: string; name: string; date: string }> }> =>
+    request<{ synced: number; events: Array<{ id: string; name: string; date: string }> }>('/api/gcal/sync', { method: 'POST' }, token),
+
+  gcalDisconnect: (token: string): Promise<void> =>
+    request<void>('/api/gcal/disconnect', { method: 'DELETE' }, token),
+
   adminListVibeSets: (token: string): Promise<VibeSet[]> =>
     request<VibeSet[]>('/api/admin/vibe-sets', {}, token),
 

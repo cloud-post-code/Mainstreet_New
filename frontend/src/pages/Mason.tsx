@@ -125,7 +125,7 @@ function MasonInner({ token, navigate }: { token: string; navigate: (path: strin
           ))}
         </nav>
 
-        <div className={styles.panelBody}>
+        <div className={`${styles.panelBody} ${tab === 'dates' ? styles.panelBodyDates : ''}`}>
           {tab === 'shipping' && (
             <ShippingPanel shipping={memory.shipping} onSave={memory.saveShipping} />
           )}

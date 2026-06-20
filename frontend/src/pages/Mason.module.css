@@ -112,6 +112,13 @@
   padding: 16px 18px;
 }
 
+/* Dates tab: no scroll — calendar fills the panel */
+.panelBodyDates {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .signedOut {
   padding: 24px;
   text-align: center;

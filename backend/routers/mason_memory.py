@@ -1,5 +1,4 @@
 """REST endpoints powering Mason's Prefs / Saved / Boards tabs."""
-import asyncio
 import uuid
 from typing import Optional, Any, List, Dict
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile

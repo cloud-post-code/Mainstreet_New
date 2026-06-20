@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     zeroentropy_rerank_timeout_s: float = 1.5
     zeroentropy_rerank_enabled: bool = True
 
+    # Google Calendar OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

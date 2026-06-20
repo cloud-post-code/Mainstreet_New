@@ -290,6 +290,31 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state])
 
+  // Handle seedMessage: auto-send a message when navigating from holiday chips
+  const lastSeedRef = useRef<string | null>(null)
+  useEffect(() => {
+    const seed = (location.state as { seedMessage?: string } | null)?.seedMessage
+    if (!seed || seed === lastSeedRef.current) return
+    lastSeedRef.current = seed
+    navigate('/', { replace: true, state: null })
+    // Small delay to let session init settle
+    const timer = setTimeout(async () => {
+      const myToken = token
+      let sessionId = activeSessionId
+      if (!sessionId) {
+        const s = myToken
+          ? await api.createSession(myToken)
+          : await api.createGuestSession()
+        if (myToken) setSessions(prev => [s, ...prev])
+        setActiveSessionId(s.id)
+        sessionId = s.id
+      }
+      await sendMessage(seed, undefined, mode, sessionId ?? undefined)
+    }, 150)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
   async function selectSession(id: number) {
     if (id === activeSessionId) return
     const myToken = ++selectTokenRef.current

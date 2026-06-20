@@ -1,60 +1,9 @@
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  user-select: none;
-}
-
-/* ── Side-by-side layout: calendar left, dates right ── */
-.mainRow {
-  display: flex;
   gap: 10px;
-  align-items: flex-start;
-}
-
-.calendarCol {
-  flex: 1;
-  min-width: 0;
-}
-
-.datesCol {
-  width: 150px;
-  flex-shrink: 0;
-}
-
-/* ── Upcoming panel (right column) ── */
-.upcomingPanel {
-  background: #f9f3e3;
-  border: 1px solid #e5dccb;
-  border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.upcomingPanelHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  margin-bottom: 2px;
-}
-
-.upcomingInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-/* ── Event list (right column when day selected) ── */
-.eventListTitle {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #015237;
-  margin-bottom: 3px;
+  user-select: none;
+  height: 100%;
 }
 
 /* ── Month navigation ── */
@@ -63,6 +12,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 2px;
+  flex-shrink: 0;
 }
 
 .navBtn {
@@ -90,15 +40,20 @@
   color: #015237;
 }
 
-/* ── Day-of-week row ── */
+/* ── Calendar grid section ── */
+.calendarSection {
+  flex-shrink: 0;
+}
+
 .dayHeaders {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
+  margin-bottom: 2px;
 }
 .dayHeader {
   text-align: center;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 700;
   color: #999;
   text-transform: uppercase;
@@ -106,7 +61,6 @@
   padding: 2px 0;
 }
 
-/* ── Calendar grid ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -123,18 +77,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  border-radius: 6px;
+  gap: 1px;
+  border-radius: 5px;
   border: 1.5px solid transparent;
   background: transparent;
   cursor: pointer;
   transition: background 120ms, border-color 120ms;
   padding: 0;
-  position: relative;
 }
 .cell:hover { background: rgba(1,82,55,0.07); }
 
-.cellPast { opacity: 0.38; }
+.cellPast { opacity: 0.35; }
 
 .cellToday {
   border-color: #015237;
@@ -148,11 +101,9 @@
 .cellSelected .dayNum { color: #fff; }
 .cellSelected .dot { background: rgba(255,255,255,0.7) !important; }
 
-.cellHasEvents { }
-
 .dayNum {
   font-family: var(--font-body, sans-serif);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   color: #1a1a1a;
   line-height: 1;
@@ -164,16 +115,16 @@
   align-items: center;
 }
 .dot {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 .dotBuiltin { background: #015237; }
 .dotCustom  { background: #be6e46; }
 
-/* ── Selected day events ── */
-.eventList {
+/* ── Selected day panel ── */
+.selectedPanel {
   background: #fff;
   border: 1px solid #e5dccb;
   border-radius: 8px;
@@ -181,16 +132,30 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  flex-shrink: 0;
+}
+
+.selectedTitle {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #015237;
 }
 
 .noEvents {
   font-size: 0.78rem;
   color: #aaa;
   margin: 0;
-  text-align: center;
 }
 
-.eventItem {
+.selectedEvents {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selectedEventRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -201,29 +166,46 @@
   border: 1px solid #e5dccb;
 }
 
-.eventUrgent {
-  background: #f0f9f4;
-  border-color: #b2d8c5;
-}
-
-.eventInfo {
+.selectedEventInfo {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
 }
 
-.eventName {
+.selectedEventName {
   font-size: 0.82rem;
   font-weight: 600;
   color: #1a1a1a;
 }
 
-.eventCountdown {
-  font-size: 0.68rem;
+.selectedEventDays {
+  font-size: 0.65rem;
   color: #015237;
   font-weight: 600;
 }
+
+.selectedEventActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.shopBtn {
+  appearance: none;
+  border: 1.5px solid #015237;
+  border-radius: 5px;
+  background: #015237;
+  color: #f1e9d8;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: opacity 120ms;
+}
+.shopBtn:hover { opacity: 0.85; }
 
 .removeBtn {
   appearance: none;
@@ -246,54 +228,15 @@
   background: transparent;
   color: #015237;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
   padding: 2px 0;
   text-align: left;
-  opacity: 0.75;
+  opacity: 0.7;
   transition: opacity 120ms;
 }
 .addEventBtn:hover { opacity: 1; }
-
-.upcomingTitle {
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #999;
-}
-
-.upcomingItem {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.upcomingName {
-  font-size: 0.72rem;
-  color: #1a1a1a;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.upcomingDays {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #aaa;
-}
-.upcomingUrgent { color: #015237; }
-
-.addFormTitle {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #015237;
-  margin-bottom: 2px;
-}
 
 /* ── Add form ── */
 .addForm {
@@ -304,6 +247,7 @@
   background: #fff;
   border: 1px solid #e5dccb;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .addInput {
@@ -370,19 +314,191 @@
 }
 .cancelBtn:hover { background: #f0e8d6; }
 
-.addEventBtnFloating {
+/* ── Holiday chips ── */
+.chipsSection {
+  flex-shrink: 0;
+}
+
+.chipsSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.chipsSectionTitle {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #999;
+}
+
+.addEventBtnSmall {
   appearance: none;
   border: 1px dashed rgba(1,82,55,0.35);
-  border-radius: 6px;
-  padding: 6px;
+  border-radius: 5px;
+  padding: 3px 8px;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 120ms, background 120ms;
+}
+.addEventBtnSmall:hover { opacity: 1; background: rgba(1,82,55,0.05); }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chip {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1.5px solid #e5dccb;
+  border-radius: 8px;
+  padding: 5px 9px;
+  background: #f9f3e3;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, transform 80ms;
+  text-align: left;
+  gap: 1px;
+}
+.chip:hover {
+  background: #f0ead6;
+  border-color: #c8b89a;
+  transform: translateY(-1px);
+}
+.chip:active { transform: translateY(0); }
+
+.chipUrgent {
+  border-color: #b2d8c5;
+  background: #f0f9f4;
+}
+.chipUrgent:hover { background: #e0f3ea; border-color: #015237; }
+
+.chipName {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.chipDate {
+  font-size: 0.62rem;
+  color: #888;
+  font-weight: 500;
+}
+
+.chipUrgent .chipDate {
+  color: #015237;
+  font-weight: 700;
+}
+
+/* ── Google Calendar section ── */
+.gcalSection {
+  flex-shrink: 0;
+  padding-top: 4px;
+  border-top: 1px solid #f0e8d6;
+}
+
+.gcalConnectBtn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1.5px dashed rgba(1,82,55,0.3);
+  border-radius: 8px;
+  padding: 7px 12px;
   background: transparent;
   color: #015237;
   font: inherit;
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  text-align: center;
-  opacity: 0.7;
-  transition: opacity 120ms, background 120ms;
+  width: 100%;
+  justify-content: center;
+  transition: background 120ms, border-color 120ms;
 }
-.addEventBtnFloating:hover { opacity: 1; background: rgba(1,82,55,0.05); }
+.gcalConnectBtn:hover { background: rgba(1,82,55,0.05); border-color: #015237; }
+
+.gcalConnected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gcalConnectedLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #015237;
+}
+
+.gcalActions {
+  display: flex;
+  gap: 5px;
+}
+
+.gcalSyncBtn {
+  appearance: none;
+  border: 1px solid rgba(1,82,55,0.3);
+  border-radius: 5px;
+  padding: 3px 10px;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms;
+}
+.gcalSyncBtn:hover { background: rgba(1,82,55,0.06); }
+
+.gcalDisconnectBtn {
+  appearance: none;
+  border: 1px solid #e5dccb;
+  border-radius: 5px;
+  padding: 3px 10px;
+  background: transparent;
+  color: #888;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.gcalDisconnectBtn:hover { background: #f5ece0; color: #5a3e2b; }
+
+.gcalSyncing {
+  font-size: 0.75rem;
+  color: #888;
+  font-style: italic;
+}
+
+.gcalError {
+  font-size: 0.75rem;
+  color: #c14b4b;
+}
+
+.gcalRetryBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #015237;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
